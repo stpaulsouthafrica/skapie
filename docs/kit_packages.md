@@ -1,8 +1,8 @@
 # Kit packages
 
-A **kit package** is a folder on disk under `kits/`. It is a recipe you can instantiate, not a second live scene. The scene document remains the source of truth for what is on the canvas. Instantiating still goes `KitApi` → `SceneStore.apply(SceneOp)` only.
+A **kit package** is a folder on disk. It is a **recipe**, not a second live scene. What you see on the canvas lives in the scene document. Instantiating goes `KitApi.reloadPackages` / `saveKit` / `instantiate` — see the [Kit API reference](kit_api.md). Words: [glossary](glossary.md).
 
-A **kit** in memory is a `KitRecipe`. Saving writes a package; loading registers recipes into `KitApi`. See [glossary](glossary.md) and [kit API](kit_api.md).
+This file is the **only** `kit.json` schema. Do not invent a second one.
 
 ## Layout
 
@@ -13,18 +13,20 @@ kits/
     kit.json          # required
 ```
 
-The folder name **must** match the `id` field in `kit.json`. A mismatch skips that package (load) or fails parse.
+Folder name **must** equal `id` inside `kit.json`. Mismatch → skip on load.
 
-Optional later (not required now): `README.md`, `assets/`, `worker/`. Phase 7 does not read them.
+Optional later (not read today): `README.md`, `assets/`, `worker/`.
 
 ## `kit.json` schema (v1)
+
+Matches [`kits/demo.note-card/kit.json`](../kits/demo.note-card/kit.json) and `parseKitPackageJson` in `lib/kit_api/kit_package.dart`.
 
 ```json
 {
   "schemaVersion": 1,
   "id": "demo.note-card",
   "displayName": "Note card",
-  "description": "Optional one-liner",
+  "description": "A box with inset text.",
   "capabilities": [],
   "objects": [
     {
@@ -49,57 +51,76 @@ Optional later (not required now): `README.md`, `assets/`, `worker/`. Phase 7 do
 
 | Field | Rule |
 |---|---|
-| `schemaVersion` | Required. Only `1` is supported. Other versions skip the package. |
-| `id` | Required. Must match the folder name. No `/` or `\`. |
+| `schemaVersion` | Required. Only `1`. Other versions skip the package. |
+| `id` | Required. Same as folder name. No `/` or `\`. Not empty, `.`, or `..`. |
 | `displayName` | Required. Maps to `KitRecipe.displayName`. |
-| `description` | Optional. Package metadata; not stored on `KitRecipe`. |
-| `capabilities` | Present as an empty-array seam. If non-empty: **warn and still load** `objects`. Workers are not implemented. |
-| `objects` | Map 1:1 to `KitObjectSpec` (`typeId`, `x`, `y`, `width`, `height`, `props`). |
+| `description` | Optional. Disk metadata only — **not** on `KitRecipe`. `saveKit` omits it. |
+| `capabilities` | Empty-array seam. If non-empty: **warn and still load** `objects`. No workers. |
+| `objects` | 1:1 `KitObjectSpec`: `typeId`, `x`, `y`, optional `width` / `height` / `props`. |
 
-Unknown JSON fields are ignored. `objects[].typeId` must be a known registry type (`box`, `text`, `button`, `debug.rect`). Unknown type → skip that package with a log; never eval Dart.
+Unknown JSON fields are ignored. `typeId` must be a registry type (`box`, `text`, `button`, `debug.rect`). Unknown type → skip that package; never eval Dart.
 
-Writes are pretty-printed JSON (2-space indent) so humans and agents can read them.
+`saveKit` writes pretty JSON (2-space indent) via `KitApi.saveKit` — [method reference](kit_api.md#savekit).
 
-Built-in demo: `kits/demo.note-card/kit.json` (same numbers as the in-memory `demoNoteCardRecipe`).
+## Where the app actually looks (read this)
 
-## Kits root
+There are **three** locations. They are not the same folder.
 
-Resolved with an absolute strategy (same spirit as the scene path). **Cwd is never the default.**
+| Place | Path | Who uses it |
+|---|---|---|
+| **Git repo (what you commit)** | `<repo>/kits/<id>/kit.json` | Humans and git. Example: `kits/demo.note-card/`. |
+| **Runtime default (what a sandboxed app loads)** | `<Application Support>/skapie/kits/` | `flutter run` with **no** override. On macOS debug that is inside the app **container**, not the repo. |
+| **Override (make the app read the repo)** | Absolute `SKAPIE_KITS_ROOT` **or** `<SKAPIE_PROJECT_ROOT>/kits` | Developers who want the committed shelf. |
 
-1. `--dart-define=SKAPIE_KITS_ROOT=/absolute/kits` (or env `SKAPIE_KITS_ROOT`)
-2. `--dart-define=SKAPIE_PROJECT_ROOT=/absolute/repo` (or env) → `<repo>/kits`
-3. Otherwise `<Application Support>/skapie/kits`
+**Cwd is never the default.** Relative `SKAPIE_KITS_ROOT` is rejected (warning + Application Support).
 
-Relative override values are **rejected**: warning + Application Support fallback.
+Resolution order (`resolveKitsRoot` in `lib/kit_api/kit_path.dart`):
+
+1. `--dart-define=SKAPIE_KITS_ROOT=/absolute/kits` (or env `SKAPIE_KITS_ROOT`) — must be absolute.
+2. Else `--dart-define=SKAPIE_PROJECT_ROOT=/absolute/repo` (or env) → `/absolute/repo/kits`.
+3. Else Application Support `…/skapie/kits`.
 
 Startup logs the absolute kits root and how many packages loaded.
 
-**macOS sandbox:** a debug/release sandboxed app cannot see the git repo `kits/` folder. Use an **absolute** `SKAPIE_KITS_ROOT` or `SKAPIE_PROJECT_ROOT`. If the resolved folder is missing or empty, `createAppKitApi` still registers the in-memory `demo.note-card` fallback so Add → note card works.
+`saveKit` writes into **whichever root was resolved**, not “the git folder” unless that root *is* the repo.
+
+```bash
+# Default: Application Support (repo kits/ is invisible to the sandbox)
+flutter run -d macos
+
+# Load/save the committed repo shelf
+flutter run -d macos \
+  --dart-define=SKAPIE_PROJECT_ROOT=/Users/you/Development/skapie
+
+# Or point straight at a kits directory
+flutter run -d macos \
+  --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
+```
+
+If the resolved folder is empty or unreadable, `createAppKitApi` still has the in-memory `demo.note-card` fallback. After a successful disk load, **disk replaces memory** for that id ([`reloadPackages`](kit_api.md#reloadpackages)).
 
 ## Load and save
 
+Call these on `KitApi`, not `KitPackageStore` (store is internal + tests).
+
 | API | Behavior |
 |---|---|
-| `KitApi.reloadPackages()` | `KitPackageStore.loadAll` scans `<root>/*/kit.json`, validates, registers. |
-| `KitApi.saveKit(recipe)` | Writes `kits/<id>/kit.json` (creates the folder), then updates memory. |
-| `KitApi.registerKit(recipe)` | Ephemeral in-memory only. Duplicate id still throws. Durable kits are saved packages. |
+| [`reloadPackages`](kit_api.md#reloadpackages) | Scan `<root>/*/kit.json`. Skip bad packages. Disk replaces memory. |
+| [`saveKit`](kit_api.md#savekit) | Write `<root>/<id>/kit.json`, then update memory. |
+| [`registerKit`](kit_api.md#registerkit) | Ephemeral. Duplicate id throws. |
 
-`KitPackageStore` is used only by `KitApi` (plus tests). UI and the future agent call `KitApi`, not the store.
-
-**Conflict policy:** on load, each package is registered by id. If that id was already in memory, **disk replaces memory** (logged). The shelf is authoritative.
-
-Bad packages (missing `schemaVersion`, id/folder mismatch, unknown `typeId`, unreadable JSON) are skipped with a clear log. Other packages still load.
+**Conflict policy:** same id already in memory → disk wins (logged).
 
 ## Dream goal (not scheduled)
 
-Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. **Not Phase 7.** Phase 7 only ships declarative on-disk recipes. Planted seam: `capabilities: []` in `kit.json`.
+Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. **Not Phase 8.** Phase 8 is Kit API documentation. Planted seam: `capabilities: []` in `kit.json`.
 
 ## Not this phase
 
 - Sandboxed workers, isolates, Wasm, or executing non-empty `capabilities`
 - Git fetchers, marketplace, signing, or versioning beyond `schemaVersion`
-- Agent harness / chat
-- Hot-reload file watcher (startup load is enough)
+- Agent harness / chat (tool names are sketched in [kit_api.md](kit_api.md#agent-tool-sketch-phase-9-not-implemented) only)
+- Hot-reload file watcher
 - “Save selection as kit…” UI
 - New registry widget types
 - Batched multi-object undo

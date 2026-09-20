@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 8+ is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 9+ is blocked until the current phase gate is green.
 
 ## Phase 1 gate — done
 
@@ -63,15 +63,21 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - `KitApi` in `lib/kit_api/` wraps `SceneStore.apply` only. Unknown `typeId` rejected. In-memory `registerKit` / `instantiate`; validate-then-apply (no partial spawn).
 - Built-in demo recipe `demo.note-card`. Add / inspector / move / delete / lock go through `KitApi`.
 
-## Phase 7 gate (current)
+## Phase 7 gate — done
 
 - Kit packages on disk: `kits/<kitId>/kit.json` loaded into `KitApi` at startup (`reloadPackages`). `saveKit` writes pretty JSON.
 - Demo `demo.note-card` ships as `kits/demo.note-card/`. Disk replaces in-memory for the same id. Unknown `typeId` in a package skips that package. No Dart eval.
 - `capabilities: []` is a seam only; non-empty logs a warning and still loads `objects`. No workers, sandbox, agent, or file watcher.
-- `flutter analyze` clean; `flutter test` covers package parse/load/save/conflict + existing spine tests.
 
-Phase 8+ stays blocked until this gate is green. Do not implement sandboxed workers or the agent here.
+## Phase 8 gate (current)
+
+- Complete Kit API documentation: mental model, every public `KitApi` method, cookbook, package contract linked from [kit packages](kit_packages.md), agent-tool sketch labeled **not implemented**.
+- Docs match `lib/kit_api/kit_api.dart`. Kits root (repo vs Application Support vs override) is unambiguous.
+- Dream goal remains doctrine only. No workers, harness, or chat.
+- `flutter analyze` clean; `flutter test` green (docs-only; no API churn).
+
+Phase 9+ stays blocked until this gate is green. Do not implement the agent harness here.
 
 ## Dream goal (not scheduled)
 
-Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. **Not Phase 7.** Phase 7 only ships declarative on-disk recipes. Planted seam: `capabilities: []` in `kit.json`.
+Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. **Not Phase 8.** Phase 8 is documentation. Planted seam: `capabilities: []` in `kit.json`.
