@@ -1,8 +1,8 @@
 # Skapie
 
-Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk later). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry will render known types.
+Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk later). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 3 of 10** — macOS desktop shell, canvas viewport, and a scene document (ops, undo/redo, JSON load/save). There is no widget registry, kit API, or agent yet.
+This repository is **Phase 4 of 10** — macOS desktop shell, canvas viewport, scene document (ops, undo/redo, JSON load/save), and a thin widget registry for built-in `box` / `text` / `button` (plus `debug.rect`). There is no Kit API or agent yet.
 
 ## Run on macOS
 
@@ -18,24 +18,37 @@ You should get a window titled **Skapie Canvas** with a thin **Skapie** bar and 
 
 **Pan:** drag the empty canvas, or two-finger trackpad pan. Pan is hard-clamped so the viewport center stays in padded content bounds (empty scene: 2000×2000 around the world origin). **Zoom:** mouse wheel or trackpad pinch; zoom is anchored to the pointer, not the viewport center. After zoom, offset is re-clamped. **Reset:** `0` or `Cmd+0` (also `Ctrl+0` / numpad `0`) restores zoom `100%` and recenters on the **world origin**, then clamps. Zoom is clamped to 25%–400%. A zoom percentage HUD sits in the corner; a dot grid and origin cross mark world `(0,0)`.
 
-**Scene (dev):** **Add debug rect** or press `N` to insert a gray `debug.rect` scene object centered on the world point currently at the viewport center (the camera `offset`). `Cmd+Z` / `Cmd+Shift+Z` undo/redo. These are temporary debug rectangles, not real widgets.
+**Scene (dev):** **Add** → Box / Text / Button / Debug rect inserts a scene object of that type, centered on the world point currently at the viewport center (the camera `offset`). Press `N` for a `debug.rect`. `Cmd+Z` / `Cmd+Shift+Z` undo/redo. Objects render through the registry; unknown types show a placeholder. Adds go through `SceneStore.apply`.
 
 **Transforms:** screen origin is the viewport top-left (Flutter: +x right, +y down). World uses the same axes. World `(0,0)` is the **world origin**. The camera `offset` is the world point shown at the viewport center — not another name for the origin.
 
-**Save file:** `.skapie/scene.json` under the process working directory (project root when launched from this repo). Loaded on startup if present. Files write `"objects"`; older files with `"nodes"` still load (`schemaVersion` 1).
+**Save file:** absolute path under Application Support (`…/skapie/scene.json`) by default. Logged at startup. The top bar shows a short label; hover or **Copy path** for the full path. Not cwd-relative unless you explicitly enable project mode with an **absolute** `SKAPIE_PROJECT_ROOT`. See [`docs/scene.md`](docs/scene.md).
+
+```bash
+# default: Application Support
+flutter run -d macos
+
+# developer: repo-local scene (absolute root required)
+flutter run -d macos \
+  --dart-define=SKAPIE_USE_PROJECT_SCENE=true \
+  --dart-define=SKAPIE_PROJECT_ROOT=/Users/you/Development/skapie
+```
 
 ## Foundation gates
 
-Skapie is built phase by phase. **Phase 4+ is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
+Skapie is built phase by phase. **Phase 5+ is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
 **Phase 1 gate:** macOS shell + folder stubs — done.
 
 **Phase 2 gate:** infinite canvas pan/zoom + tested transforms — done.
 
-**Phase 3 gate:** scene model + `SceneStore.apply` + undo/redo + JSON round-trip + `.skapie/scene.json`; debug rects only; `flutter analyze` clean; `flutter test` green.
+**Phase 3 gate:** scene model + `SceneStore.apply` + undo/redo + JSON round-trip + `.skapie/scene.json` — done.
+
+**Phase 4 gate:** `ObjectRegistry` maps `type` → builder; built-ins `box` / `text` / `button` / `debug.rect`; unknown types placeholder; Add menu via `apply`; `flutter analyze` clean; `flutter test` green.
 
 ## Docs
 
 - [`docs/glossary.md`](docs/glossary.md) — canvas, world origin, scene object, kit, graph node
 - [`docs/foundation.md`](docs/foundation.md) — doctrine and phase gates
 - [`docs/scene.md`](docs/scene.md) — document model, ops, file path, world origin
+- [`docs/registry.md`](docs/registry.md) — type string → builder, unknown placeholder

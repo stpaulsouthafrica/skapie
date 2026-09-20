@@ -88,4 +88,90 @@ void main() {
     expect(saved.containsKey('objects'), isTrue);
     expect(saved.containsKey('nodes'), isFalse);
   });
+
+  test('first save creates missing parent directories', () async {
+    final dir = await Directory.systemTemp.createTemp('skapie_scene_');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = File('${dir.path}/nested/skapie/scene.json');
+    expect(await file.parent.exists(), isFalse);
+
+    final store = SceneStore(persistence: SceneFilePersistence(file));
+    store.apply(
+      AddObject(
+        SceneObject(
+          id: 'a',
+          type: 'debug.rect',
+          x: 0,
+          y: 0,
+          width: 1,
+          height: 1,
+        ),
+      ),
+    );
+    await store.save();
+
+    expect(await file.exists(), isTrue);
+    expect(_decode(file)['objects'], isNotEmpty);
+  });
+
+  test(
+    'legacy cwd file migrates into canonical when canonical is missing',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('skapie_scene_');
+      addTearDown(() => dir.delete(recursive: true));
+      final cwd = Directory('${dir.path}/cwd');
+      final canonical = File('${dir.path}/support/skapie/scene.json');
+      await cwd.create(recursive: true);
+      final legacy = File('${cwd.path}/.skapie/scene.json');
+      await legacy.parent.create(recursive: true);
+      await legacy.writeAsString('''
+{
+  "id": "migrated-doc",
+  "schemaVersion": 1,
+  "objects": [
+    {
+      "id": "moved",
+      "type": "debug.rect",
+      "x": 1,
+      "y": 2,
+      "width": 3,
+      "height": 4
+    }
+  ]
+}
+''');
+
+      await migrateLegacySceneIfNeeded(canonical: canonical, cwd: cwd);
+
+      expect(await canonical.exists(), isTrue);
+      final store = SceneStore(persistence: SceneFilePersistence(canonical));
+      await store.load();
+      expect(store.document.id, 'migrated-doc');
+      expect(store.document.objects.single.id, 'moved');
+    },
+  );
+
+  test('save failure is recorded and logged, not silent', () async {
+    final dir = await Directory.systemTemp.createTemp('skapie_scene_');
+    addTearDown(() => dir.delete(recursive: true));
+    final blocker = Directory('${dir.path}/scene.json');
+    await blocker.create();
+    final store = SceneStore(
+      persistence: SceneFilePersistence(File(blocker.path)),
+    );
+    store.apply(
+      AddObject(
+        SceneObject(
+          id: 'a',
+          type: 'debug.rect',
+          x: 0,
+          y: 0,
+          width: 1,
+          height: 1,
+        ),
+      ),
+    );
+    await store.save();
+    expect(store.lastPersistenceError, isNotNull);
+  });
 }

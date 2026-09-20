@@ -4,18 +4,12 @@ import 'dart:io';
 import 'package:skapie/scene/scene_document.dart';
 import 'package:skapie/scene/scene_json_codec.dart';
 
-/// Writes `scene.json` under the process working directory (the repo root
-/// when launched with `flutter run` from this project).
-const String projectSceneRelativePath = '.skapie/scene.json';
-
 class SceneFilePersistence {
   SceneFilePersistence(this.file);
 
-  factory SceneFilePersistence.projectDefault() {
-    return SceneFilePersistence(File(projectSceneRelativePath));
-  }
-
   final File file;
+
+  String get absolutePath => file.absolute.path;
 
   Future<SceneDocument?> read() async {
     if (!await file.exists()) {

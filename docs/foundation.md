@@ -14,7 +14,7 @@ Vocabulary: scene items are **scene objects**. **Graph node** is reserved for a 
 
 ## Registry over fantasy
 
-v1 does not generate arbitrary Dart widgets at runtime. Known types live in a registry; kits register types; the renderer draws only what the registry knows. Unknown type → explicit fallback, not a guessed widget tree.
+v1 does not generate arbitrary Dart widgets at runtime. Known types live in `ObjectRegistry` (`lib/registry/`); the canvas asks the registry to build each `SceneObject.type`. Kits may register types later; they still do not eval Dart. Unknown type → `UnknownObjectPlaceholder`, not a guessed widget tree. Details: [registry](registry.md).
 
 ## Tests at the spine
 
@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 4+ is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 5+ is blocked until the current phase gate is green.
 
 ## Phase 1 gate — done
 
@@ -38,13 +38,18 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Camera is the viewport spine: `CanvasCamera.panScreen` / `zoomAt` / `reset`.
 - Screen origin is viewport top-left; world shares those axes; `offset` is the world point at the viewport center; zoom is world-to-screen scale, clamped 0.25–4.0. World `(0,0)` is the **world origin**.
 
-## Phase 3 gate (current)
+## Phase 3 gate — done
 
 - Scene document in `lib/scene/`. Mutations only via `SceneStore.apply`.
 - JSON `schemaVersion` required; unknown fields ignored (tolerant).
 - Undo/redo with snapshot strategy; new apply clears redo.
-- Persistence: `.skapie/scene.json`. Load on startup; save after successful apply/undo/redo. Writes `"objects"`; still reads legacy `"nodes"` (`schemaVersion` 1).
-- Debug gray rects from scene object frames only — not a registry.
-- `flutter analyze` clean; `flutter test` covers JSON round-trip, add/remove, frame/props, undo/redo, missing-file load, legacy `nodes` key, camera transforms, smoke.
+- Persistence: absolute `Application Support/skapie/scene.json` by default (`path_provider`). Overrides: `SKAPIE_SCENE_PATH`, optional project mode with absolute `SKAPIE_PROJECT_ROOT`. Cwd is never the default. One-time migrate from legacy `.skapie/scene.json`. Save errors are logged and stored on the store. Writes `"objects"`; still reads legacy `"nodes"` (`schemaVersion` 1).
 
-Phase 4+ stays blocked until this gate is green. Do not implement registry widgets, kits, selection, or the agent here.
+## Phase 4 gate (current)
+
+- `ObjectRegistry` in `lib/registry/`: `typeId` → builder, default props, display name. Duplicate `typeId` throws.
+- Built-ins: `box`, `text`, `button`, plus `debug.rect`. Canvas renders visible objects through the registry (z-sorted). Unknown / failing types → placeholder, never a crash, never Dart eval.
+- Thin Add menu inserts via `SceneStore.apply(AddObject)`. No inspector. No Kit API. No agent.
+- `flutter analyze` clean; `flutter test` covers register/get/list, duplicate register, known build, unknown placeholder, existing scene store tests.
+
+Phase 5+ stays blocked until this gate is green. Do not implement kits, selection handles, or the agent here.

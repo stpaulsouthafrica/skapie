@@ -19,9 +19,13 @@ class SceneStore extends ChangeNotifier {
   SceneCameraSnapshot? _liveCamera;
   Future<void> _writes = Future.value();
 
+  Object? _lastPersistenceError;
+
   SceneDocument get document => _document;
   bool get canUndo => _undo.isNotEmpty;
   bool get canRedo => _redo.isNotEmpty;
+  Object? get lastPersistenceError => _lastPersistenceError;
+  String? get sceneFilePath => persistence?.absolutePath;
 
   /// Remember the live viewport camera for the next save. Not undoable.
   void noteCamera(SceneCameraSnapshot snapshot) {
@@ -86,7 +90,17 @@ class SceneStore extends ChangeNotifier {
           if (_liveCamera != null) {
             _document = _document.copyWith(camera: _liveCamera);
           }
-          await persistence.write(_document);
+          try {
+            await persistence.write(_document);
+            if (_lastPersistenceError != null) {
+              _lastPersistenceError = null;
+              notifyListeners();
+            }
+          } catch (error, stack) {
+            _lastPersistenceError = error;
+            debugPrint('Skapie scene save failed ($error)\n$stack');
+            notifyListeners();
+          }
         })
         .whenComplete(done.complete);
   }

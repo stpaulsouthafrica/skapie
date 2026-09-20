@@ -6,14 +6,17 @@ import 'package:flutter/services.dart';
 import 'package:skapie/canvas/canvas_bounds.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_grid_painter.dart';
-import 'package:skapie/canvas/debug_object_painter.dart';
+import 'package:skapie/canvas/scene_object_layer.dart';
+import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 
 /// Infinite canvas viewport: pan, zoom-toward-cursor, grid, origin, zoom HUD.
 class CanvasViewport extends StatefulWidget {
-  const CanvasViewport({super.key, required this.store});
+  CanvasViewport({super.key, required this.store, ObjectRegistry? registry})
+    : registry = registry ?? createBuiltinRegistry();
 
   final SceneStore store;
+  final ObjectRegistry registry;
 
   @override
   State<CanvasViewport> createState() => CanvasViewportState();
@@ -94,19 +97,32 @@ class CanvasViewportState extends State<CanvasViewport> {
 
   void resetCamera() => _setCamera(_camera.reset());
 
-  void addDebugRect() {
-    const width = 120.0;
-    const height = 80.0;
+  static const _defaultSizes = {
+    boxTypeId: Size(160, 100),
+    textTypeId: Size(220, 48),
+    buttonTypeId: Size(140, 40),
+    debugRectType: Size(120, 80),
+  };
+
+  void addDebugRect() => addTypedObject(debugRectType);
+
+  void addTypedObject(String typeId) {
+    final type = widget.registry.get(typeId);
+    if (type == null) {
+      return;
+    }
+    final size = _defaultSizes[typeId] ?? const Size(120, 80);
     final center = _camera.offset;
     widget.store.apply(
       AddObject(
         SceneObject(
           id: newSceneId('o'),
-          type: debugRectType,
-          x: center.dx - width / 2,
-          y: center.dy - height / 2,
-          width: width,
-          height: height,
+          type: typeId,
+          x: center.dx - size.width / 2,
+          y: center.dy - size.height / 2,
+          width: size.width,
+          height: size.height,
+          props: Map<String, Object?>.of(type.defaultProps),
         ),
       ),
     );
@@ -247,18 +263,14 @@ class CanvasViewportState extends State<CanvasViewport> {
                           dotColor: colors.outlineVariant,
                           originColor: colors.primary,
                         ),
-                        child: CustomPaint(
-                          painter: DebugObjectPainter(
-                            camera: _camera,
-                            objects: objects,
-                            fillColor: colors.outlineVariant.withValues(
-                              alpha: 0.45,
-                            ),
-                            strokeColor: colors.outline,
-                          ),
-                          child: const SizedBox.expand(),
-                        ),
+                        child: const SizedBox.expand(),
                       ),
+                    ),
+                    SceneObjectLayer(
+                      camera: _camera,
+                      viewportSize: size,
+                      objects: objects,
+                      registry: widget.registry,
                     ),
                     Positioned(
                       right: 12,
