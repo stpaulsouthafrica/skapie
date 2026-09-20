@@ -10,6 +10,7 @@ import 'package:skapie/canvas/hit_test.dart';
 import 'package:skapie/canvas/scene_object_layer.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
+import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -20,12 +21,16 @@ class CanvasViewport extends StatefulWidget {
     required this.store,
     SelectionController? selection,
     ObjectRegistry? registry,
-  }) : registry = registry ?? createBuiltinRegistry(),
-       selection = selection ?? SelectionController();
+    KitApi? kitApi,
+  }) : selection = selection ?? SelectionController(),
+       kitApi =
+           kitApi ??
+           KitApi(store: store, registry: registry ?? createBuiltinRegistry());
 
   final SceneStore store;
   final SelectionController selection;
-  final ObjectRegistry registry;
+  final KitApi kitApi;
+  ObjectRegistry get registry => kitApi.registry;
 
   @override
   State<CanvasViewport> createState() => CanvasViewportState();
@@ -129,35 +134,20 @@ class CanvasViewportState extends State<CanvasViewport> {
 
   void resetCamera() => _setCamera(_camera.reset());
 
-  static const _defaultSizes = {
-    boxTypeId: Size(160, 100),
-    textTypeId: Size(220, 48),
-    buttonTypeId: Size(140, 40),
-    debugRectType: Size(120, 80),
-  };
-
   void addDebugRect() => addTypedObject(debugRectType);
 
   void addTypedObject(String typeId) {
-    final type = widget.registry.get(typeId);
-    if (type == null) {
-      return;
-    }
-    final size = _defaultSizes[typeId] ?? const Size(120, 80);
+    final size = defaultObjectSize(typeId);
     final center = _camera.offset;
-    widget.store.apply(
-      AddObject(
-        SceneObject(
-          id: newSceneId('o'),
-          type: typeId,
-          x: center.dx - size.width / 2,
-          y: center.dy - size.height / 2,
-          width: size.width,
-          height: size.height,
-          props: Map<String, Object?>.of(type.defaultProps),
-        ),
-      ),
+    widget.kitApi.addObject(
+      typeId: typeId,
+      x: center.dx - size.width / 2,
+      y: center.dy - size.height / 2,
     );
+  }
+
+  void instantiateKit(String kitId) {
+    widget.kitApi.instantiate(kitId, origin: _camera.offset);
   }
 
   void _onPointerDown(PointerDownEvent event) {
@@ -248,7 +238,7 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (commit == null || id == null) {
       return;
     }
-    widget.store.apply(UpdateObjectFrame(id: id, x: commit.x, y: commit.y));
+    widget.kitApi.updateFrame(id: id, x: commit.x, y: commit.y);
   }
 
   void _clearSelectionOrCancelMove() {
@@ -271,7 +261,7 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (id == null) {
       return;
     }
-    widget.store.apply(RemoveObject(id));
+    widget.kitApi.removeObject(id);
     widget.selection.syncToDocument(widget.store.document);
   }
 

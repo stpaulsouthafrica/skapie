@@ -48,6 +48,21 @@ void main() {
     ]);
   });
 
+  testWidgets('Add Demo kit: note card instantiates box and text', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    await tester.pumpWidget(SkapieApp(store: store));
+
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Demo kit: note card'));
+    await tester.pump();
+
+    expect(store.document.objects.map((o) => o.type), ['box', 'text']);
+    expect(store.document.objects.last.props['content'], 'Note');
+  });
+
   testWidgets('header shows a short scene label, not the absolute path', (
     tester,
   ) async {

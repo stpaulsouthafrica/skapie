@@ -2,19 +2,23 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:skapie/canvas/selection_controller.dart';
+import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/builtin_types.dart';
 import 'package:skapie/scene/scene.dart';
 
-/// Thin inspector. Edits go through [SceneStore.apply] only.
+/// Thin inspector. Edits go through [KitApi] → [SceneStore.apply] only.
 class InspectorPanel extends StatefulWidget {
-  const InspectorPanel({
+  InspectorPanel({
     super.key,
     required this.store,
     required this.selection,
-  });
+    KitApi? kitApi,
+  }) : kitApi =
+           kitApi ?? KitApi(store: store, registry: createBuiltinRegistry());
 
   final SceneStore store;
   final SelectionController selection;
+  final KitApi kitApi;
 
   @override
   State<InspectorPanel> createState() => _InspectorPanelState();
@@ -134,7 +138,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
       return;
     }
     void commit() {
-      widget.store.apply(UpdateObjectProps(id, patch));
+      widget.kitApi.updateProps(id, patch);
     }
 
     _debounce?.cancel();
@@ -150,7 +154,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
     if (id == null) {
       return;
     }
-    widget.store.apply(UpdateObjectFrame(id: id, x: x, y: y));
+    widget.kitApi.updateFrame(id: id, x: x, y: y);
   }
 
   void _delete() {
@@ -158,7 +162,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
     if (id == null) {
       return;
     }
-    widget.store.apply(RemoveObject(id));
+    widget.kitApi.removeObject(id);
     widget.selection.syncToDocument(widget.store.document);
   }
 
@@ -188,9 +192,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
               subtitle: const Text('Select and delete ok, no move'),
               value: object.locked,
               onChanged: (value) {
-                widget.store.apply(
-                  SetObjectLocked(id: object.id, locked: value),
-                );
+                widget.kitApi.setLocked(object.id, value);
               },
             ),
             _field(

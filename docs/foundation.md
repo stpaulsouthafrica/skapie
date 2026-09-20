@@ -4,7 +4,7 @@ These rules bind every phase. If a change fights them, the change is wrong.
 
 ## One mutation path
 
-Scene data changes only through `SceneStore.apply(SceneOp)`. Widgets, kits, and the agent must not poke document fields. Phase 6 Kit API must wrap these ops, not bypass them. Live camera pan/zoom is canvas state; `noteCamera` only snapshots it for save.
+Scene data changes only through `SceneStore.apply(SceneOp)`. Widgets, kits, and the agent must not poke document fields. The Kit API wraps these ops; it does not bypass them. Live camera pan/zoom is canvas state; `noteCamera` only snapshots it for save.
 
 ## Scene is the source of truth
 
@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 6+ is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 7+ is blocked until the current phase gate is green.
 
 ## Phase 1 gate — done
 
@@ -51,12 +51,18 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Built-ins: `box`, `text`, `button`, plus `debug.rect`. Canvas renders visible objects through the registry (z-sorted). Unknown / failing types → placeholder, never a crash, never Dart eval.
 - Thin Add menu inserts via `SceneStore.apply(AddObject)`.
 
-## Phase 5 gate (current)
+## Phase 5 gate — done
 
 - Single selection is UI state (`SelectionController`). Not persisted.
 - Hit-test in the viewport from scene frames (AABB; rotation ignored). Registry widgets stay non-interactive.
 - Move: preview in UI; one `UpdateObjectFrame` on pointer-up. Locked: select + delete, no move.
 - Thin inspector edits via `UpdateObjectProps` / `UpdateObjectFrame` / `SetObjectLocked`; Delete via `RemoveObject`. Inspector overlays the canvas (does not shrink the viewport). Middle-mouse drag pans without selecting.
-- `flutter analyze` clean; `flutter test` covers hit-test, move undo, props undo, lock toggle, delete clears selection, locked no-move, overlay size stability, MMB pan, plus existing spine tests.
 
-Phase 6+ stays blocked until this gate is green. Do not implement Kit API, kits on disk, or the agent here.
+## Phase 6 gate (current)
+
+- `KitApi` in `lib/kit_api/` wraps `SceneStore.apply` only. Unknown `typeId` rejected. In-memory `registerKit` / `instantiate`; validate-then-apply (no partial spawn).
+- Built-in demo recipe `demo.note-card`. No disk loader. No agent.
+- Add / inspector / move / delete / lock go through `KitApi`.
+- `flutter analyze` clean; `flutter test` covers KitApi add/unknown/undo/duplicate kit/instantiate + existing spine tests.
+
+Phase 7+ stays blocked until this gate is green. Do not implement on-disk kit packages or the agent here.

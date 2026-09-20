@@ -3,15 +3,22 @@ import 'package:flutter/services.dart';
 import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/selection_controller.dart';
+import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/shared/app_info.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, required this.store, required this.registry});
+  const HomeScreen({
+    super.key,
+    required this.store,
+    required this.registry,
+    required this.kitApi,
+  });
 
   final SceneStore store;
   final ObjectRegistry registry;
+  final KitApi kitApi;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -52,8 +59,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onSelection() => setState(() {});
 
-  void _add(String typeId) {
-    _viewportKey.currentState?.addTypedObject(typeId);
+  void _add(String value) {
+    if (value == demoNoteCardKitId) {
+      _viewportKey.currentState?.instantiateKit(value);
+      return;
+    }
+    _viewportKey.currentState?.addTypedObject(value);
   }
 
   @override
@@ -125,6 +136,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           value: debugRectType,
                           child: Text('Debug rect'),
                         ),
+                        PopupMenuItem(
+                          value: demoNoteCardKitId,
+                          child: Text('Demo kit: note card'),
+                        ),
                       ],
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -153,6 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   store: widget.store,
                   registry: widget.registry,
                   selection: _selection,
+                  kitApi: widget.kitApi,
                 ),
                 if (_selection.selectedId != null)
                   Positioned(
@@ -166,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: InspectorPanel(
                         store: widget.store,
                         selection: _selection,
+                        kitApi: widget.kitApi,
                       ),
                     ),
                   ),
