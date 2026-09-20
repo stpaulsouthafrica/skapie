@@ -5,31 +5,96 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_grid_painter.dart';
+import 'package:skapie/canvas/debug_node_painter.dart';
+import 'package:skapie/scene/scene.dart';
 
 /// Infinite canvas viewport: pan, zoom-toward-cursor, grid, origin, zoom HUD.
 class CanvasViewport extends StatefulWidget {
-  const CanvasViewport({super.key});
+  const CanvasViewport({super.key, required this.store});
+
+  final SceneStore store;
 
   @override
-  State<CanvasViewport> createState() => _CanvasViewportState();
+  State<CanvasViewport> createState() => CanvasViewportState();
 }
 
-class _CanvasViewportState extends State<CanvasViewport> {
-  CanvasCamera _camera = CanvasCamera();
+class CanvasViewportState extends State<CanvasViewport> {
+  late CanvasCamera _camera = _cameraFrom(widget.store.document.camera);
   int? _dragPointer;
   Offset? _lastDrag;
   CanvasCamera? _panZoomStart;
 
   String get _zoomLabel => '${(_camera.zoom * 100).round()}%';
 
+  static CanvasCamera _cameraFrom(SceneCameraSnapshot? snapshot) {
+    if (snapshot == null) {
+      return CanvasCamera();
+    }
+    return CanvasCamera(
+      offset: Offset(snapshot.offsetX, snapshot.offsetY),
+      zoom: snapshot.zoom,
+    );
+  }
+
+  static SceneCameraSnapshot _snapshot(CanvasCamera camera) {
+    return SceneCameraSnapshot(
+      offsetX: camera.offset.dx,
+      offsetY: camera.offset.dy,
+      zoom: camera.zoom,
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.store.addListener(_onStore);
+    widget.store.noteCamera(_snapshot(_camera));
+  }
+
+  @override
+  void didUpdateWidget(CanvasViewport oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.store != widget.store) {
+      oldWidget.store.removeListener(_onStore);
+      widget.store.addListener(_onStore);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.store.removeListener(_onStore);
+    super.dispose();
+  }
+
+  void _onStore() => setState(() {});
+
   void _setCamera(CanvasCamera next) {
     if (next == _camera) {
       return;
     }
     setState(() => _camera = next);
+    widget.store.noteCamera(_snapshot(next));
   }
 
-  void _reset() => _setCamera(_camera.reset());
+  void resetCamera() => _setCamera(_camera.reset());
+
+  void addDebugRect() {
+    const width = 120.0;
+    const height = 80.0;
+    final center = _camera.offset;
+    widget.store.apply(
+      AddNode(
+        SceneNode(
+          id: newSceneId('n'),
+          type: debugRectType,
+          x: center.dx - width / 2,
+          y: center.dy - height / 2,
+          width: width,
+          height: height,
+        ),
+      ),
+    );
+  }
 
   void _onPointerDown(PointerDownEvent event) {
     if (event.kind == PointerDeviceKind.mouse ||
@@ -104,13 +169,28 @@ class _CanvasViewportState extends State<CanvasViewport> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final nodes = widget.store.document.nodes;
 
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.digit0): _reset,
-        const SingleActivator(LogicalKeyboardKey.digit0, meta: true): _reset,
-        const SingleActivator(LogicalKeyboardKey.digit0, control: true): _reset,
-        const SingleActivator(LogicalKeyboardKey.numpad0): _reset,
+        const SingleActivator(LogicalKeyboardKey.digit0): resetCamera,
+        const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
+            resetCamera,
+        const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+            resetCamera,
+        const SingleActivator(LogicalKeyboardKey.numpad0): resetCamera,
+        const SingleActivator(LogicalKeyboardKey.keyN): addDebugRect,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
+            widget.store.undo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+            widget.store.undo,
+        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
+            widget.store.redo,
+        const SingleActivator(
+          LogicalKeyboardKey.keyZ,
+          control: true,
+          shift: true,
+        ): widget.store.redo,
       },
       child: Focus(
         autofocus: true,
@@ -136,7 +216,17 @@ class _CanvasViewportState extends State<CanvasViewport> {
                       dotColor: colors.outlineVariant,
                       originColor: colors.primary,
                     ),
-                    child: const SizedBox.expand(),
+                    child: CustomPaint(
+                      painter: DebugNodePainter(
+                        camera: _camera,
+                        nodes: nodes,
+                        fillColor: colors.outlineVariant.withValues(
+                          alpha: 0.45,
+                        ),
+                        strokeColor: colors.outline,
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
                   ),
                 ),
                 Positioned(

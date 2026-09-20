@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Skapie scene files (Phase 3 persistence)
+.skapie/

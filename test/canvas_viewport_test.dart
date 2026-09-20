@@ -2,11 +2,14 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
+import 'package:skapie/scene/scene_store.dart';
 
 void main() {
   testWidgets('viewport fills and shows zoom hud at 100%', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: CanvasViewport())),
+      MaterialApp(
+        home: Scaffold(body: CanvasViewport(store: SceneStore())),
+      ),
     );
 
     expect(find.byType(CanvasViewport), findsOneWidget);
@@ -15,7 +18,9 @@ void main() {
 
   testWidgets('mouse wheel zooms toward the pointer', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: CanvasViewport())),
+      MaterialApp(
+        home: Scaffold(body: CanvasViewport(store: SceneStore())),
+      ),
     );
 
     final center = tester.getCenter(find.byType(CanvasViewport));

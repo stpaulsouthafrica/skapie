@@ -4,11 +4,11 @@ These rules bind every phase. If a change fights them, the change is wrong.
 
 ## One mutation path
 
-Scene data changes through a single, explicit path (tools, commands, or a documented editor API). Widgets, kits, and the agent do not poke document state on the side. If two writers can update the same field, the design has failed.
+Scene data changes only through `SceneStore.apply(SceneOp)`. Widgets, kits, and the agent must not poke document fields. Phase 6 Kit API must wrap these ops, not bypass them. Live camera pan/zoom is viewport state; `noteCamera` only snapshots it for save.
 
 ## Scene is the source of truth
 
-The scene document is what is real. The canvas, inspector, and any agent memory are views or proposals. Reload from scene and the UI must reconstruct. Do not store lasting product state only in widget state, canvas controllers, or chat transcripts.
+The scene document is what is real. The canvas, inspector, and any agent memory are views or proposals. Reload from scene and the UI must reconstruct. Debug rectangles are drawn from `SceneStore` nodes, not from widget state.
 
 ## Registry over fantasy
 
@@ -24,18 +24,25 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 2+ is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 4+ is blocked until the current phase gate is green.
 
 ## Phase 1 gate — done
 
 - macOS desktop shell launches with branding chrome.
 - Folder layout for `app`, `canvas`, `scene`, `registry`, `kit_api`, `agent`, `shared`, `docs`, `kits` exists; later layers stay stubs until their phase.
 
-## Phase 2 gate (current)
+## Phase 2 gate — done
 
-- Camera is the spine for this phase: one mutation path (`CanvasCamera.panScreen` / `zoomAt` / `reset`). There is still no scene document and no Kit API.
-- Screen origin is viewport top-left; world shares those axes; `offset` is the world point at the viewport center; zoom is world-to-screen scale, clamped 0.25–4.0.
-- `flutter analyze` has no issues; `flutter test` covers transform round-trip, zoom clamp, zoom-at-point, viewport HUD, and the smoke test.
-- README describes pan/zoom, reset, and the transform convention.
+- Camera is the viewport spine: `CanvasCamera.panScreen` / `zoomAt` / `reset`.
+- Screen origin is viewport top-left; world shares those axes; `offset` is the world point at the viewport center; zoom is world-to-screen scale, clamped 0.25–4.0. World `(0,0)` is the **world origin**.
 
-Phase 3+ stays blocked until this gate is green. Do not implement scene nodes, registry widgets, kits, or the agent here.
+## Phase 3 gate (current)
+
+- Scene document in `lib/scene/`. Mutations only via `SceneStore.apply`.
+- JSON `schemaVersion` required; unknown fields ignored (tolerant).
+- Undo/redo with snapshot strategy; new apply clears redo.
+- Persistence: `.skapie/scene.json`. Load on startup; save after successful apply/undo/redo.
+- Debug gray rects from node frames only — not a registry.
+- `flutter analyze` clean; `flutter test` covers JSON round-trip, add/remove, frame/props, undo/redo, missing-file load, camera transforms, smoke.
+
+Phase 4+ stays blocked until this gate is green. Do not implement registry widgets, kits, selection, or the agent here.
