@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 9.1 is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 9.2 is blocked until the current phase gate is green.
 
 ## Phase 1 gate — done
 
@@ -74,14 +74,18 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Complete Kit API documentation: mental model, every public `KitApi` method, cookbook, package contract linked from [kit packages](kit_packages.md), agent-tool sketch labeled **not implemented**.
 - Docs match `lib/kit_api/kit_api.dart`. Kits root (repo vs Application Support vs override) is unambiguous.
 
-## Phase 9 gate (current)
+## Phase 9 gate — done
 
 - Agent harness core in `lib/agent/`: `AgentSession`, `AgentModel`, `FakeAgentModel`, events. One turn: user → model → assistant. No HTTP.
-- Harness does **not** call `KitApi` or `SceneStore.apply`. No chat UI.
-- `flutter analyze` clean; `flutter test` covers session messages, event order, and model-failure behavior.
 
-**9.1** (tools → KitApi) and **9.2** (real model + chat) stay blocked until this gate is green. See [agent.md](agent.md).
+## Phase 9.1 gate (current)
+
+- Kit tools dispatch to `KitApi` only (`add_object` → `addObject`, …). Tool results are `AgentRole.tool` messages. Loop until plain text or max 8 iterations.
+- `ScriptedAgentModel` for tests. Unknown tool / unknown `typeId` → tool error JSON, scene unchanged.
+- No chat UI, no HTTP. `flutter analyze` clean; `flutter test` covers tool loop + existing session tests.
+
+**9.2** (real model + chat) stays blocked until this gate is green. See [agent.md](agent.md).
 
 ## Dream goal (not scheduled)
 
-Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The Phase 9 harness (text session + fake model) is **not** that. Planted seam: `capabilities: []` in `kit.json`.
+Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The agent harness (session + kit tools, no chat) is **not** that. Planted seam: `capabilities: []` in `kit.json`.

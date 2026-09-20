@@ -1,9 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/scene/scene.dart';
 
 void main() {
+  late KitApi kitApi;
+
+  setUp(() {
+    kitApi = createAppKitApi(store: SceneStore());
+  });
+
   test('new session starts with the default system message', () {
-    final session = AgentSession(model: FakeAgentModel());
+    final session = AgentSession(model: FakeAgentModel(), kitApi: kitApi);
 
     expect(session.messages, hasLength(1));
     expect(session.messages.single.role, AgentRole.system);
@@ -13,7 +21,7 @@ void main() {
   test(
     'sendUser with FakeAgentModel appends user then echoed assistant',
     () async {
-      final session = AgentSession(model: FakeAgentModel());
+      final session = AgentSession(model: FakeAgentModel(), kitApi: kitApi);
 
       await session.sendUser('hi');
 
@@ -28,7 +36,7 @@ void main() {
   );
 
   test('events fire started, message, message, finished', () async {
-    final session = AgentSession(model: FakeAgentModel());
+    final session = AgentSession(model: FakeAgentModel(), kitApi: kitApi);
     final events = <AgentEvent>[];
     final sub = session.events.listen(events.add);
 
@@ -51,7 +59,7 @@ void main() {
   test(
     'model throw keeps user message, adds no assistant, emits failed',
     () async {
-      final session = AgentSession(model: _ThrowingModel());
+      final session = AgentSession(model: _ThrowingModel(), kitApi: kitApi);
       final events = <AgentEvent>[];
       final sub = session.events.listen(events.add);
 
@@ -79,7 +87,10 @@ void main() {
 
 class _ThrowingModel implements AgentModel {
   @override
-  Future<AgentModelReply> complete({required List<AgentMessage> messages}) {
+  Future<AgentModelReply> complete({
+    required List<AgentMessage> messages,
+    List<AgentTool> tools = const [],
+  }) {
     throw StateError('boom');
   }
 }

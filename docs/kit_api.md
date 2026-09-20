@@ -324,9 +324,9 @@ for (final kit in kitApi.listKits()) {
 }
 ```
 
-## Agent tool sketch (Phase 9.1, not implemented)
+## Agent tools (Phase 9.1)
 
-The Phase 9 harness (`AgentSession` + `FakeAgentModel`) exists; see [agent.md](agent.md). Tools are **not** wired. This table is the contract proposal for **9.1**. No LLM client, no MCP, no chat UI. Tools should call `KitApi` methods; they must not poke `SceneStore` fields.
+Implemented by `createKitAgentTools` + `AgentToolDispatcher` inside `AgentSession`. The harness calls `KitApi` methods; it does not poke `SceneStore` fields. Still **no** chat UI and **no** LLM HTTP. See [agent.md](agent.md).
 
 | Tool name | Maps to | Args (conceptual JSON) | Notes |
 |---|---|---|---|
@@ -355,7 +355,7 @@ Visible sub-agent kits: a future direction where a kit can show living agent wor
 ## Non-goals
 
 - Workers, isolates, Wasm, executing non-empty `capabilities`
-- Tool dispatch, chat UI, LLM HTTP (see [agent.md](agent.md) for the Phase 9 core vs 9.1 / 9.2)
+- Chat UI, LLM HTTP (see [agent.md](agent.md) — tools are 9.1; provider is 9.2)
 - Dart eval / new registry types
 - Batched multi-object undo
 - “Save selection as kit…” UI

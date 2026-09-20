@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 9 of 10** (slice 1: harness core) — canvas, scene, registry, kits, Kit API docs, and an in-process agent session with a fake model. Tools, a real LLM, and chat UI are not built yet.
+This repository is **Phase 9.1 of 10** — canvas, scene, kits, Kit API, and an agent session that can call kit tools (scripted/fake model). A real LLM and chat UI are not built yet.
 
 ## Run on macOS
 
@@ -43,7 +43,7 @@ flutter run -d macos \
 
 ## Foundation gates
 
-Skapie is built phase by phase. **Phase 9.1 (tools) is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Interaction is in [`docs/interaction.md`](docs/interaction.md). Kit API reference is in [`docs/kit_api.md`](docs/kit_api.md). Kit packages are in [`docs/kit_packages.md`](docs/kit_packages.md). Agent harness is in [`docs/agent.md`](docs/agent.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
+Skapie is built phase by phase. **Phase 9.2 (chat / real model) is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Interaction is in [`docs/interaction.md`](docs/interaction.md). Kit API reference is in [`docs/kit_api.md`](docs/kit_api.md). Kit packages are in [`docs/kit_packages.md`](docs/kit_packages.md). Agent harness is in [`docs/agent.md`](docs/agent.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
 **Phase 1 gate:** macOS shell + folder stubs — done.
 
@@ -61,7 +61,9 @@ Skapie is built phase by phase. **Phase 9.1 (tools) is blocked until the current
 
 **Phase 8 gate:** complete Kit API docs (methods, cookbook, package paths, unimplemented agent-tool sketch) — done.
 
-**Phase 9 gate:** `AgentSession` + `FakeAgentModel` (no tools, no chat, no HTTP); `flutter analyze` clean; `flutter test` green. **9.1** tools and **9.2** chat/provider stay next.
+**Phase 9 gate:** `AgentSession` + `FakeAgentModel` — done.
+
+**Phase 9.1 gate:** kit tools → `KitApi`; scripted tool loop; no chat/HTTP; `flutter analyze` clean; `flutter test` green. **9.2** chat/provider stays next.
 
 ## Docs
 
@@ -70,7 +72,7 @@ Skapie is built phase by phase. **Phase 9.1 (tools) is blocked until the current
 - [`docs/scene.md`](docs/scene.md) — document model, ops, file path, world origin
 - [`docs/registry.md`](docs/registry.md) — type string → builder, unknown placeholder
 - [`docs/interaction.md`](docs/interaction.md) — select, move, inspector
-- [`docs/kit_api.md`](docs/kit_api.md) — Kit API reference, cookbook, agent-tool sketch (not built)
+- [`docs/kit_api.md`](docs/kit_api.md) — Kit API reference, cookbook, agent tools
 - [`docs/kit_packages.md`](docs/kit_packages.md) — folder contract, `kit.json`, kits root
-- [`docs/agent.md`](docs/agent.md) — session, turn, fake model; 9.1 / 9.2 still later
+- [`docs/agent.md`](docs/agent.md) — session, tool loop, fake/scripted models; 9.2 still later
 - **Dream goal (not scheduled):** visible sub-agent kits — see [`docs/kit_packages.md`](docs/kit_packages.md); the harness core is not that
