@@ -1,3 +1,3 @@
-# Kits
+# Kit packages
 
-On-disk widget kits will live in this directory in a later phase.
+On-disk kit packages (recipes) will live in this directory in a later phase.

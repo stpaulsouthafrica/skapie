@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:skapie/scene/scene_document.dart';
-import 'package:skapie/scene/scene_node.dart';
+import 'package:skapie/scene/scene_object.dart';
 import 'package:skapie/scene/scene_op.dart';
 import 'package:skapie/scene/scene_persistence.dart';
 

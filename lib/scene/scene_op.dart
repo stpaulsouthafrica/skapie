@@ -1,5 +1,5 @@
 import 'package:skapie/scene/scene_document.dart';
-import 'package:skapie/scene/scene_node.dart';
+import 'package:skapie/scene/scene_object.dart';
 
 /// The only scene mutations. Applied by [SceneStore.apply].
 sealed class SceneOp {
@@ -8,41 +8,41 @@ sealed class SceneOp {
   SceneDocument apply(SceneDocument document);
 }
 
-final class AddNode extends SceneOp {
-  const AddNode(this.node);
+final class AddObject extends SceneOp {
+  const AddObject(this.object);
 
-  final SceneNode node;
+  final SceneObject object;
 
   @override
   SceneDocument apply(SceneDocument document) {
-    if (document.nodeById(node.id) != null) {
+    if (document.objectById(object.id) != null) {
       return document;
     }
-    return document.copyWith(nodes: [...document.nodes, node]);
+    return document.copyWith(objects: [...document.objects, object]);
   }
 }
 
-final class RemoveNode extends SceneOp {
-  const RemoveNode(this.id);
+final class RemoveObject extends SceneOp {
+  const RemoveObject(this.id);
 
   final String id;
 
   @override
   SceneDocument apply(SceneDocument document) {
-    if (document.nodeById(id) == null) {
+    if (document.objectById(id) == null) {
       return document;
     }
     return document.copyWith(
-      nodes: [
-        for (final node in document.nodes)
-          if (node.id != id) node,
+      objects: [
+        for (final object in document.objects)
+          if (object.id != id) object,
       ],
     );
   }
 }
 
-final class UpdateNodeFrame extends SceneOp {
-  const UpdateNodeFrame({
+final class UpdateObjectFrame extends SceneOp {
+  const UpdateObjectFrame({
     required this.id,
     this.x,
     this.y,
@@ -60,7 +60,7 @@ final class UpdateNodeFrame extends SceneOp {
 
   @override
   SceneDocument apply(SceneDocument document) {
-    final current = document.nodeById(id);
+    final current = document.objectById(id);
     if (current == null) {
       return document;
     }
@@ -75,26 +75,26 @@ final class UpdateNodeFrame extends SceneOp {
       return document;
     }
     return document.copyWith(
-      nodes: [
-        for (final node in document.nodes)
-          if (node.id == id) next else node,
+      objects: [
+        for (final object in document.objects)
+          if (object.id == id) next else object,
       ],
     );
   }
 }
 
-/// Shallow-merge [patch] into the node's props.
+/// Shallow-merge [patch] into the scene object's props.
 ///
 /// Keys with a `null` value are removed. Other existing keys are kept.
-final class UpdateNodeProps extends SceneOp {
-  const UpdateNodeProps(this.id, this.patch);
+final class UpdateObjectProps extends SceneOp {
+  const UpdateObjectProps(this.id, this.patch);
 
   final String id;
   final Map<String, Object?> patch;
 
   @override
   SceneDocument apply(SceneDocument document) {
-    final current = document.nodeById(id);
+    final current = document.objectById(id);
     if (current == null) {
       return document;
     }
@@ -113,9 +113,9 @@ final class UpdateNodeProps extends SceneOp {
       return document;
     }
     return document.copyWith(
-      nodes: [
-        for (final node in document.nodes)
-          if (node.id == id) next else node,
+      objects: [
+        for (final object in document.objects)
+          if (object.id == id) next else object,
       ],
     );
   }

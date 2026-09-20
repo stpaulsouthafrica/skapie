@@ -1,2 +1,2 @@
-/// Kit API for on-disk widget kits. Implemented in a later phase.
+/// Kit API for on-disk kit packages. Implemented in a later phase.
 library;

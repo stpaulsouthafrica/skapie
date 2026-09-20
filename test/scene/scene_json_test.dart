@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/scene/scene.dart';
 
-SceneNode _node({
+SceneObject _object({
   required String id,
   String type = 'debug.rect',
   double x = 0,
@@ -10,7 +10,7 @@ SceneNode _node({
   double height = 40,
   Map<String, Object?> props = const {},
 }) {
-  return SceneNode(
+  return SceneObject(
     id: id,
     type: type,
     x: x,
@@ -22,13 +22,13 @@ SceneNode _node({
 }
 
 void main() {
-  test('JSON round-trip preserves a document with nodes and props', () {
+  test('JSON round-trip preserves a document with objects and props', () {
     final original = SceneDocument(
       id: 'doc-1',
       schemaVersion: currentSceneSchemaVersion,
       camera: const SceneCameraSnapshot(offsetX: 12.5, offsetY: -4, zoom: 1.5),
-      nodes: [
-        _node(
+      objects: [
+        _object(
           id: 'a',
           x: 10,
           y: 20,
@@ -36,7 +36,7 @@ void main() {
           height: 80,
           props: const {'label': 'alpha', 'count': 3, 'on': true},
         ),
-        _node(
+        _object(
           id: 'b',
           type: 'box',
           x: -50,
@@ -50,18 +50,22 @@ void main() {
       ],
     );
 
-    final decoded = SceneDocument.fromJson(original.toJson());
+    final encoded = original.toJson();
+    expect(encoded.containsKey('objects'), isTrue);
+    expect(encoded.containsKey('nodes'), isFalse);
+
+    final decoded = SceneDocument.fromJson(encoded);
 
     expect(decoded, original);
     expect(decoded.schemaVersion, currentSceneSchemaVersion);
-    expect(decoded.nodes, hasLength(2));
-    expect(decoded.nodes[0].props['label'], 'alpha');
-    expect(decoded.nodes[1].props['nested'], {'k': 'v'});
+    expect(decoded.objects, hasLength(2));
+    expect(decoded.objects[0].props['label'], 'alpha');
+    expect(decoded.objects[1].props['nested'], {'k': 'v'});
   });
 
   test('schemaVersion is required in JSON', () {
     expect(
-      () => SceneDocument.fromJson({'id': 'doc-1', 'nodes': <Object?>[]}),
+      () => SceneDocument.fromJson({'id': 'doc-1', 'objects': <Object?>[]}),
       throwsFormatException,
     );
   });
@@ -70,7 +74,7 @@ void main() {
     final doc = SceneDocument.fromJson({
       'id': 'doc-1',
       'schemaVersion': 1,
-      'nodes': <Object?>[],
+      'objects': <Object?>[],
     });
     expect(doc.schemaVersion, 1);
   });
@@ -80,7 +84,7 @@ void main() {
       'id': 'doc-1',
       'schemaVersion': 1,
       'futureTopLevel': {'ignore': true},
-      'nodes': [
+      'objects': [
         {
           'id': 'n1',
           'type': 'debug.rect',
@@ -88,14 +92,66 @@ void main() {
           'y': 2,
           'width': 3,
           'height': 4,
-          'futureNodeField': 'nope',
+          'futureObjectField': 'nope',
         },
       ],
     });
 
     expect(doc.id, 'doc-1');
-    expect(doc.nodes, hasLength(1));
-    expect(doc.nodes.single.id, 'n1');
-    expect(doc.nodes.single.x, 1);
+    expect(doc.objects, hasLength(1));
+    expect(doc.objects.single.id, 'n1');
+    expect(doc.objects.single.x, 1);
+  });
+
+  test('legacy nodes key still loads; resave uses objects', () {
+    final doc = SceneDocument.fromJson({
+      'id': 'doc-1',
+      'schemaVersion': 1,
+      'nodes': [
+        {
+          'id': 'legacy',
+          'type': 'debug.rect',
+          'x': 8,
+          'y': 9,
+          'width': 10,
+          'height': 11,
+        },
+      ],
+    });
+
+    expect(doc.schemaVersion, 1);
+    expect(doc.objects, hasLength(1));
+    expect(doc.objects.single.id, 'legacy');
+    expect(doc.toJson().containsKey('objects'), isTrue);
+    expect(doc.toJson().containsKey('nodes'), isFalse);
+  });
+
+  test('objects wins when both objects and nodes are present', () {
+    final doc = SceneDocument.fromJson({
+      'id': 'doc-1',
+      'schemaVersion': 1,
+      'objects': [
+        {
+          'id': 'kept',
+          'type': 'debug.rect',
+          'x': 1,
+          'y': 1,
+          'width': 1,
+          'height': 1,
+        },
+      ],
+      'nodes': [
+        {
+          'id': 'ignored',
+          'type': 'debug.rect',
+          'x': 2,
+          'y': 2,
+          'width': 2,
+          'height': 2,
+        },
+      ],
+    });
+
+    expect(doc.objects.single.id, 'kept');
   });
 }

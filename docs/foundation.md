@@ -4,11 +4,13 @@ These rules bind every phase. If a change fights them, the change is wrong.
 
 ## One mutation path
 
-Scene data changes only through `SceneStore.apply(SceneOp)`. Widgets, kits, and the agent must not poke document fields. Phase 6 Kit API must wrap these ops, not bypass them. Live camera pan/zoom is viewport state; `noteCamera` only snapshots it for save.
+Scene data changes only through `SceneStore.apply(SceneOp)`. Widgets, kits, and the agent must not poke document fields. Phase 6 Kit API must wrap these ops, not bypass them. Live camera pan/zoom is canvas state; `noteCamera` only snapshots it for save.
 
 ## Scene is the source of truth
 
-The scene document is what is real. The canvas, inspector, and any agent memory are views or proposals. Reload from scene and the UI must reconstruct. Debug rectangles are drawn from `SceneStore` nodes, not from widget state.
+The scene document is what is real. The canvas, inspector, and any agent memory are views or proposals. Reload from scene and the UI must reconstruct. Debug rectangles are drawn from `SceneStore` scene objects, not from widget state. Camera pan limits read those objects and clamp viewport state only — they never mutate the scene.
+
+Vocabulary: scene items are **scene objects**. **Graph node** is reserved for a future cable/port graph. Full table: [glossary](glossary.md).
 
 ## Registry over fantasy
 
@@ -41,8 +43,8 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Scene document in `lib/scene/`. Mutations only via `SceneStore.apply`.
 - JSON `schemaVersion` required; unknown fields ignored (tolerant).
 - Undo/redo with snapshot strategy; new apply clears redo.
-- Persistence: `.skapie/scene.json`. Load on startup; save after successful apply/undo/redo.
-- Debug gray rects from node frames only — not a registry.
-- `flutter analyze` clean; `flutter test` covers JSON round-trip, add/remove, frame/props, undo/redo, missing-file load, camera transforms, smoke.
+- Persistence: `.skapie/scene.json`. Load on startup; save after successful apply/undo/redo. Writes `"objects"`; still reads legacy `"nodes"` (`schemaVersion` 1).
+- Debug gray rects from scene object frames only — not a registry.
+- `flutter analyze` clean; `flutter test` covers JSON round-trip, add/remove, frame/props, undo/redo, missing-file load, legacy `nodes` key, camera transforms, smoke.
 
 Phase 4+ stays blocked until this gate is green. Do not implement registry widgets, kits, selection, or the agent here.

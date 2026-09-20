@@ -3,9 +3,10 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skapie/canvas/canvas_bounds.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_grid_painter.dart';
-import 'package:skapie/canvas/debug_node_painter.dart';
+import 'package:skapie/canvas/debug_object_painter.dart';
 import 'package:skapie/scene/scene.dart';
 
 /// Infinite canvas viewport: pan, zoom-toward-cursor, grid, origin, zoom HUD.
@@ -23,6 +24,8 @@ class CanvasViewportState extends State<CanvasViewport> {
   int? _dragPointer;
   Offset? _lastDrag;
   CanvasCamera? _panZoomStart;
+
+  Size _viewportSize = Size.zero;
 
   String get _zoomLabel => '${(_camera.zoom * 100).round()}%';
 
@@ -66,9 +69,22 @@ class CanvasViewportState extends State<CanvasViewport> {
     super.dispose();
   }
 
-  void _onStore() => setState(() {});
+  void _onStore() {
+    final next = _clamped(_camera);
+    setState(() => _camera = next);
+    widget.store.noteCamera(_snapshot(next));
+  }
+
+  CanvasCamera _clamped(CanvasCamera camera) {
+    return clampCameraToContent(
+      camera: camera,
+      viewportSize: _viewportSize,
+      objects: widget.store.document.objects,
+    );
+  }
 
   void _setCamera(CanvasCamera next) {
+    next = _clamped(next);
     if (next == _camera) {
       return;
     }
@@ -83,9 +99,9 @@ class CanvasViewportState extends State<CanvasViewport> {
     const height = 80.0;
     final center = _camera.offset;
     widget.store.apply(
-      AddNode(
-        SceneNode(
-          id: newSceneId('n'),
+      AddObject(
+        SceneObject(
+          id: newSceneId('o'),
           type: debugRectType,
           x: center.dx - width / 2,
           y: center.dy - height / 2,
@@ -125,8 +141,8 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (event is! PointerScrollEvent) {
       return;
     }
-    final size = context.size;
-    if (size == null) {
+    final size = _viewportSize;
+    if (size.isEmpty) {
       return;
     }
     if (event.kind == PointerDeviceKind.trackpad) {
@@ -149,8 +165,8 @@ class CanvasViewportState extends State<CanvasViewport> {
 
   void _onPanZoomUpdate(PointerPanZoomUpdateEvent event) {
     final start = _panZoomStart;
-    final size = context.size;
-    if (start == null || size == null) {
+    final size = _viewportSize;
+    if (start == null || size.isEmpty) {
       return;
     }
     var next = start.panScreen(event.pan);
@@ -169,80 +185,97 @@ class CanvasViewportState extends State<CanvasViewport> {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final nodes = widget.store.document.nodes;
+    final objects = widget.store.document.objects;
 
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.digit0): resetCamera,
-        const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
-            resetCamera,
-        const SingleActivator(LogicalKeyboardKey.digit0, control: true):
-            resetCamera,
-        const SingleActivator(LogicalKeyboardKey.numpad0): resetCamera,
-        const SingleActivator(LogicalKeyboardKey.keyN): addDebugRect,
-        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
-            widget.store.undo,
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
-            widget.store.undo,
-        const SingleActivator(LogicalKeyboardKey.keyZ, meta: true, shift: true):
-            widget.store.redo,
-        const SingleActivator(
-          LogicalKeyboardKey.keyZ,
-          control: true,
-          shift: true,
-        ): widget.store.redo,
-      },
-      child: Focus(
-        autofocus: true,
-        child: Listener(
-          onPointerDown: _onPointerDown,
-          onPointerMove: _onPointerMove,
-          onPointerUp: _onPointerUp,
-          onPointerCancel: _onPointerUp,
-          onPointerSignal: _onPointerSignal,
-          onPointerPanZoomStart: _onPanZoomStart,
-          onPointerPanZoomUpdate: _onPanZoomUpdate,
-          onPointerPanZoomEnd: _onPanZoomEnd,
-          child: MouseRegion(
-            cursor: SystemMouseCursors.grab,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(
-                  color: colors.surface,
-                  child: CustomPaint(
-                    painter: CanvasGridPainter(
-                      camera: _camera,
-                      dotColor: colors.outlineVariant,
-                      originColor: colors.primary,
-                    ),
-                    child: CustomPaint(
-                      painter: DebugNodePainter(
-                        camera: _camera,
-                        nodes: nodes,
-                        fillColor: colors.outlineVariant.withValues(
-                          alpha: 0.45,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        if (size != _viewportSize) {
+          _viewportSize = size;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _setCamera(_camera);
+            }
+          });
+        }
+
+        return CallbackShortcuts(
+          bindings: {
+            const SingleActivator(LogicalKeyboardKey.digit0): resetCamera,
+            const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
+                resetCamera,
+            const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+                resetCamera,
+            const SingleActivator(LogicalKeyboardKey.numpad0): resetCamera,
+            const SingleActivator(LogicalKeyboardKey.keyN): addDebugRect,
+            const SingleActivator(LogicalKeyboardKey.keyZ, meta: true):
+                widget.store.undo,
+            const SingleActivator(LogicalKeyboardKey.keyZ, control: true):
+                widget.store.undo,
+            const SingleActivator(
+              LogicalKeyboardKey.keyZ,
+              meta: true,
+              shift: true,
+            ): widget.store.redo,
+            const SingleActivator(
+              LogicalKeyboardKey.keyZ,
+              control: true,
+              shift: true,
+            ): widget.store.redo,
+          },
+          child: Focus(
+            autofocus: true,
+            child: Listener(
+              onPointerDown: _onPointerDown,
+              onPointerMove: _onPointerMove,
+              onPointerUp: _onPointerUp,
+              onPointerCancel: _onPointerUp,
+              onPointerSignal: _onPointerSignal,
+              onPointerPanZoomStart: _onPanZoomStart,
+              onPointerPanZoomUpdate: _onPanZoomUpdate,
+              onPointerPanZoomEnd: _onPanZoomEnd,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.grab,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ColoredBox(
+                      color: colors.surface,
+                      child: CustomPaint(
+                        painter: CanvasGridPainter(
+                          camera: _camera,
+                          dotColor: colors.outlineVariant,
+                          originColor: colors.primary,
                         ),
-                        strokeColor: colors.outline,
+                        child: CustomPaint(
+                          painter: DebugObjectPainter(
+                            camera: _camera,
+                            objects: objects,
+                            fillColor: colors.outlineVariant.withValues(
+                              alpha: 0.45,
+                            ),
+                            strokeColor: colors.outline,
+                          ),
+                          child: const SizedBox.expand(),
+                        ),
                       ),
-                      child: const SizedBox.expand(),
                     ),
-                  ),
+                    Positioned(
+                      right: 12,
+                      bottom: 12,
+                      child: Text(
+                        _zoomLabel,
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: colors.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
                 ),
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: Text(
-                    _zoomLabel,
-                    style: Theme.of(context).textTheme.labelMedium
-                        ?.copyWith(color: colors.onSurfaceVariant),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

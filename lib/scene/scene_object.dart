@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
 import 'package:skapie/scene/scene_json_codec.dart';
 
-/// Last-saved camera. Live pan/zoom still lives on the viewport.
+/// Last-saved camera. Live pan/zoom still lives on the canvas.
 ///
 /// [offsetX]/[offsetY] are the world point shown at the viewport center,
 /// not the world origin.
@@ -42,8 +42,9 @@ class SceneCameraSnapshot {
   int get hashCode => Object.hash(offsetX, offsetY, zoom);
 }
 
-class SceneNode {
-  const SceneNode({
+/// One typed item in the scene. Not a graph node (ports/cables are reserved).
+class SceneObject {
+  const SceneObject({
     required this.id,
     required this.type,
     required this.x,
@@ -73,7 +74,7 @@ class SceneNode {
   final bool locked;
   final bool visible;
 
-  SceneNode copyWith({
+  SceneObject copyWith({
     String? type,
     double? x,
     double? y,
@@ -85,7 +86,7 @@ class SceneNode {
     bool? locked,
     bool? visible,
   }) {
-    return SceneNode(
+    return SceneObject(
       id: id,
       type: type ?? this.type,
       x: x ?? this.x,
@@ -114,16 +115,16 @@ class SceneNode {
     'visible': visible,
   };
 
-  factory SceneNode.fromJson(Map<String, Object?> json) {
+  factory SceneObject.fromJson(Map<String, Object?> json) {
     final id = json['id'];
     final type = json['type'];
     if (id is! String || id.isEmpty) {
-      throw const FormatException('SceneNode.id is required');
+      throw const FormatException('SceneObject.id is required');
     }
     if (type is! String || type.isEmpty) {
-      throw const FormatException('SceneNode.type is required');
+      throw const FormatException('SceneObject.type is required');
     }
-    return SceneNode(
+    return SceneObject(
       id: id,
       type: type,
       x: readDouble(json, 'x'),
@@ -142,7 +143,7 @@ class SceneNode {
 
   @override
   bool operator ==(Object other) {
-    return other is SceneNode &&
+    return other is SceneObject &&
         other.id == id &&
         other.type == type &&
         other.x == x &&

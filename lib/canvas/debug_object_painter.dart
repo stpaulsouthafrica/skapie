@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
-import 'package:skapie/scene/scene_node.dart';
+import 'package:skapie/scene/scene_object.dart';
 
-/// Temporary world-space rectangles for scene nodes. Not a widget registry.
-final class DebugNodePainter extends CustomPainter {
-  DebugNodePainter({
+/// Temporary world-space rectangles for scene objects. Not a widget registry.
+final class DebugObjectPainter extends CustomPainter {
+  DebugObjectPainter({
     required this.camera,
-    required this.nodes,
+    required this.objects,
     required this.fillColor,
     required this.strokeColor,
   });
 
   final CanvasCamera camera;
-  final List<SceneNode> nodes;
+  final List<SceneObject> objects;
   final Color fillColor;
   final Color strokeColor;
 
@@ -25,22 +25,22 @@ final class DebugNodePainter extends CustomPainter {
       ..strokeWidth = 1.5;
 
     final ordered = [
-      for (final node in nodes)
-        if (node.visible) node,
+      for (final object in objects)
+        if (object.visible) object,
     ]..sort((a, b) => a.zIndex.compareTo(b.zIndex));
 
-    for (final node in ordered) {
-      final topLeft = worldToScreen(Offset(node.x, node.y), size, camera);
+    for (final object in ordered) {
+      final topLeft = worldToScreen(Offset(object.x, object.y), size, camera);
       final rect = Rect.fromLTWH(
         topLeft.dx,
         topLeft.dy,
-        node.width * camera.zoom,
-        node.height * camera.zoom,
+        object.width * camera.zoom,
+        object.height * camera.zoom,
       );
       canvas
         ..save()
         ..translate(rect.center.dx, rect.center.dy)
-        ..rotate(node.rotation)
+        ..rotate(object.rotation)
         ..translate(-rect.center.dx, -rect.center.dy)
         ..drawRect(rect, fill)
         ..drawRect(rect, stroke)
@@ -49,9 +49,9 @@ final class DebugNodePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant DebugNodePainter oldDelegate) {
+  bool shouldRepaint(covariant DebugObjectPainter oldDelegate) {
     return oldDelegate.camera != camera ||
-        oldDelegate.nodes != nodes ||
+        oldDelegate.objects != objects ||
         oldDelegate.fillColor != fillColor ||
         oldDelegate.strokeColor != strokeColor;
   }

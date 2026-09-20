@@ -2,13 +2,13 @@ import 'package:collection/collection.dart';
 import 'package:skapie/scene/scene_constants.dart';
 import 'package:skapie/scene/scene_ids.dart';
 import 'package:skapie/scene/scene_json_codec.dart';
-import 'package:skapie/scene/scene_node.dart';
+import 'package:skapie/scene/scene_object.dart';
 
 class SceneDocument {
   const SceneDocument({
     required this.id,
     required this.schemaVersion,
-    this.nodes = const [],
+    this.objects = const [],
     this.camera,
   });
 
@@ -21,28 +21,28 @@ class SceneDocument {
 
   final String id;
   final int schemaVersion;
-  final List<SceneNode> nodes;
+  final List<SceneObject> objects;
 
-  /// Last saved camera. Not the live viewport camera.
+  /// Last saved camera. Not the live canvas camera.
   final SceneCameraSnapshot? camera;
 
   SceneDocument copyWith({
-    List<SceneNode>? nodes,
+    List<SceneObject>? objects,
     SceneCameraSnapshot? camera,
     bool clearCamera = false,
   }) {
     return SceneDocument(
       id: id,
       schemaVersion: schemaVersion,
-      nodes: nodes ?? this.nodes,
+      objects: objects ?? this.objects,
       camera: clearCamera ? null : (camera ?? this.camera),
     );
   }
 
-  SceneNode? nodeById(String id) {
-    for (final node in nodes) {
-      if (node.id == id) {
-        return node;
+  SceneObject? objectById(String id) {
+    for (final object in objects) {
+      if (object.id == id) {
+        return object;
       }
     }
     return null;
@@ -51,7 +51,7 @@ class SceneDocument {
   Map<String, Object?> toJson() => {
     'id': id,
     'schemaVersion': schemaVersion,
-    'nodes': [for (final node in nodes) node.toJson()],
+    'objects': [for (final object in objects) object.toJson()],
     if (camera != null) 'camera': camera!.toJson(),
   };
 
@@ -64,16 +64,6 @@ class SceneDocument {
     if (version is! num) {
       throw const FormatException('SceneDocument.schemaVersion is required');
     }
-    final rawNodes = json['nodes'];
-    final nodes = <SceneNode>[];
-    if (rawNodes != null) {
-      if (rawNodes is! List) {
-        throw const FormatException('SceneDocument.nodes must be a list');
-      }
-      for (final item in rawNodes) {
-        nodes.add(SceneNode.fromJson(asJsonMap(item, 'node')));
-      }
-    }
     SceneCameraSnapshot? camera;
     final rawCamera = json['camera'];
     if (rawCamera != null) {
@@ -82,12 +72,26 @@ class SceneDocument {
     return SceneDocument(
       id: id,
       schemaVersion: version.toInt(),
-      nodes: nodes,
+      objects: _readObjects(json),
       camera: camera,
     );
   }
 
-  static const _listEq = ListEquality<SceneNode>();
+  /// Prefer `objects`. Legacy Phase 3 files used `nodes`; both stay schema 1.
+  static List<SceneObject> _readObjects(Map<String, Object?> json) {
+    final raw = json.containsKey('objects') ? json['objects'] : json['nodes'];
+    if (raw == null) {
+      return const [];
+    }
+    if (raw is! List) {
+      throw const FormatException('SceneDocument.objects must be a list');
+    }
+    return [
+      for (final item in raw) SceneObject.fromJson(asJsonMap(item, 'object')),
+    ];
+  }
+
+  static const _listEq = ListEquality<SceneObject>();
 
   @override
   bool operator ==(Object other) {
@@ -95,10 +99,10 @@ class SceneDocument {
         other.id == id &&
         other.schemaVersion == schemaVersion &&
         other.camera == camera &&
-        _listEq.equals(other.nodes, nodes);
+        _listEq.equals(other.objects, objects);
   }
 
   @override
   int get hashCode =>
-      Object.hash(id, schemaVersion, camera, _listEq.hash(nodes));
+      Object.hash(id, schemaVersion, camera, _listEq.hash(objects));
 }

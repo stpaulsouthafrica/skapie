@@ -9,14 +9,14 @@ void main() {
     expect(find.text('Skapie'), findsOneWidget);
   });
 
-  testWidgets('Add debug rect inserts a scene node', (tester) async {
+  testWidgets('Add debug rect inserts a scene object', (tester) async {
     final store = SceneStore();
     await tester.pumpWidget(SkapieApp(store: store));
 
     await tester.tap(find.text('Add debug rect'));
     await tester.pump();
 
-    expect(store.document.nodes, hasLength(1));
-    expect(store.document.nodes.single.type, 'debug.rect');
+    expect(store.document.objects, hasLength(1));
+    expect(store.document.objects.single.type, 'debug.rect');
   });
 }
