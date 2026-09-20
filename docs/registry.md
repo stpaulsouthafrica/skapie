@@ -40,7 +40,7 @@ Registered by `createBuiltinRegistry()`:
 | `button` | colored chip with a label | `label` (visual only; no navigation) |
 | `debug.rect` | grey outlined rect | none |
 
-Add actions insert a `SceneObject` with that type and those defaults through `SceneStore.apply(AddObject(...))`.
+Add actions insert a `SceneObject` with that type and those defaults through `SceneStore.apply(AddObject(...))`. Inspector edits (Phase 5) patch the same props through `UpdateObjectProps`. See [interaction](interaction.md).
 
 ## Unknown types
 
@@ -50,7 +50,6 @@ If `type` is not registered, or a builder throws, the canvas shows `UnknownObjec
 
 - Kit API / kits on disk
 - Agent
-- Inspector (Phase 5)
 - Runtime Dart eval
 
 See [glossary](glossary.md): **scene object** vs **kit** vs **kit package** vs **graph node**.

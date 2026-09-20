@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
+import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/shared/app_info.dart';
@@ -17,11 +19,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _viewportKey = GlobalKey<CanvasViewportState>();
+  final _selection = SelectionController();
 
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStore);
+    _selection.addListener(_onSelection);
   }
 
   @override
@@ -36,10 +40,17 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     widget.store.removeListener(_onStore);
+    _selection.removeListener(_onSelection);
+    _selection.dispose();
     super.dispose();
   }
 
-  void _onStore() => setState(() {});
+  void _onStore() {
+    _selection.syncToDocument(widget.store.document);
+    setState(() {});
+  }
+
+  void _onSelection() => setState(() {});
 
   void _add(String typeId) {
     _viewportKey.currentState?.addTypedObject(typeId);
@@ -134,10 +145,20 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           Expanded(
-            child: CanvasViewport(
-              key: _viewportKey,
-              store: widget.store,
-              registry: widget.registry,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: CanvasViewport(
+                    key: _viewportKey,
+                    store: widget.store,
+                    registry: widget.registry,
+                    selection: _selection,
+                  ),
+                ),
+                if (_selection.selectedId != null)
+                  InspectorPanel(store: widget.store, selection: _selection),
+              ],
             ),
           ),
         ],

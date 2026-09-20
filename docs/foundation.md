@@ -8,7 +8,7 @@ Scene data changes only through `SceneStore.apply(SceneOp)`. Widgets, kits, and 
 
 ## Scene is the source of truth
 
-The scene document is what is real. The canvas, inspector, and any agent memory are views or proposals. Reload from scene and the UI must reconstruct. Debug rectangles are drawn from `SceneStore` scene objects, not from widget state. Camera pan limits read those objects and clamp viewport state only — they never mutate the scene.
+The scene document is what is real. The canvas, inspector, and any agent memory are views or proposals. Reload from scene and the UI must reconstruct. Selection (`selectedId`) is **UI state only** — not a scene field and not persisted. Camera pan limits read those objects and clamp viewport state only — they never mutate the scene.
 
 Vocabulary: scene items are **scene objects**. **Graph node** is reserved for a future cable/port graph. Full table: [glossary](glossary.md).
 
@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 5+ is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 6+ is blocked until the current phase gate is green.
 
 ## Phase 1 gate — done
 
@@ -45,11 +45,18 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Undo/redo with snapshot strategy; new apply clears redo.
 - Persistence: absolute `Application Support/skapie/scene.json` by default (`path_provider`). Overrides: `SKAPIE_SCENE_PATH`, optional project mode with absolute `SKAPIE_PROJECT_ROOT`. Cwd is never the default. One-time migrate from legacy `.skapie/scene.json`. Save errors are logged and stored on the store. Writes `"objects"`; still reads legacy `"nodes"` (`schemaVersion` 1).
 
-## Phase 4 gate (current)
+## Phase 4 gate — done
 
 - `ObjectRegistry` in `lib/registry/`: `typeId` → builder, default props, display name. Duplicate `typeId` throws.
 - Built-ins: `box`, `text`, `button`, plus `debug.rect`. Canvas renders visible objects through the registry (z-sorted). Unknown / failing types → placeholder, never a crash, never Dart eval.
-- Thin Add menu inserts via `SceneStore.apply(AddObject)`. No inspector. No Kit API. No agent.
-- `flutter analyze` clean; `flutter test` covers register/get/list, duplicate register, known build, unknown placeholder, existing scene store tests.
+- Thin Add menu inserts via `SceneStore.apply(AddObject)`.
 
-Phase 5+ stays blocked until this gate is green. Do not implement kits, selection handles, or the agent here.
+## Phase 5 gate (current)
+
+- Single selection is UI state (`SelectionController`). Not persisted.
+- Hit-test in the viewport from scene frames (AABB; rotation ignored). Registry widgets stay non-interactive.
+- Move: preview in UI; one `UpdateObjectFrame` on pointer-up. Locked: select + delete, no move.
+- Thin inspector edits via `UpdateObjectProps` / `UpdateObjectFrame`; Delete via `RemoveObject`.
+- `flutter analyze` clean; `flutter test` covers hit-test, move undo, props undo, delete clears selection, locked no-move, plus existing spine tests.
+
+Phase 6+ stays blocked until this gate is green. Do not implement Kit API, kits on disk, or the agent here.

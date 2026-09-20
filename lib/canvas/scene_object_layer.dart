@@ -11,12 +11,16 @@ class SceneObjectLayer extends StatelessWidget {
     required this.viewportSize,
     required this.objects,
     required this.registry,
+    this.selectedId,
+    this.previewDelta = Offset.zero,
   });
 
   final CanvasCamera camera;
   final Size viewportSize;
   final List<SceneObject> objects;
   final ObjectRegistry registry;
+  final String? selectedId;
+  final Offset previewDelta;
 
   @override
   Widget build(BuildContext context) {
@@ -37,8 +41,9 @@ class SceneObjectLayer extends StatelessWidget {
   }
 
   Widget _placed(BuildContext context, SceneObject object) {
+    final preview = object.id == selectedId ? previewDelta : Offset.zero;
     final topLeft = worldToScreen(
-      Offset(object.x, object.y),
+      Offset(object.x + preview.dx, object.y + preview.dy),
       viewportSize,
       camera,
     );

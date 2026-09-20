@@ -72,3 +72,5 @@ Files write `"objects"`; older files with `"nodes"` still load (`schemaVersion` 
 ## Rendering
 
 The canvas does not own widget trees. `SceneObjectLayer` lists `store.document.objects`, sorts by `zIndex`, and asks `ObjectRegistry.build` for each visible object. Frames still come from world `x` / `y` / `width` / `height`. Unknown types show a placeholder. See [registry](registry.md).
+
+Selection, move, and inspector edits are UI; they call `SceneStore.apply` and do not persist `selectedId`. Hit-test ignores rotation. See [interaction](interaction.md).

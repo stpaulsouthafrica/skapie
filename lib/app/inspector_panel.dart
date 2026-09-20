@@ -1,0 +1,354 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:skapie/canvas/selection_controller.dart';
+import 'package:skapie/registry/builtin_types.dart';
+import 'package:skapie/scene/scene.dart';
+
+/// Thin inspector. Edits go through [SceneStore.apply] only.
+class InspectorPanel extends StatefulWidget {
+  const InspectorPanel({
+    super.key,
+    required this.store,
+    required this.selection,
+  });
+
+  final SceneStore store;
+  final SelectionController selection;
+
+  @override
+  State<InspectorPanel> createState() => _InspectorPanelState();
+}
+
+class _InspectorPanelState extends State<InspectorPanel> {
+  Timer? _debounce;
+  String? _boundId;
+  final _x = TextEditingController();
+  final _y = TextEditingController();
+  final _content = TextEditingController();
+  final _fontSize = TextEditingController();
+  final _color = TextEditingController();
+  final _fill = TextEditingController();
+  final _cornerRadius = TextEditingController();
+  final _opacity = TextEditingController();
+  final _label = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    widget.store.addListener(_onStore);
+    widget.selection.addListener(_onSelection);
+    _bindObject(force: true);
+  }
+
+  @override
+  void didUpdateWidget(InspectorPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.store != widget.store) {
+      oldWidget.store.removeListener(_onStore);
+      widget.store.addListener(_onStore);
+    }
+    if (oldWidget.selection != widget.selection) {
+      oldWidget.selection.removeListener(_onSelection);
+      widget.selection.addListener(_onSelection);
+    }
+    _bindObject(force: true);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    widget.store.removeListener(_onStore);
+    widget.selection.removeListener(_onSelection);
+    _x.dispose();
+    _y.dispose();
+    _content.dispose();
+    _fontSize.dispose();
+    _color.dispose();
+    _fill.dispose();
+    _cornerRadius.dispose();
+    _opacity.dispose();
+    _label.dispose();
+    super.dispose();
+  }
+
+  void _onStore() {
+    widget.selection.syncToDocument(widget.store.document);
+    if (_debounce?.isActive ?? false) {
+      setState(() {});
+      return;
+    }
+    _bindObject(force: true);
+    setState(() {});
+  }
+
+  void _onSelection() {
+    _bindObject(force: true);
+    setState(() {});
+  }
+
+  SceneObject? get _object {
+    final id = widget.selection.selectedId;
+    if (id == null) {
+      return null;
+    }
+    return widget.store.document.objectById(id);
+  }
+
+  void _bindObject({required bool force}) {
+    final object = _object;
+    if (object == null) {
+      _boundId = null;
+      return;
+    }
+    if (!force && _boundId == object.id) {
+      return;
+    }
+    _boundId = object.id;
+    _x.text = _fmt(object.x);
+    _y.text = _fmt(object.y);
+    _content.text = _string(object.props, 'content');
+    _fontSize.text = _string(object.props, 'fontSize');
+    _color.text = _string(object.props, 'color');
+    _fill.text = _string(object.props, 'fill');
+    _cornerRadius.text = _string(object.props, 'cornerRadius');
+    _opacity.text = _string(object.props, 'opacity');
+    _label.text = _string(object.props, 'label');
+  }
+
+  String _fmt(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toInt().toString();
+    }
+    return value.toString();
+  }
+
+  String _string(Map<String, Object?> props, String key) {
+    final value = props[key];
+    return value == null ? '' : '$value';
+  }
+
+  void _applyProps(Map<String, Object?> patch, {bool immediate = false}) {
+    final id = widget.selection.selectedId;
+    if (id == null) {
+      return;
+    }
+    void commit() {
+      widget.store.apply(UpdateObjectProps(id, patch));
+    }
+
+    _debounce?.cancel();
+    if (immediate) {
+      commit();
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 200), commit);
+  }
+
+  void _applyFrame({double? x, double? y}) {
+    final id = widget.selection.selectedId;
+    if (id == null) {
+      return;
+    }
+    widget.store.apply(UpdateObjectFrame(id: id, x: x, y: y));
+  }
+
+  void _delete() {
+    final id = widget.selection.selectedId;
+    if (id == null) {
+      return;
+    }
+    widget.store.apply(RemoveObject(id));
+    widget.selection.syncToDocument(widget.store.document);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final object = _object;
+    if (object == null) {
+      return const SizedBox.shrink();
+    }
+    final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Material(
+      color: colors.surfaceContainerHighest,
+      child: SizedBox(
+        width: 260,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+          children: [
+            Text('Inspector', style: textTheme.labelLarge),
+            const SizedBox(height: 12),
+            _readOnly('Type', object.type),
+            _readOnly('Id', object.id, mono: true),
+            if (object.locked)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Locked — select and delete ok, no move',
+                  style: textTheme.labelSmall?.copyWith(color: colors.outline),
+                ),
+              ),
+            _field(
+              label: 'X',
+              controller: _x,
+              onSubmitted: (value) {
+                final parsed = double.tryParse(value);
+                if (parsed != null) {
+                  _applyFrame(x: parsed);
+                }
+              },
+            ),
+            _field(
+              label: 'Y',
+              controller: _y,
+              onSubmitted: (value) {
+                final parsed = double.tryParse(value);
+                if (parsed != null) {
+                  _applyFrame(y: parsed);
+                }
+              },
+            ),
+            ..._typeFields(object),
+            const SizedBox(height: 8),
+            FilledButton.tonal(onPressed: _delete, child: const Text('Delete')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _typeFields(SceneObject object) {
+    switch (object.type) {
+      case boxTypeId:
+        return [
+          _field(
+            label: 'Fill',
+            controller: _fill,
+            onChanged: (value) => _applyProps({'fill': value}),
+            onSubmitted: (value) =>
+                _applyProps({'fill': value}, immediate: true),
+          ),
+          _field(
+            label: 'Corner radius',
+            controller: _cornerRadius,
+            onSubmitted: (value) {
+              final parsed = double.tryParse(value);
+              if (parsed != null) {
+                _applyProps({'cornerRadius': parsed}, immediate: true);
+              }
+            },
+          ),
+          _field(
+            label: 'Opacity',
+            controller: _opacity,
+            onSubmitted: (value) {
+              final parsed = double.tryParse(value);
+              if (parsed != null) {
+                _applyProps({'opacity': parsed}, immediate: true);
+              }
+            },
+          ),
+        ];
+      case textTypeId:
+        return [
+          _field(
+            key: const Key('inspector-content'),
+            label: 'Content',
+            controller: _content,
+            onChanged: (value) => _applyProps({'content': value}),
+            onSubmitted: (value) =>
+                _applyProps({'content': value}, immediate: true),
+          ),
+          _field(
+            label: 'Font size',
+            controller: _fontSize,
+            onSubmitted: (value) {
+              final parsed = double.tryParse(value);
+              if (parsed != null) {
+                _applyProps({'fontSize': parsed}, immediate: true);
+              }
+            },
+          ),
+          _field(
+            label: 'Color',
+            controller: _color,
+            onChanged: (value) => _applyProps({'color': value}),
+            onSubmitted: (value) =>
+                _applyProps({'color': value}, immediate: true),
+          ),
+        ];
+      case buttonTypeId:
+        return [
+          _field(
+            label: 'Label',
+            controller: _label,
+            onChanged: (value) => _applyProps({'label': value}),
+            onSubmitted: (value) =>
+                _applyProps({'label': value}, immediate: true),
+          ),
+        ];
+      default:
+        if (object.props.isEmpty) {
+          return const [];
+        }
+        return [
+          Text('Props', style: Theme.of(context).textTheme.labelSmall),
+          for (final entry in object.props.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${entry.key}: ${entry.value}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+        ];
+    }
+  }
+
+  Widget _readOnly(String label, String value, {bool mono = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: mono
+                ? Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(fontFamily: 'monospace')
+                : Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _field({
+    Key? key,
+    required String label,
+    required TextEditingController controller,
+    ValueChanged<String>? onChanged,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: TextField(
+        key: key,
+        controller: controller,
+        style: Theme.of(context).textTheme.bodySmall,
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          border: const OutlineInputBorder(),
+        ),
+        onChanged: onChanged,
+        onSubmitted: onSubmitted,
+      ),
+    );
+  }
+}
