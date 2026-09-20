@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "demo.note-card",
+  "displayName": "Note card",
+  "description": "A box with inset text.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {}
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "Note"
+      }
+    }
+  ]
+}

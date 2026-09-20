@@ -3,16 +3,22 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:skapie/app/skapie_app.dart';
+import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/kit_package_store.dart';
+import 'package:skapie/kit_api/kit_path.dart';
+import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 
 const _scenePathDefine = String.fromEnvironment('SKAPIE_SCENE_PATH');
 const _useProjectScene = bool.fromEnvironment('SKAPIE_USE_PROJECT_SCENE');
 const _projectRootDefine = String.fromEnvironment('SKAPIE_PROJECT_ROOT');
+const _kitsRootDefine = String.fromEnvironment('SKAPIE_KITS_ROOT');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final store = await bootstrapSceneStore();
-  runApp(SkapieApp(store: store));
+  final kitApi = await bootstrapKitApi(store: store);
+  runApp(SkapieApp(store: store, kitApi: kitApi));
 }
 
 Future<SceneStore> bootstrapSceneStore({
@@ -45,4 +51,41 @@ Future<SceneStore> bootstrapSceneStore({
   final store = SceneStore(persistence: SceneFilePersistence(resolved.file));
   await store.load();
   return store;
+}
+
+Future<KitApi> bootstrapKitApi({
+  required SceneStore store,
+  Directory? appSupportDirectory,
+  ObjectRegistry? registry,
+}) async {
+  final appSupport =
+      appSupportDirectory ?? await getApplicationSupportDirectory();
+  final projectRoot = _projectRootDefine.trim().isNotEmpty
+      ? _projectRootDefine
+      : Platform.environment['SKAPIE_PROJECT_ROOT'];
+  final resolved = resolveKitsRoot(
+    dartDefinePath: _kitsRootDefine,
+    envPath: Platform.environment['SKAPIE_KITS_ROOT'],
+    projectRoot: projectRoot,
+    appSupportDirectory: appSupport,
+  );
+  if (resolved.warning != null) {
+    debugPrint('Skapie: ${resolved.warning}');
+  }
+  debugPrint(
+    'Skapie kits root: ${resolved.directory.absolute.path} (${resolved.source})',
+  );
+  final objectRegistry = registry ?? createBuiltinRegistry();
+  final api = createAppKitApi(
+    store: store,
+    registry: objectRegistry,
+    packages: KitPackageStore(
+      root: resolved.directory,
+      registry: objectRegistry,
+    ),
+  );
+  api.log = (message) => debugPrint('Skapie: $message');
+  await api.reloadPackages();
+  debugPrint('Skapie kit packages in memory: ${api.listKits().length}');
+  return api;
 }

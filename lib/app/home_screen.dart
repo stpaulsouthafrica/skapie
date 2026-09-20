@@ -60,7 +60,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onSelection() => setState(() {});
 
   void _add(String value) {
-    if (value == demoNoteCardKitId) {
+    if (widget.kitApi.getKit(value) != null) {
       _viewportKey.currentState?.instantiateKit(value);
       return;
     }
@@ -125,21 +125,32 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: PopupMenuButton<String>(
                       tooltip: 'Add scene object',
                       onSelected: _add,
-                      itemBuilder: (context) => const [
-                        PopupMenuItem(value: boxTypeId, child: Text('Box')),
-                        PopupMenuItem(value: textTypeId, child: Text('Text')),
-                        PopupMenuItem(
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: boxTypeId,
+                          child: Text('Box'),
+                        ),
+                        const PopupMenuItem(
+                          value: textTypeId,
+                          child: Text('Text'),
+                        ),
+                        const PopupMenuItem(
                           value: buttonTypeId,
                           child: Text('Button'),
                         ),
-                        PopupMenuItem(
+                        const PopupMenuItem(
                           value: debugRectType,
                           child: Text('Debug rect'),
                         ),
-                        PopupMenuItem(
-                          value: demoNoteCardKitId,
-                          child: Text('Demo kit: note card'),
-                        ),
+                        for (final kit in widget.kitApi.listKits())
+                          PopupMenuItem(
+                            value: kit.id,
+                            child: Text(
+                              kit.id == demoNoteCardKitId
+                                  ? 'Demo kit: note card'
+                                  : 'Kit: ${kit.displayName}',
+                            ),
+                          ),
                       ],
                       child: Padding(
                         padding: const EdgeInsets.symmetric(

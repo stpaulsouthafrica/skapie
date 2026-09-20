@@ -1,8 +1,8 @@
 # Skapie
 
-Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk later). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
+Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 6 of 10** — canvas, scene, registry, select/move/inspector, and an in-memory Kit API. Kit packages on disk and the agent are not implemented yet.
+This repository is **Phase 7 of 10** — canvas, scene, registry, select/move/inspector, Kit API, and on-disk kit packages. Sandboxed kit runtimes and the agent are not implemented yet.
 
 ## Run on macOS
 
@@ -24,6 +24,8 @@ You should get a window titled **Skapie Canvas** with a thin **Skapie** bar and 
 
 **Save file:** absolute path under Application Support (`…/skapie/scene.json`) by default. Logged at startup. The top bar shows a short label; hover or **Copy path** for the full path. Not cwd-relative unless you explicitly enable project mode with an **absolute** `SKAPIE_PROJECT_ROOT`. See [`docs/scene.md`](docs/scene.md).
 
+**Kits:** declarative packages under `kits/<id>/kit.json`. Startup loads them into `KitApi`. Default kits root is Application Support (`…/skapie/kits`) because a sandboxed macOS app cannot see the git repo. Point at the repo shelf with an **absolute** override:
+
 ```bash
 # default: Application Support
 flutter run -d macos
@@ -32,11 +34,16 @@ flutter run -d macos
 flutter run -d macos \
   --dart-define=SKAPIE_USE_PROJECT_SCENE=true \
   --dart-define=SKAPIE_PROJECT_ROOT=/Users/you/Development/skapie
+
+# developer: load repo kit packages (absolute root required)
+flutter run -d macos \
+  --dart-define=SKAPIE_PROJECT_ROOT=/Users/you/Development/skapie
+# or: --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
 ## Foundation gates
 
-Skapie is built phase by phase. **Phase 7+ is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Interaction is in [`docs/interaction.md`](docs/interaction.md). Kit API is in [`docs/kit_api.md`](docs/kit_api.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
+Skapie is built phase by phase. **Phase 8+ is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Interaction is in [`docs/interaction.md`](docs/interaction.md). Kit API is in [`docs/kit_api.md`](docs/kit_api.md). Kit packages are in [`docs/kit_packages.md`](docs/kit_packages.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
 **Phase 1 gate:** macOS shell + folder stubs — done.
 
@@ -48,7 +55,9 @@ Skapie is built phase by phase. **Phase 7+ is blocked until the current phase ga
 
 **Phase 5 gate:** single select + move (one undo) + overlay inspector (`SetObjectLocked`, no canvas reflow) + MMB pan; selection not in `scene.json` — done.
 
-**Phase 6 gate:** `KitApi` wraps `SceneStore.apply`; in-memory recipes + demo note card; no disk loader; `flutter analyze` clean; `flutter test` green.
+**Phase 6 gate:** `KitApi` wraps `SceneStore.apply`; in-memory recipes + demo note card — done.
+
+**Phase 7 gate:** on-disk `kits/<id>/kit.json` loaded into `KitApi`; `saveKit` / `reloadPackages`; disk replaces memory; no sandbox; `flutter analyze` clean; `flutter test` green.
 
 ## Docs
 
@@ -57,4 +66,6 @@ Skapie is built phase by phase. **Phase 7+ is blocked until the current phase ga
 - [`docs/scene.md`](docs/scene.md) — document model, ops, file path, world origin
 - [`docs/registry.md`](docs/registry.md) — type string → builder, unknown placeholder
 - [`docs/interaction.md`](docs/interaction.md) — select, move, inspector
-- [`docs/kit_api.md`](docs/kit_api.md) — high-level scene mutations, in-memory kits
+- [`docs/kit_api.md`](docs/kit_api.md) — high-level scene mutations, in-memory vs saved kits
+- [`docs/kit_packages.md`](docs/kit_packages.md) — folder contract, `kit.json`, kits root
+- **Dream goal (not scheduled):** visible sub-agent kits — see [`docs/kit_packages.md`](docs/kit_packages.md)

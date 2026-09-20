@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -61,12 +62,17 @@ const KitRecipe demoNoteCardRecipe = KitRecipe(
   ],
 );
 
-/// High-level scene mutations. Always wraps [SceneStore.apply]. In-memory kits only.
+/// High-level scene mutations. Always wraps [SceneStore.apply].
+///
+/// [registerKit] is ephemeral (in-memory). Saved packages under `kits/` are
+/// the durable shelf; [reloadPackages] loads them and **disk replaces memory**.
 class KitApi {
-  KitApi({required this.store, required this.registry});
+  KitApi({required this.store, required this.registry, this.packages});
 
   final SceneStore store;
   final ObjectRegistry registry;
+  final KitPackageStore? packages;
+  void Function(String message)? log;
   final Map<String, KitRecipe> _kits = {};
 
   String addObject({
@@ -143,6 +149,41 @@ class KitApi {
 
   List<KitRecipe> listKits() => List.unmodifiable(_kits.values);
 
+  /// Scan the kits root and register each package. Disk replaces in-memory
+  /// recipes with the same id.
+  Future<void> reloadPackages() async {
+    final store = packages;
+    if (store == null) {
+      return;
+    }
+    final loaded = await store.loadAll();
+    for (final warning in loaded.warnings) {
+      log?.call(warning);
+    }
+    for (final error in loaded.errors) {
+      log?.call(error);
+    }
+    for (final recipe in loaded.recipes) {
+      if (_kits.containsKey(recipe.id)) {
+        log?.call('Disk package ${recipe.id} replaces in-memory recipe');
+      }
+      _kits[recipe.id] = recipe;
+    }
+    log?.call(
+      'Loaded ${loaded.recipes.length} kit package(s) from ${store.root.absolute.path}',
+    );
+  }
+
+  /// Write `kits/<id>/kit.json`, then register/update the in-memory recipe.
+  Future<void> saveKit(KitRecipe recipe) async {
+    final store = packages;
+    if (store == null) {
+      throw StateError('No kit package store');
+    }
+    await store.write(recipe);
+    _kits[recipe.id] = recipe;
+  }
+
   /// Validate every spec type, then apply. N objects = N undo steps.
   List<String> instantiate(String kitId, {required Offset origin}) {
     final recipe = _kits[kitId];
@@ -168,10 +209,15 @@ class KitApi {
   }
 }
 
-KitApi createAppKitApi({required SceneStore store, ObjectRegistry? registry}) {
+KitApi createAppKitApi({
+  required SceneStore store,
+  ObjectRegistry? registry,
+  KitPackageStore? packages,
+}) {
   final api = KitApi(
     store: store,
     registry: registry ?? createBuiltinRegistry(),
+    packages: packages,
   );
   api.registerKit(demoNoteCardRecipe);
   return api;

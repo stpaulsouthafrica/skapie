@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 7+ is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 8+ is blocked until the current phase gate is green.
 
 ## Phase 1 gate — done
 
@@ -58,11 +58,20 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Move: preview in UI; one `UpdateObjectFrame` on pointer-up. Locked: select + delete, no move.
 - Thin inspector edits via `UpdateObjectProps` / `UpdateObjectFrame` / `SetObjectLocked`; Delete via `RemoveObject`. Inspector overlays the canvas (does not shrink the viewport). Middle-mouse drag pans without selecting.
 
-## Phase 6 gate (current)
+## Phase 6 gate — done
 
 - `KitApi` in `lib/kit_api/` wraps `SceneStore.apply` only. Unknown `typeId` rejected. In-memory `registerKit` / `instantiate`; validate-then-apply (no partial spawn).
-- Built-in demo recipe `demo.note-card`. No disk loader. No agent.
-- Add / inspector / move / delete / lock go through `KitApi`.
-- `flutter analyze` clean; `flutter test` covers KitApi add/unknown/undo/duplicate kit/instantiate + existing spine tests.
+- Built-in demo recipe `demo.note-card`. Add / inspector / move / delete / lock go through `KitApi`.
 
-Phase 7+ stays blocked until this gate is green. Do not implement on-disk kit packages or the agent here.
+## Phase 7 gate (current)
+
+- Kit packages on disk: `kits/<kitId>/kit.json` loaded into `KitApi` at startup (`reloadPackages`). `saveKit` writes pretty JSON.
+- Demo `demo.note-card` ships as `kits/demo.note-card/`. Disk replaces in-memory for the same id. Unknown `typeId` in a package skips that package. No Dart eval.
+- `capabilities: []` is a seam only; non-empty logs a warning and still loads `objects`. No workers, sandbox, agent, or file watcher.
+- `flutter analyze` clean; `flutter test` covers package parse/load/save/conflict + existing spine tests.
+
+Phase 8+ stays blocked until this gate is green. Do not implement sandboxed workers or the agent here.
+
+## Dream goal (not scheduled)
+
+Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. **Not Phase 7.** Phase 7 only ships declarative on-disk recipes. Planted seam: `capabilities: []` in `kit.json`.
