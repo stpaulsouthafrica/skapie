@@ -77,4 +77,22 @@ void main() {
     store.redo();
     expect(store.document.objects.map((o) => o.id), ['a', 'b', 'c']);
   });
+
+  test('SetObjectLocked applies, undoes, and no-ops when unchanged', () {
+    final store = SceneStore();
+    store.apply(AddObject(_box('a')));
+    expect(store.document.objects.single.locked, isFalse);
+
+    store.apply(const SetObjectLocked(id: 'a', locked: true));
+    expect(store.document.objects.single.locked, isTrue);
+
+    store.undo();
+    expect(store.document.objects.single.locked, isFalse);
+
+    expect(
+      store.apply(const SetObjectLocked(id: 'missing', locked: true)),
+      isFalse,
+    );
+    expect(store.apply(const SetObjectLocked(id: 'a', locked: false)), isFalse);
+  });
 }

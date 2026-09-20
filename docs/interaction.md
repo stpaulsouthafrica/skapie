@@ -6,6 +6,7 @@ Selection, move, and inspector edits are UI. The scene document stays the source
 
 - **Primary down on an object:** select it (topmost visible AABB hit). If unlocked, start a move drag.
 - **Primary down on empty canvas:** clear selection and pan the camera (existing pan).
+- **Middle mouse (button 2) down + drag:** pan the camera. Does not select or move objects, even over a hit.
 - **Trackpad pan / scroll / pinch zoom:** unchanged. Zoom still aims at the cursor.
 - While move-dragging, the camera does not pan.
 - **Escape:** cancel an in-progress move preview, otherwise clear selection.
@@ -13,7 +14,7 @@ Selection, move, and inspector edits are UI. The scene document stays the source
 
 Hit-test is world-space AABB from `x,y,width,height`. **Rotation is ignored** (same as camera content bounds). Invisible objects are skipped. Highest `zIndex` wins; later list order breaks ties.
 
-`locked == true`: still selectable and deletable; move is ignored.
+`locked == true`: still selectable and deletable; move is ignored. Toggle **Locked** in the inspector (`SetObjectLocked`); it is a scene-object field, not a prop.
 
 Registry widgets stay `IgnorePointer`. Buttons do not receive Flutter taps. Hit-testing is done in the viewport from scene data.
 
@@ -23,11 +24,13 @@ During drag, a **preview offset** lives on `SelectionController` (UI state). On 
 
 ## Inspector
 
-Shown only when something is selected. Hardcoded fields per `typeId`:
+Shown as a **floating overlay** on the right when something is selected. It does not reflow the canvas: viewport size, camera offset, and zoom stay put unless the user pans or zooms.
+
+Hardcoded fields per `typeId`:
 
 - `box`: fill, cornerRadius, opacity
 - `text`: content, fontSize, color
 - `button`: label
 - `debug.rect` / unknown: type, id, frame; unknown also lists prop keys read-only
 
-Edits use `UpdateObjectProps` or `UpdateObjectFrame` (submit or ~200ms debounce). Delete uses `RemoveObject`.
+Edits use `UpdateObjectProps` or `UpdateObjectFrame` (submit or ~200ms debounce). **Locked** uses `SetObjectLocked`. Delete uses `RemoveObject`.

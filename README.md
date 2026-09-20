@@ -46,7 +46,7 @@ Skapie is built phase by phase. **Phase 6+ is blocked until the current phase ga
 
 **Phase 4 gate:** `ObjectRegistry` maps `type` → builder; built-ins `box` / `text` / `button` / `debug.rect`; unknown types placeholder; Add menu via `apply` — done.
 
-**Phase 5 gate:** single select + move (one undo) + thin inspector via existing ops; selection not in `scene.json`; `flutter analyze` clean; `flutter test` green.
+**Phase 5 gate:** single select + move (one undo) + overlay inspector (`SetObjectLocked`, no canvas reflow) + MMB pan; selection not in `scene.json`; `flutter analyze` clean; `flutter test` green.
 
 ## Docs
 

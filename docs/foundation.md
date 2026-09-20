@@ -56,7 +56,7 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Single selection is UI state (`SelectionController`). Not persisted.
 - Hit-test in the viewport from scene frames (AABB; rotation ignored). Registry widgets stay non-interactive.
 - Move: preview in UI; one `UpdateObjectFrame` on pointer-up. Locked: select + delete, no move.
-- Thin inspector edits via `UpdateObjectProps` / `UpdateObjectFrame`; Delete via `RemoveObject`.
-- `flutter analyze` clean; `flutter test` covers hit-test, move undo, props undo, delete clears selection, locked no-move, plus existing spine tests.
+- Thin inspector edits via `UpdateObjectProps` / `UpdateObjectFrame` / `SetObjectLocked`; Delete via `RemoveObject`. Inspector overlays the canvas (does not shrink the viewport). Middle-mouse drag pans without selecting.
+- `flutter analyze` clean; `flutter test` covers hit-test, move undo, props undo, lock toggle, delete clears selection, locked no-move, overlay size stability, MMB pan, plus existing spine tests.
 
 Phase 6+ stays blocked until this gate is green. Do not implement Kit API, kits on disk, or the agent here.

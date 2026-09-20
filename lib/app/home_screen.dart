@@ -145,19 +145,30 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Stack(
+              fit: StackFit.expand,
               children: [
-                Expanded(
-                  child: CanvasViewport(
-                    key: _viewportKey,
-                    store: widget.store,
-                    registry: widget.registry,
-                    selection: _selection,
-                  ),
+                CanvasViewport(
+                  key: _viewportKey,
+                  store: widget.store,
+                  registry: widget.registry,
+                  selection: _selection,
                 ),
                 if (_selection.selectedId != null)
-                  InspectorPanel(store: widget.store, selection: _selection),
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Material(
+                      elevation: 6,
+                      color: colors.surfaceContainerHighest,
+                      shadowColor: colors.shadow,
+                      child: InspectorPanel(
+                        store: widget.store,
+                        selection: _selection,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),

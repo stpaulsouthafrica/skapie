@@ -43,6 +43,7 @@ The only way to change document state is `SceneStore.apply(SceneOp op)`.
 | `RemoveObject` | Drop a scene object by id (no-op if missing) |
 | `UpdateObjectFrame` | Patch any of x/y/width/height/rotation |
 | `UpdateObjectProps` | **Shallow merge.** Listed keys overwrite; other keys stay. A `null` value **removes** that key. |
+| `SetObjectLocked` | Set `SceneObject.locked` (not a prop). No-op if missing id or unchanged. |
 
 Each successful apply snapshots the previous document for undo, clears redo, notifies listeners, and writes the file when persistence is attached. Undo/redo restore those snapshots. A new apply after undo clears the redo stack.
 

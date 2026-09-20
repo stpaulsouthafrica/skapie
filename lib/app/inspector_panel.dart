@@ -182,14 +182,17 @@ class _InspectorPanelState extends State<InspectorPanel> {
             const SizedBox(height: 12),
             _readOnly('Type', object.type),
             _readOnly('Id', object.id, mono: true),
-            if (object.locked)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Locked — select and delete ok, no move',
-                  style: textTheme.labelSmall?.copyWith(color: colors.outline),
-                ),
-              ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Locked'),
+              subtitle: const Text('Select and delete ok, no move'),
+              value: object.locked,
+              onChanged: (value) {
+                widget.store.apply(
+                  SetObjectLocked(id: object.id, locked: value),
+                );
+              },
+            ),
             _field(
               label: 'X',
               controller: _x,

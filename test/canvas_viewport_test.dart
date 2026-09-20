@@ -170,4 +170,46 @@ void main() {
     expect(store.document.objects, isEmpty);
     expect(selection.selectedId, isNull);
   });
+
+  testWidgets('middle mouse drag pans without selecting or moving', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    store.apply(
+      AddObject(
+        const SceneObject(
+          id: 'box1',
+          type: 'box',
+          x: -40,
+          y: -20,
+          width: 80,
+          height: 40,
+        ),
+      ),
+    );
+    final selection = SelectionController();
+    final key = GlobalKey<CanvasViewportState>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(key: key, store: store, selection: selection),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(
+      pointer.down(center, buttons: kMiddleMouseButton),
+    );
+    await tester.sendEventToBinding(
+      pointer.move(center + const Offset(40, 0), buttons: kMiddleMouseButton),
+    );
+    await tester.sendEventToBinding(pointer.up());
+    await tester.pump();
+
+    expect(selection.selectedId, isNull);
+    expect(store.document.objects.single.x, closeTo(-40, 0.001));
+    expect(key.currentState!.camera.offset.dx, isNot(closeTo(0, 0.001)));
+  });
 }

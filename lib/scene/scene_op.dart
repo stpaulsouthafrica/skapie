@@ -120,3 +120,24 @@ final class UpdateObjectProps extends SceneOp {
     );
   }
 }
+
+final class SetObjectLocked extends SceneOp {
+  const SetObjectLocked({required this.id, required this.locked});
+
+  final String id;
+  final bool locked;
+
+  @override
+  SceneDocument apply(SceneDocument document) {
+    final current = document.objectById(id);
+    if (current == null || current.locked == locked) {
+      return document;
+    }
+    return document.copyWith(
+      objects: [
+        for (final object in document.objects)
+          if (object.id == id) object.copyWith(locked: locked) else object,
+      ],
+    );
+  }
+}

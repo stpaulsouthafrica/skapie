@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/app/skapie_app.dart';
+import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/scene/scene.dart';
 
 void main() {
@@ -64,5 +65,32 @@ void main() {
       findsOneWidget,
     );
     expect(find.byTooltip('Copy path'), findsOneWidget);
+  });
+
+  testWidgets('selecting does not change CanvasViewport size', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final store = SceneStore();
+    store.apply(
+      AddObject(
+        const SceneObject(
+          id: 'box1',
+          type: 'box',
+          x: -40,
+          y: -20,
+          width: 80,
+          height: 40,
+        ),
+      ),
+    );
+    await tester.pumpWidget(SkapieApp(store: store));
+
+    final before = tester.getSize(find.byType(CanvasViewport));
+    await tester.tapAt(tester.getCenter(find.byType(CanvasViewport)));
+    await tester.pump();
+
+    expect(tester.getSize(find.byType(CanvasViewport)), before);
+    expect(find.text('Inspector'), findsOneWidget);
   });
 }

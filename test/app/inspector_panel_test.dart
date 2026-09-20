@@ -73,4 +73,38 @@ void main() {
     expect(store.document.objects, isEmpty);
     expect(selection.selectedId, isNull);
   });
+
+  testWidgets('Locked switch applies SetObjectLocked; undo restores', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    store.apply(
+      AddObject(
+        const SceneObject(
+          id: 'b1',
+          type: 'box',
+          x: 0,
+          y: 0,
+          width: 80,
+          height: 40,
+        ),
+      ),
+    );
+    final selection = SelectionController()..select('b1');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InspectorPanel(store: store, selection: selection),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+
+    expect(store.document.objects.single.locked, isTrue);
+    store.undo();
+    expect(store.document.objects.single.locked, isFalse);
+  });
 }

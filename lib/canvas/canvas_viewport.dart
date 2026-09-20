@@ -42,6 +42,8 @@ class CanvasViewportState extends State<CanvasViewport> {
 
   Size _viewportSize = Size.zero;
 
+  CanvasCamera get camera => _camera;
+
   String get _zoomLabel => '${(_camera.zoom * 100).round()}%';
 
   SceneObject? get _selectedObject {
@@ -162,13 +164,21 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (event.kind == PointerDeviceKind.trackpad) {
       return;
     }
+    final middle =
+        event.kind == PointerDeviceKind.mouse &&
+        (event.buttons & kMiddleMouseButton) != 0;
     if (event.kind == PointerDeviceKind.mouse &&
-        event.buttons != kPrimaryButton) {
+        !middle &&
+        (event.buttons & kPrimaryButton) == 0) {
       return;
     }
     _focus.requestFocus();
     _dragPointer = event.pointer;
     _lastDrag = event.localPosition;
+    if (middle) {
+      _dragKind = _DragKind.pan;
+      return;
+    }
     if (_viewportSize.isEmpty) {
       _dragKind = _DragKind.pan;
       return;
