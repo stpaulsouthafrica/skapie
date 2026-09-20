@@ -113,13 +113,13 @@ Call these on `KitApi`, not `KitPackageStore` (store is internal + tests).
 
 ## Dream goal (not scheduled)
 
-Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. **Not Phase 8.** Phase 8 is Kit API documentation. Planted seam: `capabilities: []` in `kit.json`.
+Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The Phase 9 harness core is **not** that. Planted seam: `capabilities: []` in `kit.json`.
 
 ## Not this phase
 
 - Sandboxed workers, isolates, Wasm, or executing non-empty `capabilities`
 - Git fetchers, marketplace, signing, or versioning beyond `schemaVersion`
-- Agent harness / chat (tool names are sketched in [kit_api.md](kit_api.md#agent-tool-sketch-phase-9-not-implemented) only)
+- Agent tools / chat (harness core: [agent.md](agent.md); tool names still sketched in [kit_api.md](kit_api.md#agent-tool-sketch-phase-91-not-implemented))
 - Hot-reload file watcher
 - “Save selection as kit…” UI
 - New registry widget types

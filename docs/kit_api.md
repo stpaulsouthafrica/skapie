@@ -4,7 +4,7 @@
 
 UI, tests, and a future agent should call `KitApi`. Do not call `store.apply` from app code. Do not eval Dart. Do not invent widgets.
 
-On-disk folders are documented in [kit packages](kit_packages.md). Types are documented in [registry](registry.md). Words: [glossary](glossary.md).
+On-disk folders are documented in [kit packages](kit_packages.md). Types are documented in [registry](registry.md). Words: [glossary](glossary.md). Session loop: [agent.md](agent.md).
 
 ## Mental model
 
@@ -324,9 +324,9 @@ for (final kit in kitApi.listKits()) {
 }
 ```
 
-## Agent tool sketch (Phase 9, not implemented)
+## Agent tool sketch (Phase 9.1, not implemented)
 
-Contract proposal only. No harness, no LLM client, no MCP, no chat UI in this phase. Tools should call `KitApi` methods; they must not poke `SceneStore` fields.
+The Phase 9 harness (`AgentSession` + `FakeAgentModel`) exists; see [agent.md](agent.md). Tools are **not** wired. This table is the contract proposal for **9.1**. No LLM client, no MCP, no chat UI. Tools should call `KitApi` methods; they must not poke `SceneStore` fields.
 
 | Tool name | Maps to | Args (conceptual JSON) | Notes |
 |---|---|---|---|
@@ -350,12 +350,12 @@ Unknown `typeId` / unknown kit → tool error, scene unchanged.
 
 ## Dream goal (not scheduled)
 
-Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. **Not Phase 8.** Phase 8 is documentation. Planted seam: `capabilities: []` in `kit.json`. See [kit packages](kit_packages.md).
+Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The Phase 9 harness is **not** that. Planted seam: `capabilities: []` in `kit.json`. See [kit packages](kit_packages.md) and [agent.md](agent.md).
 
 ## Non-goals
 
 - Workers, isolates, Wasm, executing non-empty `capabilities`
-- Agent loop, chat UI, tool runner, MCP
+- Tool dispatch, chat UI, LLM HTTP (see [agent.md](agent.md) for the Phase 9 core vs 9.1 / 9.2)
 - Dart eval / new registry types
 - Batched multi-object undo
 - “Save selection as kit…” UI
