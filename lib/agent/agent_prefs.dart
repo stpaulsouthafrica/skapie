@@ -5,18 +5,27 @@ const String agentPrefsFileName = 'agent_prefs.json';
 const String appSupportAgentSubdir = 'skapie';
 
 class AgentPrefs {
-  const AgentPrefs({required this.providerId, this.model, this.baseUrl});
+  const AgentPrefs({
+    required this.providerId,
+    this.model,
+    this.thinkingLevel,
+    this.baseUrl,
+  });
 
   final String providerId;
   final String? model;
+  final String? thinkingLevel;
   final String? baseUrl;
 
   Map<String, Object?> toJson() {
     return {
-      'schemaVersion': 1,
+      'schemaVersion': 2,
       'provider': providerId,
       if (model != null && model!.trim().isNotEmpty) 'model': model,
-      if (baseUrl != null && baseUrl!.trim().isNotEmpty) 'baseUrl': baseUrl,
+      if (thinkingLevel != null &&
+          thinkingLevel!.trim().isNotEmpty &&
+          thinkingLevel != 'off')
+        'thinkingLevel': thinkingLevel,
     };
   }
 
@@ -29,6 +38,7 @@ class AgentPrefs {
     return AgentPrefs(
       providerId: trim(json['provider']) ?? 'fake',
       model: trim(json['model']),
+      thinkingLevel: trim(json['thinkingLevel']),
       baseUrl: trim(json['baseUrl']),
     );
   }

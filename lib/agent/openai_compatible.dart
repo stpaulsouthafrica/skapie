@@ -11,11 +11,18 @@ class AgentHttpException implements Exception {
   String toString() => message;
 }
 
-String openaiChatCompletionsUrl(String baseUrl) {
-  final trimmed = baseUrl.endsWith('/')
+String openaiNormalizedBaseUrl(String baseUrl) {
+  return baseUrl.endsWith('/')
       ? baseUrl.substring(0, baseUrl.length - 1)
       : baseUrl;
-  return '$trimmed/chat/completions';
+}
+
+String openaiChatCompletionsUrl(String baseUrl) {
+  return '${openaiNormalizedBaseUrl(baseUrl)}/chat/completions';
+}
+
+String openaiModelsUrl(String baseUrl) {
+  return '${openaiNormalizedBaseUrl(baseUrl)}/models';
 }
 
 List<Map<String, Object?>> openaiMessagesFromSession(
@@ -81,6 +88,7 @@ class OpenAiCompatibleAgentModel implements AgentModel {
     this.headers = const {},
     http.Client? httpClient,
     this.timeout = const Duration(seconds: 60),
+    this.reasoningEffort,
   }) : _client = httpClient ?? http.Client();
 
   final String baseUrl;
@@ -88,6 +96,7 @@ class OpenAiCompatibleAgentModel implements AgentModel {
   final String model;
   final Map<String, String> headers;
   final Duration timeout;
+  final String? reasoningEffort;
   final http.Client _client;
 
   @override
@@ -95,10 +104,13 @@ class OpenAiCompatibleAgentModel implements AgentModel {
     required List<AgentMessage> messages,
     List<AgentTool> tools = const [],
   }) async {
+    final effort = reasoningEffort?.trim();
     final body = <String, Object?>{
       'model': model,
       'messages': openaiMessagesFromSession(messages),
       if (tools.isNotEmpty) 'tools': openaiToolsFromAgent(tools),
+      if (effort != null && effort.isNotEmpty && effort != 'off')
+        'reasoning': {'effort': effort},
     };
     final http.Response response;
     try {

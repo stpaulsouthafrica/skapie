@@ -32,7 +32,7 @@ class AgentController extends ChangeNotifier {
     required String providerId,
     String? model,
     String? apiKey,
-    String? baseUrl,
+    String? thinkingLevel,
   }) async {
     final pasted = apiKey?.trim();
     if (pasted != null && pasted.isNotEmpty) {
@@ -41,7 +41,7 @@ class AgentController extends ChangeNotifier {
     final nextPrefs = AgentPrefs(
       providerId: providerId.trim().isEmpty ? 'fake' : providerId.trim(),
       model: model,
-      baseUrl: baseUrl,
+      thinkingLevel: thinkingLevel,
     );
     prefs = nextPrefs;
     await prefsStore?.save(nextPrefs);

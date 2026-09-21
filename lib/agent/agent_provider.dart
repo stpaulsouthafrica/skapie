@@ -41,6 +41,7 @@ class ResolvedAgentRuntime {
     this.baseUrl,
     this.apiKey,
     this.model,
+    this.thinkingLevel,
     this.warning,
   });
 
@@ -49,6 +50,7 @@ class ResolvedAgentRuntime {
   final String? baseUrl;
   final String? apiKey;
   final String? model;
+  final String? thinkingLevel;
   final String? warning;
 }
 
@@ -224,14 +226,27 @@ ResolvedAgentRuntime mergeAgentRuntime({
     if (provider.isEmpty || provider == 'fake') {
       return const ResolvedAgentRuntime(presetId: 'fake', useFake: true);
     }
-    return resolveAgentRuntime(
+    final preset = agentHttpPresets[provider];
+    final baseOverride = preset?.defaultBaseUrl == null
+        ? (prefs.baseUrl ?? '')
+        : '';
+    final resolved = resolveAgentRuntime(
       dartDefineProvider: provider,
-      dartDefineBaseUrl: prefs.baseUrl ?? '',
+      dartDefineBaseUrl: baseOverride,
       dartDefineApiKey:
           _firstNonEmpty([memoryApiKey, merged.dartDefineApiKey]) ?? '',
       dartDefineModel: prefs.model ?? '',
       envApiKey: merged.envApiKey,
       environment: merged.environment,
+    );
+    return ResolvedAgentRuntime(
+      presetId: resolved.presetId,
+      useFake: resolved.useFake,
+      baseUrl: resolved.baseUrl,
+      apiKey: resolved.apiKey,
+      model: resolved.model,
+      thinkingLevel: prefs.thinkingLevel,
+      warning: resolved.warning,
     );
   }
   return resolveAgentRuntime(
@@ -276,6 +291,9 @@ AgentSession buildAgentSession({
         presetId: runtime.presetId,
         sessionId: sessionId,
       ),
+      reasoningEffort: runtime.presetId == 'openrouter'
+          ? runtime.thinkingLevel
+          : null,
     ),
     kitApi: kitApi,
     id: sessionId,

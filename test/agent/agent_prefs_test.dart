@@ -6,24 +6,25 @@ import 'package:skapie/agent/agent_prefs.dart';
 
 void main() {
   test(
-    'prefs JSON round-trips provider, model, and base URL without a key',
+    'prefs JSON round-trips provider, model, thinkingLevel without a key',
     () {
       const prefs = AgentPrefs(
-        providerId: 'opencode-go',
-        model: 'kimi-k2.6',
-        baseUrl: 'https://example.test/v1',
+        providerId: 'openrouter',
+        model: 'anthropic/claude-sonnet-4',
+        thinkingLevel: 'high',
       );
       final json = prefs.toJson();
       expect(json.containsKey('apiKey'), isFalse);
       expect(json.containsKey('api_key'), isFalse);
-      expect(json['provider'], 'opencode-go');
-      expect(json['model'], 'kimi-k2.6');
-      expect(json['baseUrl'], 'https://example.test/v1');
+      expect(json.containsKey('baseUrl'), isFalse);
+      expect(json['provider'], 'openrouter');
+      expect(json['model'], 'anthropic/claude-sonnet-4');
+      expect(json['thinkingLevel'], 'high');
 
       final loaded = AgentPrefs.fromJson(json);
       expect(loaded.providerId, prefs.providerId);
       expect(loaded.model, prefs.model);
-      expect(loaded.baseUrl, prefs.baseUrl);
+      expect(loaded.thinkingLevel, 'high');
     },
   );
 
@@ -38,7 +39,7 @@ void main() {
     expect(jsonEncode(loaded.toJson()), isNot(contains('sk-should-not-load')));
   });
 
-  test('prefs file save then load does not write a key', () async {
+  test('prefs file save then load does not write a key or baseUrl', () async {
     final dir = await Directory.systemTemp.createTemp('skapie_agent_prefs_');
     addTearDown(() => dir.delete(recursive: true));
     final file = agentPrefsFile(dir);
@@ -48,17 +49,19 @@ void main() {
       const AgentPrefs(
         providerId: 'openrouter',
         model: 'anthropic/claude-sonnet-4',
+        thinkingLevel: 'medium',
       ),
     );
     final text = file.readAsStringSync();
     expect(text.toLowerCase(), isNot(contains('apikey')));
     expect(text, isNot(contains('sk-')));
+    expect(text.contains('baseUrl'), isFalse);
 
     final loaded = await store.load();
     expect(loaded, isNotNull);
     expect(loaded!.providerId, 'openrouter');
     expect(loaded.model, 'anthropic/claude-sonnet-4');
-    expect(loaded.baseUrl, isNull);
+    expect(loaded.thinkingLevel, 'medium');
   });
 
   test('missing prefs file loads as null', () async {

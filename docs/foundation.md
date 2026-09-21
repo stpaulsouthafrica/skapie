@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. After Phase 10 is green, the 10-phase core is complete; later arcs are not numbered phases.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models).
 
 ## Phase 1 gate — done
 
@@ -90,14 +90,20 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Named presets `opencode-go`, `openrouter`, `openai`, `custom` (one HTTP client). Missing key/model → `FakeAgentModel`.
 - Overlay chat panel calls `AgentSession.sendUser` only; canvas does not reflow. Failures visible in chat.
 
-## Phase 10 gate (current)
+## Phase 10 gate — done
 
-- Agent settings (gear on chat): provider, model, API key, optional base URL. Apply rebuilds `AgentSession` on the same `KitApi` (system prompt kept; prior turns cleared). Use Fake one-click.
-- Non-secret prefs at Application Support `skapie/agent_prefs.json` (provider / model / base URL). API key is memory-only (or env/dart-define). Never in `scene.json`.
+- Agent settings (gear on chat): provider, model, API key. Apply rebuilds `AgentSession` on the same `KitApi` (system prompt kept; prior turns cleared). Use Fake one-click.
+- Non-secret prefs at Application Support `skapie/agent_prefs.json`. API key is memory-only (or env/dart-define). Never in `scene.json`.
 - Chat chip Fake vs `{preset} · {model}`; empty-state suggested prompts. Overlay still does not reflow the canvas.
-- `flutter analyze` clean; `flutter test` covers prefs round-trip, merge (UI override wins), session swap, and Fake Echo chat.
 
-When this gate is green, the **10-phase core is complete**. See [agent.md](agent.md). Later arcs (streaming, Pi/MCP, sandbox kits, visible sub-agent kits, personal coding-agent kit) stay out of scope.
+The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, visible sub-agent kits, personal coding-agent kit) stay out of scope.
+
+## Phase 10.1 gate (current)
+
+- Settings UX: provider → paste key → **Connect** → `GET /models` → Model dropdown. No typed model id. No Base URL field. `custom` not in the panel.
+- Thinking row only when the catalog lists efforts. OpenRouter `reasoning.effort` on chat completions; OpenCode Go / OpenAI thinking is UI-reserved / hidden when the catalog has none.
+- Prefs schema 2: `provider`, `model`, optional `thinkingLevel`. No API key. No base URL written from the UI.
+- `flutter analyze` clean; `flutter test` covers catalog parse, Connect mock HTTP, prefs, session swap, and Fake Echo chat.
 
 ## Dream goal (not scheduled)
 

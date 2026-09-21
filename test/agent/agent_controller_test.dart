@@ -50,5 +50,24 @@ void main() {
       apiKey: 'oc-test',
     );
     expect(kitApi.store.document.objects, isEmpty);
+    expect(controller.prefs?.model, 'kimi-k2.6');
+    expect(controller.prefs?.thinkingLevel, isNull);
+  });
+
+  test('Apply persists thinkingLevel without a baseUrl', () async {
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    await controller.applySettings(
+      providerId: 'openrouter',
+      model: 'anthropic/claude-sonnet-4',
+      apiKey: 'or-test',
+      thinkingLevel: 'high',
+    );
+    expect(controller.prefs?.thinkingLevel, 'high');
+    expect(controller.prefs?.toJson().containsKey('baseUrl'), isFalse);
+    expect(controller.session.messages, hasLength(1));
   });
 }

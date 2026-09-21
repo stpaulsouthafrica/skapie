@@ -61,4 +61,32 @@ void main() {
       throwsA(isA<AgentHttpException>()),
     );
   });
+
+  test('OpenRouter reasoning effort is sent when set', () async {
+    final client = MockClient((request) async {
+      final body = jsonDecode(request.body) as Map;
+      expect(body['reasoning'], {'effort': 'high'});
+      return http.Response(
+        jsonEncode({
+          'choices': [
+            {
+              'message': {'content': 'ok'},
+            },
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final model = OpenAiCompatibleAgentModel(
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'or-test',
+      model: 'anthropic/claude-sonnet-4',
+      httpClient: client,
+      reasoningEffort: 'high',
+    );
+    await model.complete(
+      messages: const [AgentMessage(role: AgentRole.user, content: 'hi')],
+    );
+  });
 }
