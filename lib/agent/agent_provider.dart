@@ -4,6 +4,12 @@ import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/agent/vanilla_completion.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/providers/model_surface.dart';
+import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
+import 'package:skapie/providers/unverified_vanilla.dart';
+import 'package:skapie/providers/vanilla_client.dart';
+import 'package:skapie/providers/vanilla_messages.dart';
+import 'package:skapie/providers/vanilla_responses.dart';
 
 class AgentHttpPreset {
   const AgentHttpPreset({
@@ -20,7 +26,7 @@ class AgentHttpPreset {
 const Map<String, AgentHttpPreset> agentHttpPresets = {
   'opencode-go': AgentHttpPreset(
     id: 'opencode-go',
-    defaultBaseUrl: 'https://opencode.ai/zen/go/v1',
+    defaultBaseUrl: opencodeGoDefaultBaseUrl,
     nativeKeyEnv: 'OPENCODE_API_KEY',
   ),
   'openrouter': AgentHttpPreset(
@@ -320,7 +326,7 @@ AgentSession buildAgentSession({
   );
 }
 
-VanillaCompletionClient? buildVanillaCompletion({
+VanillaSurfaceClient? buildVanillaClient({
   required ResolvedAgentRuntime runtime,
   String? sessionId,
   http.Client? httpClient,
@@ -328,15 +334,63 @@ VanillaCompletionClient? buildVanillaCompletion({
   if (runtime.useFake) {
     return null;
   }
+  final headers = agentProviderHeaders(
+    presetId: runtime.presetId,
+    sessionId: sessionId ?? 'vanilla',
+  );
+  if (runtime.presetId == 'opencode-go') {
+    final entry = lookupOpenCodeGoModel(runtime.model!);
+    if (entry == null || !entry.show || !entry.vanillaOk) {
+      return UnverifiedVanillaClient(
+        model: runtime.model!,
+        presetId: runtime.presetId,
+      );
+    }
+    return switch (entry.surface) {
+      ModelSurface.completions => VanillaCompletionClient(
+        baseUrl: runtime.baseUrl!,
+        apiKey: runtime.apiKey!,
+        model: runtime.model!,
+        presetId: runtime.presetId,
+        headers: headers,
+        httpClient: httpClient,
+      ),
+      ModelSurface.responses => VanillaResponsesClient(
+        baseUrl: runtime.baseUrl!,
+        apiKey: runtime.apiKey!,
+        model: runtime.model!,
+        presetId: runtime.presetId,
+        headers: headers,
+        httpClient: httpClient,
+      ),
+      ModelSurface.messages => VanillaMessagesClient(
+        baseUrl: runtime.baseUrl!,
+        apiKey: runtime.apiKey!,
+        model: runtime.model!,
+        presetId: runtime.presetId,
+        headers: headers,
+        httpClient: httpClient,
+      ),
+    };
+  }
   return VanillaCompletionClient(
     baseUrl: runtime.baseUrl!,
     apiKey: runtime.apiKey!,
     model: runtime.model!,
     presetId: runtime.presetId,
-    headers: agentProviderHeaders(
-      presetId: runtime.presetId,
-      sessionId: sessionId ?? 'vanilla',
-    ),
+    headers: headers,
+    httpClient: httpClient,
+  );
+}
+
+VanillaSurfaceClient? buildVanillaCompletion({
+  required ResolvedAgentRuntime runtime,
+  String? sessionId,
+  http.Client? httpClient,
+}) {
+  return buildVanillaClient(
+    runtime: runtime,
+    sessionId: sessionId,
     httpClient: httpClient,
   );
 }

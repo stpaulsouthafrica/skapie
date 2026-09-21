@@ -9,6 +9,7 @@ import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/agent/vanilla_completion.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/providers/vanilla_responses.dart';
 import 'package:skapie/scene/scene.dart';
 
 void main() {
@@ -194,6 +195,21 @@ void main() {
         controller.lastDiagnostic?.summary,
         isNot(contains('sk-secret-key')),
       );
+      expect(controller.lastDiagnostic?.surface, 'completions');
     },
   );
+
+  test('Apply OpenCode Go luna builds a responses vanilla client', () async {
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    await controller.applySettings(
+      providerId: 'opencode-go',
+      model: 'gpt-5.6-luna',
+      apiKey: 'oc-test',
+    );
+    expect(controller.vanilla, isA<VanillaResponsesClient>());
+  });
 }

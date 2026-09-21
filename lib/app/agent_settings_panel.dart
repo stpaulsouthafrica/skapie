@@ -4,6 +4,7 @@ import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_models_catalog.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/paint/paint.dart';
+import 'package:skapie/providers/merge_live_models.dart';
 
 const List<String> agentProviderChoices = [
   'fake',
@@ -80,12 +81,14 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
 
   bool get _modelEnabled => _models.isNotEmpty && !_busy && _provider != 'fake';
 
-  bool get _canApplyLive =>
-      _selectedModel != null &&
-      _models.isNotEmpty &&
-      (_apiKey.text.trim().isNotEmpty ||
-          (widget.controller.memoryApiKey?.trim().isNotEmpty ?? false) ||
-          (widget.controller.prefs?.apiKey?.trim().isNotEmpty ?? false));
+  bool get _canApplyLive {
+    final info = _selectedInfo;
+    return info != null &&
+        info.selectable &&
+        (_apiKey.text.trim().isNotEmpty ||
+            (widget.controller.memoryApiKey?.trim().isNotEmpty ?? false) ||
+            (widget.controller.prefs?.apiKey?.trim().isNotEmpty ?? false));
+  }
 
   Future<void> _connect() async {
     if (_busy || _provider == 'fake') {
@@ -106,7 +109,7 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
       _error = null;
     });
     try {
-      final models = await fetchAgentModels(
+      final live = await fetchAgentModels(
         baseUrl: baseUrl,
         apiKey: key,
         headers: agentProviderHeaders(
@@ -118,7 +121,7 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
       if (!mounted) {
         return;
       }
-      if (models.isEmpty) {
+      if (live.isEmpty) {
         setState(() {
           _models = const [];
           _selectedModel = null;
@@ -127,10 +130,23 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
         });
         return;
       }
-      final preferred = widget.controller.prefs?.model;
-      final selected = models.any((model) => model.id == preferred)
-          ? preferred!
-          : models.first.id;
+      final models = mergeLiveModelsWithCatalog(
+        live: live,
+        providerId: _provider,
+      );
+      final selected = firstSelectableModelId(
+        models,
+        preferred: widget.controller.prefs?.model,
+      );
+      if (selected == null) {
+        setState(() {
+          _models = models;
+          _selectedModel = null;
+          _thinking = _thinkingOff;
+          _error = 'No models in the Skapie catalog yet';
+        });
+        return;
+      }
       final info = models.firstWhere((model) => model.id == selected);
       final preferredThinking = widget.controller.prefs?.thinkingLevel;
       final thinking =
@@ -220,6 +236,9 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
         break;
       }
     }
+    if (info != null && !info.selectable) {
+      return;
+    }
     setState(() {
       _selectedModel = value;
       if (info == null || info.thinkingLevels.isEmpty) {
@@ -300,8 +319,9 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
                   for (final model in _models)
                     DropdownMenuItem(
                       value: model.id,
+                      enabled: model.selectable,
                       child: Text(
-                        model.displayName,
+                        _modelItemLabel(model),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -371,6 +391,17 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
         ],
       ),
     );
+  }
+
+  String _modelItemLabel(AgentModelInfo model) {
+    if (!model.selectable) {
+      return '${model.displayName} · ${model.subtitle ?? unverifiedCatalogSubtitle}';
+    }
+    final surface = model.surface?.id;
+    if (surface == null || surface.isEmpty) {
+      return model.displayName;
+    }
+    return '${model.displayName} · $surface';
   }
 
   String _providerLabel(String id) {

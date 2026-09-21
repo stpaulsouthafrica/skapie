@@ -2,15 +2,16 @@
 
 The **world is the harness.** The bottom chat bar is an on-ramp, not a hidden full agent stack.
 
-**Phase 10.2.1:** first Enter is a vanilla chat completion (user text only). The reply lands on an **LLM kit**. **System prompt** and **Tools** are separate stub kits you can place on the board. Wiring those kits into the HTTP payload is later. The tool-loop `AgentSession` still exists for that later wire; chat Enter does not use it.
+**Phase 10.3.1:** first Enter is vanilla user text only. OpenCode Go models are joined to a curated seating chart and routed to completions, responses, or messages. The reply lands on an **LLM kit**. **System prompt** and **Tools** are separate stub kits you can place on the board. Wiring those kits into the HTTP payload is later. The tool-loop `AgentSession` still exists for that later wire; chat Enter does not use it.
 
-The **scene document** remains the source of truth. Mutations go `KitApi` → `SceneStore.apply`. Settings and the chat widget do not call `KitApi`. `AgentController.sendUser` publishes the LLM kit through `KitApi`. **Kit** / **kit recipe** / **kit package**: [glossary](glossary.md).
+The **scene document** remains the source of truth. Mutations go `KitApi` → `SceneStore.apply`. Settings and the chat widget do not call `KitApi`. `AgentController.sendUser` publishes the LLM kit through `KitApi`. **Kit** / **kit recipe** / **kit package**: [glossary](glossary.md). Chart file and how to add a row: [providers](providers.md).
 
 ## What this is / isn’t
 
-| In 10.2.1 | Later |
+| In 10.3.1 | Later |
 |---|---|
-| Vanilla first Enter: `{ model, messages: [user] }` | Inject system prompt + tools from board kits |
+| Vanilla first Enter on the model’s surface (user text only) | Inject system prompt + tools from board kits |
+| OpenCode Go catalog in `lib/providers/` | Remote / WordPress catalog overlay |
 | LLM kit, system-prompt stub kit, tools stub kit | Cable/graph connection renderer |
 | Prefs: provider + model + local key (never scene.json) | Streaming, MCP, OAuth, Keychain |
 | Minimal chat field | Fat chat transcript chrome |
@@ -20,7 +21,7 @@ Living sub-agent kits (status, tokens, workers) remain a dream goal. These harne
 ## Mental model
 
 1. Settings supply the **pipe**: provider, base URL, API key, model.
-2. Chat Enter sends **vanilla** completion when live (or Fake Echo offline).
+2. Chat Enter sends **vanilla** user text when live (or Fake Echo offline). Surface comes from the OpenCode Go chart.
 3. Success or failure materializes / updates `harness.llm` on the world.
 4. `harness.system-prompt` and `harness.tools` can sit on the board. They do **not** change the vanilla payload.
 5. `AgentSession` (system prompt + kit tools loop) is kept for a later wire. First Enter does not call `session.sendUser`.
@@ -28,9 +29,13 @@ Living sub-agent kits (status, tokens, workers) remain a dream goal. These harne
 ```
 controller.sendUser("hello")
   → if Fake: reply = "Echo: hello"
-  → else VanillaCompletionClient.complete(userText)
-       POST {baseUrl}/chat/completions
-       body: { model, messages: [{ role: user, content }] }
+  → else buildVanillaClient(catalog.surface).complete(userText)
+       completions → POST {baseUrl}/chat/completions
+                     { model, messages: [{ role: user, content }] }
+       responses   → POST {baseUrl}/responses
+                     { model, input }
+       messages    → POST {baseUrl}/messages
+                     { model, max_tokens: 1024, messages: [{ role: user, content }] }
   → publishLlmKit via KitApi (success or failure)
 ```
 
@@ -50,8 +55,11 @@ Default system prompt (`defaultAgentSystemPrompt`) still seeds **AgentSession** 
 | Type | Role |
 |---|---|
 | `VanillaCompletionClient` | Plain POST `/chat/completions`. One user message. No tools. No system. No reasoning. |
+| `VanillaResponsesClient` | Plain POST `/responses`. `{ model, input }`. |
+| `VanillaMessagesClient` | Plain POST `/messages`. `{ model, max_tokens, messages: [user] }`. |
+| `UnverifiedVanillaClient` | Live id not in the chart. Throws; does not POST completions. |
 | `AgentHttpException` | Non-2xx / timeout. Carries `statusCode` + `body` when HTTP. |
-| `AgentHttpDiagnostic` | Redacted request summary. Never includes the API key. |
+| `AgentHttpDiagnostic` | Redacted request summary (provider, model, surface, URL, status, body). Never the API key. |
 | `publishLlmKit` | Instantiates or updates `harness.llm` through `KitApi` |
 | `AgentController.sendUser` | Vanilla on-ramp, then LLM kit |
 | `AgentSession` | Later tool-loop harness. Not the default first Enter. |
@@ -74,7 +82,7 @@ One HTTP client. A const table fills base URL, key env, and optional headers.
 
 Known presets own their base URL. Settings does **not** ask for a base URL or a typed model id.
 
-OpenCode Go’s `x-opencode-session` is generated once per `AgentSession` and reused on vanilla requests for that controller. **Apply** creates a new session id. Stay on `/v1/chat/completions`. Connect uses `GET /models`.
+OpenCode Go’s `x-opencode-session` is generated once per `AgentSession` and reused on vanilla requests for that controller. **Apply** creates a new session id. Connect uses `GET /models`, then joins that list with [`lib/providers/opencode_go/opencode_go_catalog.json`](../lib/providers/opencode_go/opencode_go_catalog.json). Send routes by catalog `surface`. Unknown live ids are shown disabled and are never posted as completions.
 
 ### Config resolution
 
@@ -100,36 +108,22 @@ Prefs persist at **`<Application Support>/skapie/agent_prefs.json`**: schema ver
 
 ### Vanilla payload (first Enter)
 
-`VanillaCompletionClient` sends:
+`buildVanillaClient` picks a surface from the OpenCode Go chart (other presets still use completions). Details and how to add a row: [providers](providers.md).
 
-```
-POST {normalizedBaseUrl}/chat/completions
-```
-
-Headers:
+Headers (all surfaces):
 
 - `Authorization: Bearer <apiKey>` (never logged, never shown on the kit)
 - `Content-Type: application/json`
 - Preset extras from the table above
-
-JSON body **only**:
-
-```json
-{
-  "model": "<id>",
-  "messages": [
-    { "role": "user", "content": "<typed text>" }
-  ]
-}
-```
+- messages also sends `x-api-key` with the same key
 
 No `tools`. No system message. No `reasoning`. Stub kits on the board do not change this body.
 
-Timeouts (60s) and non-2xx throw `AgentHttpException`. `lastDiagnostic` records preset, URL, model, status, truncated body, `tools=off`, `reasoning=off`. Never the API key.
+Timeouts (60s) and non-2xx throw `AgentHttpException`. `lastDiagnostic` records preset, model, surface, URL, status, truncated body, `tools=off`, `reasoning=off`. Never the API key.
 
 ### Future wired harness payload (not first Enter)
 
-`OpenAiCompatibleAgentModel` + `AgentSession.sendUser` still map the full session: system / user / assistant / tool messages, optional function `tools` with object JSON Schema, and OpenRouter-only `reasoning.effort`. Chat Enter does not take this path in 10.2.1.
+`OpenAiCompatibleAgentModel` + `AgentSession.sendUser` still map the full session: system / user / assistant / tool messages, optional function `tools` with object JSON Schema, and OpenRouter-only `reasoning.effort`. Chat Enter does not take this path in 10.3.1.
 
 ## Chat panel
 
@@ -153,8 +147,10 @@ Later turns update the same LLM kit. No transcript UI in the strip. No drop anim
 
 Provider dropdown: `fake`, `opencode-go`, `openrouter`, `openai`. Paste API key → **Connect** → `GET {preset baseUrl}/models`. Thinking row only when the catalog lists efforts (OpenRouter). Thinking does **not** ride on vanilla first Enter.
 
-- **Apply** — requires a selected model and a key. Saves prefs, rebuilds `AgentSession` and the vanilla client.
+- **Apply** — requires a selected catalog model and a key. Saves prefs, rebuilds `AgentSession` and the vanilla client.
 - **Use Fake** — persists provider `fake` without requiring a key.
+
+Unknown live ids stay in the list as disabled (`not in Skapie catalog yet`). They cannot be Applied.
 
 ## Kit tools (9.1, later wire)
 
@@ -189,7 +185,7 @@ No key → Fake Echo on `harness.llm`.
 
 macOS sandbox needs `com.apple.security.network.client` for outbound HTTP.
 
-## Later arcs (not Phase 10.2.1)
+## Later arcs (not Phase 10.3.1)
 
 - Wire system-prompt + tools kits into the HTTP payload
 - Cable/graph visualization

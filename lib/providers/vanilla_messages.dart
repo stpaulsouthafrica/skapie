@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
+import 'package:skapie/providers/vanilla_extract.dart';
 
-/// Minimal legal chat completion: one user message, no tools, no system prompt.
-class VanillaCompletionClient implements VanillaSurfaceClient {
-  VanillaCompletionClient({
+class VanillaMessagesClient implements VanillaSurfaceClient {
+  VanillaMessagesClient({
     required this.baseUrl,
     required this.apiKey,
     required this.model,
@@ -32,12 +32,12 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
       presetId: presetId,
       baseUrl: openaiNormalizedBaseUrl(baseUrl),
       model: model,
-      url: openaiChatCompletionsUrl(baseUrl),
+      url: anthropicMessagesUrl(baseUrl),
       statusCode: statusCode,
       responseBody: responseBody,
       toolNames: const [],
       reasoningAttached: false,
-      surface: 'completions',
+      surface: 'messages',
     );
   }
 
@@ -45,6 +45,7 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
   Future<String> complete({required String userText}) async {
     final body = <String, Object?>{
       'model': model,
+      'max_tokens': 1024,
       'messages': [
         {'role': 'user', 'content': userText},
       ],
@@ -54,9 +55,10 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
     try {
       response = await _client
           .post(
-            Uri.parse(openaiChatCompletionsUrl(baseUrl)),
+            Uri.parse(anthropicMessagesUrl(baseUrl)),
             headers: {
               'Authorization': 'Bearer $apiKey',
+              'x-api-key': apiKey,
               'Content-Type': 'application/json',
               ...headers,
             },
@@ -73,26 +75,13 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
         'HTTP ${response.statusCode}: ${response.body}',
         statusCode: response.statusCode,
         body: response.body,
-        url: openaiChatCompletionsUrl(baseUrl),
+        url: anthropicMessagesUrl(baseUrl),
       );
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) {
-      throw AgentHttpException('Unexpected chat completions body');
+      throw AgentHttpException('Unexpected messages body');
     }
-    final choices = decoded['choices'];
-    if (choices is! List || choices.isEmpty) {
-      throw AgentHttpException('No choices in chat completions response');
-    }
-    final choice = choices.first;
-    if (choice is! Map) {
-      throw AgentHttpException('Invalid choice in chat completions response');
-    }
-    final message = choice['message'];
-    if (message is! Map) {
-      throw AgentHttpException('Invalid message in chat completions response');
-    }
-    final content = message['content'];
-    return content is String ? content : '';
+    return extractAnthropicMessageText(decoded);
   }
 }

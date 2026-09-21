@@ -118,6 +118,8 @@ class PaintTextField extends StatelessWidget {
     this.hint,
     this.enabled = true,
     this.obscure = false,
+    this.autofocus = false,
+    this.focusNode,
     this.onSubmitted,
     this.onChanged,
   });
@@ -127,6 +129,8 @@ class PaintTextField extends StatelessWidget {
   final String? hint;
   final bool enabled;
   final bool obscure;
+  final bool autofocus;
+  final FocusNode? focusNode;
   final ValueChanged<String>? onSubmitted;
   final ValueChanged<String>? onChanged;
 
@@ -135,6 +139,8 @@ class PaintTextField extends StatelessWidget {
     final tokens = PaintScope.of(context);
     return TextField(
       controller: controller,
+      focusNode: focusNode,
+      autofocus: autofocus,
       enabled: enabled,
       obscureText: obscure,
       onSubmitted: onSubmitted,

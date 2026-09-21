@@ -70,7 +70,77 @@ void main() {
       find.byKey(const Key('agent-settings-model')),
     );
     expect(after.onChanged, isNotNull);
-    expect(find.text('kimi-k2.6'), findsOneWidget);
+    expect(find.text('Kimi K2.6 · completions'), findsOneWidget);
+  });
+
+  testWidgets('Connect keeps unknown live ids disabled, not as completions', (
+    tester,
+  ) async {
+    final client = MockClient((request) async {
+      return http.Response(
+        jsonEncode({
+          'data': [
+            {'id': 'brand-new-go'},
+            {'id': 'deepseek-v4-flash'},
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final kitApi = createAppKitApi(store: SceneStore());
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      prefs: const AgentPrefs(providerId: 'opencode-go'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 280,
+            height: 600,
+            child: AgentSettingsPanel(
+              controller: controller,
+              onClose: () {},
+              httpClient: client,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.enterText(
+      find.byKey(const Key('agent-settings-api-key')),
+      'oc-test',
+    );
+    await tester.tap(find.byKey(const Key('agent-settings-connect')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('DeepSeek V4 Flash · completions'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('agent-settings-model')));
+    await tester.pumpAndSettle();
+    final unknown = tester.widget<DropdownMenuItem<String>>(
+      find.widgetWithText(
+        DropdownMenuItem<String>,
+        'brand-new-go · not in Skapie catalog yet',
+      ),
+    );
+    expect(unknown.enabled, isFalse);
+    expect(unknown.value, 'brand-new-go');
+    final known = tester.widget<DropdownMenuItem<String>>(
+      find
+          .widgetWithText(
+            DropdownMenuItem<String>,
+            'DeepSeek V4 Flash · completions',
+          )
+          .last,
+    );
+    expect(known.enabled, isTrue);
+    expect(known.value, 'deepseek-v4-flash');
   });
 
   testWidgets('Connect 401 shows error and leaves Model disabled', (

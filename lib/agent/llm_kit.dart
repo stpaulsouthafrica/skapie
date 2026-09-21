@@ -12,14 +12,71 @@ void ensureHarnessLlmKit(KitApi kitApi) {
   }
 }
 
+bool isLlmKitObject(SceneObject object) {
+  return object.props[skapieKitProp] == harnessLlmKitId;
+}
+
 SceneObject? findLlmKitBody(KitApi kitApi) {
-  for (final object in kitApi.store.document.objects) {
-    if (object.props[skapieKitProp] == harnessLlmKitId &&
-        object.props[skapieRoleProp] == 'body') {
+  return llmKitBodyForSelection(
+    document: kitApi.store.document,
+    selectedId: kitApi.store.document.objects
+        .where(
+          (object) =>
+              isLlmKitObject(object) && object.props[skapieRoleProp] == 'body',
+        )
+        .map((object) => object.id)
+        .firstOrNull,
+  );
+}
+
+SceneObject? llmKitBodyForSelection({
+  required SceneDocument document,
+  required String? selectedId,
+}) {
+  if (selectedId == null) {
+    return null;
+  }
+  final selected = document.objectById(selectedId);
+  if (selected == null || !isLlmKitObject(selected)) {
+    return null;
+  }
+  if (selected.props[skapieRoleProp] == 'body') {
+    return selected;
+  }
+  for (final object in document.objects) {
+    if (isLlmKitObject(object) &&
+        object.props[skapieRoleProp] == 'body' &&
+        _bodyBelongsToFrame(object, selected)) {
       return object;
     }
   }
   return null;
+}
+
+bool _bodyBelongsToFrame(SceneObject body, SceneObject frame) {
+  return body.x >= frame.x - 0.5 &&
+      body.y >= frame.y - 0.5 &&
+      body.x + body.width <= frame.x + frame.width + 0.5 &&
+      body.y + body.height <= frame.y + frame.height + 0.5;
+}
+
+void setLlmKitPrompt({
+  required KitApi kitApi,
+  required String bodyId,
+  required String prompt,
+}) {
+  final body = kitApi.store.document.objectById(bodyId);
+  if (body == null || !isLlmKitObject(body)) {
+    return;
+  }
+  kitApi.updateProps(bodyId, {
+    'prompt': prompt,
+    'content': formatLlmKitContent(
+      prompt: prompt,
+      reply: body.props['reply']?.toString(),
+      error: body.props['error']?.toString(),
+    ),
+  });
 }
 
 String formatLlmKitContent({
@@ -47,9 +104,10 @@ String formatLlmKitContent({
   return buffer.toString();
 }
 
-/// Spawn or update the single `harness.llm` kit via [KitApi] only.
+/// Update a compound LLM kit body via [KitApi] only. Does not instantiate.
 void publishLlmKit({
   required KitApi kitApi,
+  required String bodyId,
   required String prompt,
   String? reply,
   String? error,
@@ -57,14 +115,11 @@ void publishLlmKit({
   String? provider,
   AgentHttpDiagnostic? diagnostic,
 }) {
-  ensureHarnessLlmKit(kitApi);
-  var body = findLlmKitBody(kitApi);
-  if (body == null) {
-    kitApi.instantiate(harnessLlmKitId, origin: llmKitOrigin);
-    body = findLlmKitBody(kitApi);
-  }
-  if (body == null) {
-    throw StateError('harness.llm body text is missing');
+  final body = kitApi.store.document.objectById(bodyId);
+  if (body == null ||
+      !isLlmKitObject(body) ||
+      body.props[skapieRoleProp] != 'body') {
+    throw StateError('harness.llm body is missing');
   }
   kitApi.updateProps(body.id, {
     'prompt': prompt,

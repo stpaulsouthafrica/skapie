@@ -56,6 +56,8 @@ void main() {
       expect(sent.containsKey('reasoning'), isFalse);
       expect(vanilla.lastDiagnostic!.toolNames, isEmpty);
       expect(vanilla.lastDiagnostic!.reasoningAttached, isFalse);
+      expect(vanilla.lastDiagnostic!.surface, 'completions');
+      expect(vanilla.lastDiagnostic!.summary, contains('completions'));
       expect(vanilla.lastDiagnostic!.summary, isNot(contains('oc-secret')));
     },
   );

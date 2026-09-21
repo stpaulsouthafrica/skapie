@@ -24,6 +24,7 @@ class AgentHttpDiagnostic {
     this.responseBody = '',
     this.toolNames = const [],
     this.reasoningAttached = false,
+    this.surface,
   });
 
   final String? presetId;
@@ -34,6 +35,7 @@ class AgentHttpDiagnostic {
   final String responseBody;
   final List<String> toolNames;
   final bool reasoningAttached;
+  final String? surface;
 
   String get summary {
     final tools = toolNames.isEmpty
@@ -47,6 +49,7 @@ class AgentHttpDiagnostic {
     return [
       presetId ?? 'http',
       model,
+      if (surface != null && surface!.isNotEmpty) surface,
       status,
       tools,
       reason,
@@ -177,6 +180,7 @@ class OpenAiCompatibleAgentModel implements AgentModel {
       responseBody: responseBody,
       toolNames: [for (final tool in tools) tool.name],
       reasoningAttached: _reasoningAttached,
+      surface: 'completions',
     );
   }
 

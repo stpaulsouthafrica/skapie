@@ -3,17 +3,24 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/providers/model_surface.dart';
 
 class AgentModelInfo {
   const AgentModelInfo({
     required this.id,
     required this.displayName,
     this.thinkingLevels = const [],
+    this.surface,
+    this.selectable = true,
+    this.subtitle,
   });
 
   final String id;
   final String displayName;
   final List<String> thinkingLevels;
+  final ModelSurface? surface;
+  final bool selectable;
+  final String? subtitle;
 }
 
 List<AgentModelInfo> parseAgentModelsCatalog(Object? decoded) {

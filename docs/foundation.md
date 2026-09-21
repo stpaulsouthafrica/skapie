@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits: vanilla first completion plus LLM / system-prompt / tools kits.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces.
 
 ## Phase 1 gate — done
 
@@ -112,14 +112,22 @@ The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, 
 - Chat is a thin bar over the bottom third. Settings open from `/settings` and Cmd+, as a transient sheet. Inspector stays an overlay.
 - Engine seams (Kit API, scene schema, registry, tool loop) unchanged.
 
-## Phase 10.2.1 gate (current)
+## Phase 10.2.1 gate — done
 
 - Thesis: the world is the harness. The bottom chat bar is an on-ramp, not a hidden full agent stack.
 - Prefs: `provider`, `model`, optional `thinkingLevel`, optional `apiKey`. File is Application Support `skapie/agent_prefs.json`. Cold start rebuilds live pipe when key+model resolve. **Never** write the key into `scene.json`. No Keychain.
-- First Enter is vanilla POST `{baseUrl}/chat/completions` with body `{ model, messages: [{ role: user, content }] }` only. No tools. No Skapie system prompt. No reasoning.
+- First Enter is vanilla user text only. No tools. No Skapie system prompt. No reasoning.
 - `harness.llm` shows the turn (or redacted HTTP error) via `KitApi`. `harness.system-prompt` and `harness.tools` are real stub kit packages; they do not re-fat the vanilla payload. Reserved `attachedTo` seam only.
 - `AgentSession` tool loop is kept but is not the default first Enter.
 - `flutter analyze` clean; `flutter test` green. No animations.
+
+## Phase 10.3.1 gate (current)
+
+- Curated providers catalog in `lib/providers/`. OpenCode Go seating chart: [`lib/providers/opencode_go/opencode_go_catalog.json`](../lib/providers/opencode_go/opencode_go_catalog.json). How-to: [providers](providers.md).
+- Connect joins live `GET /models` with the chart. Unknown live ids are unverified (not silently completions). Chart-only ids missing from live are omitted.
+- Vanilla first Enter routes `switch (surface)`: completions `/chat/completions`, responses `/responses`, messages `/messages`. User text only on all three.
+- LLM kit diagnostics include provider, model, surface, URL, status, body. Never the API key.
+- `flutter analyze` clean; `flutter test` green.
 
 ## Dream goal (not scheduled)
 

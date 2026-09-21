@@ -4,8 +4,8 @@ import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/agent/openai_compatible.dart';
-import 'package:skapie/agent/vanilla_completion.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/providers/vanilla_client.dart';
 
 /// Owns the replaceable [AgentSession] (later harness) and the vanilla on-ramp.
 class AgentController extends ChangeNotifier {
@@ -28,7 +28,7 @@ class AgentController extends ChangeNotifier {
   ResolvedAgentRuntime runtime;
   String? memoryApiKey;
   AgentPrefs? prefs;
-  VanillaCompletionClient? vanilla;
+  VanillaSurfaceClient? vanilla;
   AgentHttpDiagnostic? lastDiagnostic;
 
   String get statusChip => agentStatusChip(runtime);
@@ -61,7 +61,7 @@ class AgentController extends ChangeNotifier {
       sources: sources,
     );
     session = buildAgentSession(kitApi: kitApi, runtime: resolved);
-    vanilla = buildVanillaCompletion(runtime: resolved, sessionId: session.id);
+    vanilla = buildVanillaClient(runtime: resolved, sessionId: session.id);
     runtime = resolved;
     notifyListeners();
   }
@@ -72,20 +72,29 @@ class AgentController extends ChangeNotifier {
     thinkingLevel: prefs?.thinkingLevel,
   );
 
-  /// Chat on-ramp: vanilla completion, then spawn or update the LLM kit.
-  Future<void> sendUser(String text) async {
+  /// Selection-scoped vanilla completion onto one compound LLM kit body.
+  Future<void> sendUser(String text, {String? targetBodyId}) async {
+    final prompt = text.trim();
+    final bodyId = targetBodyId?.trim() ?? '';
+    if (prompt.isEmpty || bodyId.isEmpty) {
+      return;
+    }
+    final target = kitApi.store.document.objectById(bodyId);
+    if (target == null) {
+      return;
+    }
     Object? failure;
     String? reply;
     try {
       if (runtime.useFake) {
-        reply = 'Echo: $text';
+        reply = 'Echo: $prompt';
         lastDiagnostic = null;
       } else {
         final client = vanilla;
         if (client == null) {
-          throw StateError('No vanilla completion client');
+          throw StateError('No vanilla client');
         }
-        reply = await client.complete(userText: text);
+        reply = await client.complete(userText: prompt);
         lastDiagnostic = client.lastDiagnostic;
       }
     } catch (error) {
@@ -97,7 +106,8 @@ class AgentController extends ChangeNotifier {
     }
     publishLlmKit(
       kitApi: kitApi,
-      prompt: text,
+      bodyId: bodyId,
+      prompt: prompt,
       reply: failure == null ? reply : null,
       error: failure?.toString(),
       model: runtime.model,

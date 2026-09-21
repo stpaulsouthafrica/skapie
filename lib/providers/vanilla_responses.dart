@@ -4,10 +4,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
+import 'package:skapie/providers/vanilla_extract.dart';
 
-/// Minimal legal chat completion: one user message, no tools, no system prompt.
-class VanillaCompletionClient implements VanillaSurfaceClient {
-  VanillaCompletionClient({
+class VanillaResponsesClient implements VanillaSurfaceClient {
+  VanillaResponsesClient({
     required this.baseUrl,
     required this.apiKey,
     required this.model,
@@ -32,29 +32,24 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
       presetId: presetId,
       baseUrl: openaiNormalizedBaseUrl(baseUrl),
       model: model,
-      url: openaiChatCompletionsUrl(baseUrl),
+      url: openaiResponsesUrl(baseUrl),
       statusCode: statusCode,
       responseBody: responseBody,
       toolNames: const [],
       reasoningAttached: false,
-      surface: 'completions',
+      surface: 'responses',
     );
   }
 
   @override
   Future<String> complete({required String userText}) async {
-    final body = <String, Object?>{
-      'model': model,
-      'messages': [
-        {'role': 'user', 'content': userText},
-      ],
-    };
+    final body = <String, Object?>{'model': model, 'input': userText};
     _record();
     final http.Response response;
     try {
       response = await _client
           .post(
-            Uri.parse(openaiChatCompletionsUrl(baseUrl)),
+            Uri.parse(openaiResponsesUrl(baseUrl)),
             headers: {
               'Authorization': 'Bearer $apiKey',
               'Content-Type': 'application/json',
@@ -73,26 +68,13 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
         'HTTP ${response.statusCode}: ${response.body}',
         statusCode: response.statusCode,
         body: response.body,
-        url: openaiChatCompletionsUrl(baseUrl),
+        url: openaiResponsesUrl(baseUrl),
       );
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) {
-      throw AgentHttpException('Unexpected chat completions body');
+      throw AgentHttpException('Unexpected responses body');
     }
-    final choices = decoded['choices'];
-    if (choices is! List || choices.isEmpty) {
-      throw AgentHttpException('No choices in chat completions response');
-    }
-    final choice = choices.first;
-    if (choice is! Map) {
-      throw AgentHttpException('Invalid choice in chat completions response');
-    }
-    final message = choice['message'];
-    if (message is! Map) {
-      throw AgentHttpException('Invalid message in chat completions response');
-    }
-    final content = message['content'];
-    return content is String ? content : '';
+    return extractResponsesOutputText(decoded);
   }
 }
