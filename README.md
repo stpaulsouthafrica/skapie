@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 9.1 of 10** — canvas, scene, kits, Kit API, and an agent session that can call kit tools (scripted/fake model). A real LLM and chat UI are not built yet.
+This repository is **Phase 9.2 of 10** — canvas, scene, kits, Kit API, kit tools, an OpenAI-compatible agent provider, and an overlay chat panel. Streaming, Pi/MCP, and product polish are not this slice.
 
 ## Run on macOS
 
@@ -41,9 +41,29 @@ flutter run -d macos \
 # or: --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
+**Agent:** Chat is a left overlay (canvas does not reflow). No API key → `FakeAgentModel` (Echo). Keys are dart-define / env only — never committed, never written into the scene file.
+
+```bash
+# OpenCode Go (preferred for local testing)
+flutter run -d macos \
+  --dart-define=SKAPIE_AGENT_PROVIDER=opencode-go \
+  --dart-define=SKAPIE_AGENT_API_KEY="$OPENCODE_API_KEY" \
+  --dart-define=SKAPIE_AGENT_MODEL=kimi-k2.6
+
+# OpenRouter
+flutter run -d macos \
+  --dart-define=SKAPIE_AGENT_PROVIDER=openrouter \
+  --dart-define=SKAPIE_AGENT_API_KEY="$OPENROUTER_API_KEY" \
+  --dart-define=SKAPIE_AGENT_MODEL=anthropic/claude-sonnet-4
+
+# Or export OPENCODE_API_KEY / OPENROUTER_API_KEY and only pass provider + model.
+```
+
+Suggested model ids are examples (`kimi-k2.6`, `anthropic/claude-sonnet-4`, `gpt-4o-mini`). See [`docs/agent.md`](docs/agent.md).
+
 ## Foundation gates
 
-Skapie is built phase by phase. **Phase 9.2 (chat / real model) is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Interaction is in [`docs/interaction.md`](docs/interaction.md). Kit API reference is in [`docs/kit_api.md`](docs/kit_api.md). Kit packages are in [`docs/kit_packages.md`](docs/kit_packages.md). Agent harness is in [`docs/agent.md`](docs/agent.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
+Skapie is built phase by phase. **Phase 10 is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Interaction is in [`docs/interaction.md`](docs/interaction.md). Kit API reference is in [`docs/kit_api.md`](docs/kit_api.md). Kit packages are in [`docs/kit_packages.md`](docs/kit_packages.md). Agent harness is in [`docs/agent.md`](docs/agent.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
 **Phase 1 gate:** macOS shell + folder stubs — done.
 
@@ -55,7 +75,7 @@ Skapie is built phase by phase. **Phase 9.2 (chat / real model) is blocked until
 
 **Phase 5 gate:** single select + move (one undo) + overlay inspector (`SetObjectLocked`, no canvas reflow) + MMB pan; selection not in `scene.json` — done.
 
-**Phase 6 gate:** `KitApi` wraps `SceneStore.apply`; in-memory recipes + demo note card — done.
+**Phase 6 gate:** `KitApi` wraps `SceneStore.apply`; in-memory kit recipes + demo note card — done.
 
 **Phase 7 gate:** on-disk `kits/<id>/kit.json` loaded into `KitApi`; `saveKit` / `reloadPackages`; disk replaces memory; no sandbox — done.
 
@@ -63,16 +83,18 @@ Skapie is built phase by phase. **Phase 9.2 (chat / real model) is blocked until
 
 **Phase 9 gate:** `AgentSession` + `FakeAgentModel` — done.
 
-**Phase 9.1 gate:** kit tools → `KitApi`; scripted tool loop; no chat/HTTP; `flutter analyze` clean; `flutter test` green. **9.2** chat/provider stays next.
+**Phase 9.1 gate:** kit tools → `KitApi`; scripted tool loop — done.
+
+**Phase 9.2 gate:** OpenAI-compatible provider + presets + overlay chat; Fake fallback; `flutter analyze` clean; `flutter test` green. **Phase 10** polish stays next.
 
 ## Docs
 
-- [`docs/glossary.md`](docs/glossary.md) — canvas, world origin, scene object, kit, graph node
+- [`docs/glossary.md`](docs/glossary.md) — canvas, world origin, scene object, kit, kit recipe, kit package, graph node
 - [`docs/foundation.md`](docs/foundation.md) — doctrine and phase gates
 - [`docs/scene.md`](docs/scene.md) — document model, ops, file path, world origin
 - [`docs/registry.md`](docs/registry.md) — type string → builder, unknown placeholder
 - [`docs/interaction.md`](docs/interaction.md) — select, move, inspector
 - [`docs/kit_api.md`](docs/kit_api.md) — Kit API reference, cookbook, agent tools
 - [`docs/kit_packages.md`](docs/kit_packages.md) — folder contract, `kit.json`, kits root
-- [`docs/agent.md`](docs/agent.md) — session, tool loop, fake/scripted models; 9.2 still later
+- [`docs/agent.md`](docs/agent.md) — session, tool loop, provider presets, overlay chat
 - **Dream goal (not scheduled):** visible sub-agent kits — see [`docs/kit_packages.md`](docs/kit_packages.md); the harness core is not that

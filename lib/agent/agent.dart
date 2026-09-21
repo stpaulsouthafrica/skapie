@@ -10,7 +10,9 @@ export 'package:skapie/agent/agent_tool_dispatcher.dart';
 export 'package:skapie/agent/kit_agent_tools.dart';
 
 const String defaultAgentSystemPrompt =
-    'You are Skapie\'s canvas agent. Use kit tools to change the scene when needed.';
+    'You are Skapie\'s canvas agent. Use kit tools to change the scene. '
+    'Prefer instantiate_kit, list_kits, and add_object rather than inventing UI. '
+    'Say kit, kit recipe, or kit package — never bare "recipe".';
 
 const int defaultMaxToolIterations = 8;
 
@@ -123,8 +125,10 @@ class AgentSession {
     required this.model,
     required this.kitApi,
     String? systemPrompt,
+    String? id,
     this.maxToolIterations = defaultMaxToolIterations,
-  }) : _tools = createKitAgentTools(kitApi),
+  }) : id = id ?? 'agent_${DateTime.now().microsecondsSinceEpoch}',
+       _tools = createKitAgentTools(kitApi),
        _messages = [
          AgentMessage(
            role: AgentRole.system,
@@ -133,6 +137,8 @@ class AgentSession {
        ] {
     _dispatcher = AgentToolDispatcher(_tools);
   }
+
+  final String id;
 
   final AgentModel model;
   final KitApi kitApi;

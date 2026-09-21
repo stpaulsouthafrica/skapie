@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skapie/agent/agent.dart';
+import 'package:skapie/app/agent_chat_panel.dart';
 import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/selection_controller.dart';
@@ -14,11 +16,13 @@ class HomeScreen extends StatefulWidget {
     required this.store,
     required this.registry,
     required this.kitApi,
+    required this.agentSession,
   });
 
   final SceneStore store;
   final ObjectRegistry registry;
   final KitApi kitApi;
+  final AgentSession agentSession;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -27,6 +31,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _viewportKey = GlobalKey<CanvasViewportState>();
   final _selection = SelectionController();
+  var _chatOpen = false;
 
   @override
   void initState() {
@@ -122,6 +127,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   Focus(
                     canRequestFocus: false,
                     descendantsAreFocusable: false,
+                    child: IconButton(
+                      tooltip: 'Chat',
+                      visualDensity: VisualDensity.compact,
+                      iconSize: 18,
+                      onPressed: () => setState(() => _chatOpen = !_chatOpen),
+                      icon: Icon(
+                        _chatOpen
+                            ? Icons.chat_bubble
+                            : Icons.chat_bubble_outline,
+                      ),
+                    ),
+                  ),
+                  Focus(
+                    canRequestFocus: false,
+                    descendantsAreFocusable: false,
                     child: PopupMenuButton<String>(
                       tooltip: 'Add scene object',
                       onSelected: _add,
@@ -181,6 +201,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   selection: _selection,
                   kitApi: widget.kitApi,
                 ),
+                if (_chatOpen)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    bottom: 0,
+                    child: AgentChatPanel(session: widget.agentSession),
+                  ),
                 if (_selection.selectedId != null)
                   Positioned(
                     top: 0,

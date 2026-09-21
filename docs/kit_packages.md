@@ -1,6 +1,8 @@
 # Kit packages
 
-A **kit package** is a folder on disk. It is a **recipe**, not a second live scene. What you see on the canvas lives in the scene document. Instantiating goes `KitApi.reloadPackages` / `saveKit` / `instantiate` — see the [Kit API reference](kit_api.md). Words: [glossary](glossary.md).
+A **kit package** is a folder on disk. It is not a second live scene. Loading it creates or updates a **kit recipe** in `KitApi`. Instantiating uses that in-memory kit recipe — it does not re-read the folder mid-turn. What you see on the canvas lives in the scene document. Load/save/instantiate go through `KitApi` — see the [Kit API reference](kit_api.md).
+
+**Vocabulary:** **kit** vs **kit recipe** vs **kit package** — [glossary](glossary.md). Do not use bare “recipe.”
 
 This file is the **only** `kit.json` schema. Do not invent a second one.
 
@@ -105,9 +107,9 @@ Call these on `KitApi`, not `KitPackageStore` (store is internal + tests).
 
 | API | Behavior |
 |---|---|
-| [`reloadPackages`](kit_api.md#reloadpackages) | Scan `<root>/*/kit.json`. Skip bad packages. Disk replaces memory. |
-| [`saveKit`](kit_api.md#savekit) | Write `<root>/<id>/kit.json`, then update memory. |
-| [`registerKit`](kit_api.md#registerkit) | Ephemeral. Duplicate id throws. |
+| [`reloadPackages`](kit_api.md#reloadpackages) | Scan `<root>/*/kit.json`. Skip bad packages. Disk replaces the in-memory kit recipe. |
+| [`saveKit`](kit_api.md#savekit) | Write `<root>/<id>/kit.json`, then update the in-memory kit recipe. |
+| [`registerKit`](kit_api.md#registerkit) | Ephemeral kit recipe. Duplicate id throws. |
 
 **Conflict policy:** same id already in memory → disk wins (logged).
 
@@ -119,7 +121,7 @@ Visible sub-agent kits: a future direction where a kit can show living agent wor
 
 - Sandboxed workers, isolates, Wasm, or executing non-empty `capabilities`
 - Git fetchers, marketplace, signing, or versioning beyond `schemaVersion`
-- Agent chat / LLM HTTP (tools: [agent.md](agent.md); table: [kit_api.md](kit_api.md#agent-tools-phase-91))
+- Agent chat / LLM HTTP — see [agent.md](agent.md); tool table: [kit_api.md](kit_api.md#agent-tools-phase-91)
 - Hot-reload file watcher
 - “Save selection as kit…” UI
 - New registry widget types

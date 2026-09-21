@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/agent_provider.dart';
+import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_package_store.dart';
@@ -13,12 +16,17 @@ const _scenePathDefine = String.fromEnvironment('SKAPIE_SCENE_PATH');
 const _useProjectScene = bool.fromEnvironment('SKAPIE_USE_PROJECT_SCENE');
 const _projectRootDefine = String.fromEnvironment('SKAPIE_PROJECT_ROOT');
 const _kitsRootDefine = String.fromEnvironment('SKAPIE_KITS_ROOT');
+const _agentProviderDefine = String.fromEnvironment('SKAPIE_AGENT_PROVIDER');
+const _agentBaseUrlDefine = String.fromEnvironment('SKAPIE_AGENT_BASE_URL');
+const _agentApiKeyDefine = String.fromEnvironment('SKAPIE_AGENT_API_KEY');
+const _agentModelDefine = String.fromEnvironment('SKAPIE_AGENT_MODEL');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final store = await bootstrapSceneStore();
   final kitApi = await bootstrapKitApi(store: store);
-  runApp(SkapieApp(store: store, kitApi: kitApi));
+  final agentSession = bootstrapAgentSession(kitApi: kitApi);
+  runApp(SkapieApp(store: store, kitApi: kitApi, agentSession: agentSession));
 }
 
 Future<SceneStore> bootstrapSceneStore({
@@ -88,4 +96,37 @@ Future<KitApi> bootstrapKitApi({
   await api.reloadPackages();
   debugPrint('Skapie kit packages in memory: ${api.listKits().length}');
   return api;
+}
+
+AgentSession bootstrapAgentSession({required KitApi kitApi}) {
+  final runtime = resolveAgentRuntime(
+    dartDefineProvider: _agentProviderDefine,
+    envProvider: Platform.environment['SKAPIE_AGENT_PROVIDER'] ?? '',
+    dartDefineBaseUrl: _agentBaseUrlDefine,
+    envBaseUrl: Platform.environment['SKAPIE_AGENT_BASE_URL'] ?? '',
+    dartDefineApiKey: _agentApiKeyDefine,
+    envApiKey: Platform.environment['SKAPIE_AGENT_API_KEY'] ?? '',
+    dartDefineModel: _agentModelDefine,
+    envModel: Platform.environment['SKAPIE_AGENT_MODEL'] ?? '',
+    environment: Platform.environment,
+  );
+  if (runtime.warning != null) {
+    debugPrint('Skapie: ${runtime.warning}');
+  }
+  if (runtime.useFake) {
+    debugPrint('Skapie agent: FakeAgentModel');
+    return AgentSession(model: const FakeAgentModel(), kitApi: kitApi);
+  }
+  final sessionId = 'agent_${DateTime.now().microsecondsSinceEpoch}';
+  final model = OpenAiCompatibleAgentModel(
+    baseUrl: runtime.baseUrl!,
+    apiKey: runtime.apiKey!,
+    model: runtime.model!,
+    headers: agentProviderHeaders(
+      presetId: runtime.presetId,
+      sessionId: sessionId,
+    ),
+  );
+  debugPrint('Skapie agent: ${runtime.presetId} model=${runtime.model}');
+  return AgentSession(model: model, kitApi: kitApi, id: sessionId);
 }

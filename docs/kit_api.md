@@ -6,13 +6,15 @@ UI, tests, and a future agent should call `KitApi`. Do not call `store.apply` fr
 
 On-disk folders are documented in [kit packages](kit_packages.md). Types are documented in [registry](registry.md). Words: [glossary](glossary.md). Session loop: [agent.md](agent.md).
 
+**Vocabulary:** a **kit** is what you instantiate; a **kit recipe** (`KitRecipe`) is the in-memory definition; a **kit package** is the on-disk `kits/<id>/` folder. Do not use bare “recipe.” See [glossary](glossary.md).
+
 ## Mental model
 
 | Thing | What it is | Source of truth? |
 |---|---|---|
 | **Scene object** | One typed item on the canvas (`id`, `type`, frame, `props`) | **Yes** — the scene document |
-| **Kit** (`KitRecipe`) | In-memory recipe: id + display name + relative `KitObjectSpec`s | Process memory |
-| **Kit package** | Folder `kits/<kitId>/kit.json` | Disk shelf (recipes, not a live world) |
+| **Kit** (as `KitRecipe`) | In-memory kit recipe: id + display name + relative `KitObjectSpec`s | Process memory |
+| **Kit package** | Folder `kits/<kitId>/kit.json` | Disk shelf (not a live world) |
 | **Registry** | `typeId` → builder (`box`, `text`, `button`, `debug.rect`) | Known widgets only |
 
 Instantiating a kit **copies** specs into new scene objects. Editing those objects does not edit the kit. Reloading the scene does not reload kits; kits reload from disk via `reloadPackages`.
@@ -45,7 +47,7 @@ Tests may omit `packages`. Then `reloadPackages` is a no-op and `saveKit` throws
 
 ### `KitObjectSpec`
 
-Relative object inside a recipe. World position at instantiate is `origin + (x, y)`.
+Relative object inside a kit recipe. World position at instantiate is `origin + (x, y)`.
 
 | Field | Type | Notes |
 |---|---|---|
@@ -157,7 +159,7 @@ In-memory only. Does not write disk. Does not mutate the scene.
 - **Throws:** `StateError` (`Duplicate kit id: …`).
 - **Undo:** none.
 
-Prefer `saveKit` for anything that should survive restart. `reloadPackages` may **replace** this recipe if a package has the same id.
+Prefer `saveKit` for anything that should survive restart. `reloadPackages` may **replace** this kit recipe if a package has the same id.
 
 ### `getKit`
 
@@ -173,7 +175,7 @@ Lookup. `null` if unknown. No I/O, no scene change.
 List<KitRecipe> listKits()
 ```
 
-Unmodifiable snapshot of in-memory recipes (insertion order). The Add menu uses this (demo id labeled **Demo kit: note card**).
+Unmodifiable snapshot of in-memory kit recipes (insertion order). The Add menu uses this (demo id labeled **Demo kit: note card**).
 
 ### `instantiate`
 
@@ -183,7 +185,7 @@ List<String> instantiate(String kitId, {required Offset origin})
 
 Validate **every** spec `typeId` first, then `addObject` for each spec. Spec `(x, y)` is added to `origin` (world). The Add menu passes the camera offset (world point at viewport center).
 
-- **Returns:** new scene object ids, same order as the recipe.
+- **Returns:** new scene object ids, same order as the kit recipe.
 - **Undo:** N objects = **N undo steps** (v1). Not one batched undo.
 - **Throws:** `ArgumentError` (`Unknown kit: …`) or `ArgumentError` (`Unknown typeId: …`) **before** any apply. No partial spawn.
 
@@ -208,13 +210,13 @@ Scan the kits root (`*/kit.json`), parse, register. See [kit packages](kit_packa
 Future<void> saveKit(KitRecipe recipe)
 ```
 
-Write pretty `kit.json` under the **resolved** kits root (`<root>/<id>/kit.json`), create the folder, then put the recipe in memory (overwrite ok).
+Write pretty `kit.json` under the **resolved** kits root (`<root>/<id>/kit.json`), create the folder, then put the kit recipe in memory (overwrite ok).
 
 Writes to Application Support unless you overrode the root. It does **not** automatically write the git repo `kits/` folder. Path rules: [kit packages](kit_packages.md).
 
 - **Throws:** `StateError` (`No kit package store`); `ArgumentError` invalid id (`/`, `\`, empty, `.`, `..`) or unknown `typeId` in objects.
 - Does not mutate the scene.
-- **Undo:** none (disk + memory recipe only).
+- **Undo:** none (disk kit package + in-memory kit recipe only).
 
 ### `createAppKitApi`
 
@@ -326,7 +328,7 @@ for (final kit in kitApi.listKits()) {
 
 ## Agent tools (Phase 9.1)
 
-Implemented by `createKitAgentTools` + `AgentToolDispatcher` inside `AgentSession`. The harness calls `KitApi` methods; it does not poke `SceneStore` fields. Still **no** chat UI and **no** LLM HTTP. See [agent.md](agent.md).
+Implemented by `createKitAgentTools` + `AgentToolDispatcher` inside `AgentSession`. The harness calls `KitApi` methods; it does not poke `SceneStore` fields. Overlay chat and HTTP live in [agent.md](agent.md).
 
 | Tool name | Maps to | Args (conceptual JSON) | Notes |
 |---|---|---|---|
@@ -344,9 +346,9 @@ Implemented by `createKitAgentTools` + `AgentToolDispatcher` inside `AgentSessio
 
 Unknown `typeId` / unknown kit → tool error, scene unchanged.
 
-## Demo recipe
+## Demo kit
 
-`demo.note-card` (`demoNoteCardKitId`): `box` 200×88 + inset `text` (`content`: `Note`). Shipped as [`kits/demo.note-card/kit.json`](../kits/demo.note-card/kit.json). `createAppKitApi` registers the same numbers in memory; disk replaces it when loaded.
+`demo.note-card` (`demoNoteCardKitId`): `box` 200×88 + inset `text` (`content`: `Note`). Shipped as the kit package [`kits/demo.note-card/kit.json`](../kits/demo.note-card/kit.json). `createAppKitApi` registers the same numbers as a kit recipe; a loaded package replaces it.
 
 ## Dream goal (not scheduled)
 
@@ -355,7 +357,7 @@ Visible sub-agent kits: a future direction where a kit can show living agent wor
 ## Non-goals
 
 - Workers, isolates, Wasm, executing non-empty `capabilities`
-- Chat UI, LLM HTTP (see [agent.md](agent.md) — tools are 9.1; provider is 9.2)
+- Streaming / Pi / MCP (see [agent.md](agent.md) — tools are 9.1; provider + chat are 9.2)
 - Dart eval / new registry types
 - Batched multi-object undo
 - “Save selection as kit…” UI

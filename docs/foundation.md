@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 9.2 is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 10 is blocked until the current phase gate is green.
 
 ## Phase 1 gate — done
 
@@ -61,12 +61,12 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 ## Phase 6 gate — done
 
 - `KitApi` in `lib/kit_api/` wraps `SceneStore.apply` only. Unknown `typeId` rejected. In-memory `registerKit` / `instantiate`; validate-then-apply (no partial spawn).
-- Built-in demo recipe `demo.note-card`. Add / inspector / move / delete / lock go through `KitApi`.
+- Built-in demo kit `demo.note-card` (kit recipe in memory). Add / inspector / move / delete / lock go through `KitApi`.
 
 ## Phase 7 gate — done
 
 - Kit packages on disk: `kits/<kitId>/kit.json` loaded into `KitApi` at startup (`reloadPackages`). `saveKit` writes pretty JSON.
-- Demo `demo.note-card` ships as `kits/demo.note-card/`. Disk replaces in-memory for the same id. Unknown `typeId` in a package skips that package. No Dart eval.
+- Demo `demo.note-card` ships as `kits/demo.note-card/`. Disk replaces the in-memory kit recipe for the same id. Unknown `typeId` in a package skips that package. No Dart eval.
 - `capabilities: []` is a seam only; non-empty logs a warning and still loads `objects`. No workers, sandbox, agent, or file watcher.
 
 ## Phase 8 gate — done
@@ -78,14 +78,21 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 
 - Agent harness core in `lib/agent/`: `AgentSession`, `AgentModel`, `FakeAgentModel`, events. One turn: user → model → assistant. No HTTP.
 
-## Phase 9.1 gate (current)
+## Phase 9.1 gate — done
 
 - Kit tools dispatch to `KitApi` only (`add_object` → `addObject`, …). Tool results are `AgentRole.tool` messages. Loop until plain text or max 8 iterations.
 - `ScriptedAgentModel` for tests. Unknown tool / unknown `typeId` → tool error JSON, scene unchanged.
-- No chat UI, no HTTP. `flutter analyze` clean; `flutter test` covers tool loop + existing session tests.
+- No chat UI, no HTTP in 9.1.
 
-**9.2** (real model + chat) stays blocked until this gate is green. See [agent.md](agent.md).
+## Phase 9.2 gate (current)
+
+- `OpenAiCompatibleAgentModel` POST `{baseUrl}/chat/completions`; inject `http.Client` in tests.
+- Named presets `opencode-go`, `openrouter`, `openai`, `custom` (one HTTP client). Missing key/model → `FakeAgentModel`.
+- Overlay chat panel calls `AgentSession.sendUser` only; canvas does not reflow. Failures visible in chat.
+- `flutter analyze` clean; `flutter test` covers mapping, presets, mock HTTP, and Fake Echo chat.
+
+**Phase 10** stays blocked until this gate is green. See [agent.md](agent.md).
 
 ## Dream goal (not scheduled)
 
-Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The agent harness (session + kit tools, no chat) is **not** that. Planted seam: `capabilities: []` in `kit.json`.
+Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The agent harness (session + kit tools + overlay chat) is **not** that. Planted seam: `capabilities: []` in `kit.json`.

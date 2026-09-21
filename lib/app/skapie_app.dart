@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skapie/agent/agent.dart';
 import 'package:skapie/app/home_screen.dart';
 import 'package:skapie/app/theme.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -8,19 +9,35 @@ import 'package:skapie/shared/app_info.dart';
 
 class SkapieApp extends StatelessWidget {
   SkapieApp({
-    super.key,
-    required this.store,
+    Key? key,
+    required SceneStore store,
     ObjectRegistry? registry,
     KitApi? kitApi,
-  }) : kitApi =
-           kitApi ??
-           createAppKitApi(
-             store: store,
-             registry: registry ?? createBuiltinRegistry(),
-           );
+    AgentSession? agentSession,
+  }) : this._(
+         key: key,
+         store: store,
+         kitApi:
+             kitApi ??
+             createAppKitApi(
+               store: store,
+               registry: registry ?? createBuiltinRegistry(),
+             ),
+         agentSession: agentSession,
+       );
+
+  SkapieApp._({
+    super.key,
+    required this.store,
+    required this.kitApi,
+    AgentSession? agentSession,
+  }) : agentSession =
+           agentSession ??
+           AgentSession(model: const FakeAgentModel(), kitApi: kitApi);
 
   final SceneStore store;
   final KitApi kitApi;
+  final AgentSession agentSession;
   ObjectRegistry get registry => kitApi.registry;
 
   @override
@@ -28,7 +45,12 @@ class SkapieApp extends StatelessWidget {
     return MaterialApp(
       title: AppInfo.windowTitle,
       theme: buildAppTheme(),
-      home: HomeScreen(store: store, registry: registry, kitApi: kitApi),
+      home: HomeScreen(
+        store: store,
+        registry: registry,
+        kitApi: kitApi,
+        agentSession: agentSession,
+      ),
     );
   }
 }

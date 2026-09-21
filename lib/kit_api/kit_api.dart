@@ -64,7 +64,7 @@ const KitRecipe demoNoteCardRecipe = KitRecipe(
 
 /// High-level scene mutations. Always wraps [SceneStore.apply].
 ///
-/// [registerKit] is ephemeral (in-memory). Saved packages under `kits/` are
+/// [registerKit] is ephemeral (in-memory kit recipe). Saved kit packages under `kits/` are
 /// the durable shelf; [reloadPackages] loads them and **disk replaces memory**.
 class KitApi {
   KitApi({required this.store, required this.registry, this.packages});
@@ -150,7 +150,7 @@ class KitApi {
   List<KitRecipe> listKits() => List.unmodifiable(_kits.values);
 
   /// Scan the kits root and register each package. Disk replaces in-memory
-  /// recipes with the same id.
+  /// kit recipes with the same id.
   Future<void> reloadPackages() async {
     final store = packages;
     if (store == null) {
@@ -165,7 +165,7 @@ class KitApi {
     }
     for (final recipe in loaded.recipes) {
       if (_kits.containsKey(recipe.id)) {
-        log?.call('Disk package ${recipe.id} replaces in-memory recipe');
+        log?.call('Disk package ${recipe.id} replaces in-memory kit recipe');
       }
       _kits[recipe.id] = recipe;
     }
@@ -174,7 +174,7 @@ class KitApi {
     );
   }
 
-  /// Write `kits/<id>/kit.json`, then register/update the in-memory recipe.
+  /// Write `kits/<id>/kit.json`, then register/update the in-memory kit recipe.
   Future<void> saveKit(KitRecipe recipe) async {
     final store = packages;
     if (store == null) {
