@@ -52,3 +52,7 @@ LLM chrome shows `Tools: none` or `Tools: list_kits, add_object`. `harness.tools
 4. Detach clears `attachedTo` and refreshes the LLM Tools line.
 
 The Skapie canvas system prompt is **not** injected on this path. Empty system text only. Wiring `harness.system-prompt` onto the payload is still later.
+
+## Cleanup (10.5.1)
+
+Feel and chrome only. Palette hover, solid LLM compound, inspector-hosted model/input. Runner vs grant, `attachedTo`, and the vanilla vs tool-loop split are unchanged.

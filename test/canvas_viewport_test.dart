@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/selection_controller.dart';
+import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
 
 void main() {
@@ -102,6 +104,48 @@ void main() {
     expect(object.y, closeTo(-20, 0.001));
     store.undo();
     expect(store.document.objects.single.x, closeTo(-40, 0.001));
+  });
+
+  testWidgets('drag LLM kit moves frame and body together', (tester) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final frame = store.document.objects.firstWhere(
+      (object) => object.props[skapieRoleProp] == 'frame',
+    );
+    final body = store.document.objects.firstWhere(
+      (object) => object.props[skapieRoleProp] == 'body',
+    );
+    final frameX = frame.x;
+    final bodyX = body.x;
+    final offset = bodyX - frameX;
+    final selection = SelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PaintScope(
+          tokens: PaintTokens.dark(),
+          child: Scaffold(
+            body: CanvasViewport(
+              store: store,
+              selection: selection,
+              kitApi: kitApi,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.dragFrom(center, const Offset(50, 0));
+    await tester.pump();
+
+    final movedFrame = store.document.objectById(frame.id)!;
+    final movedBody = store.document.objectById(body.id)!;
+    expect(movedFrame.x, closeTo(frameX + 50, 0.001));
+    expect(movedBody.x, closeTo(bodyX + 50, 0.001));
+    expect(movedBody.x - movedFrame.x, closeTo(offset, 0.001));
+    expect(movedFrame.y, closeTo(frame.y, 0.001));
+    expect(movedBody.y, closeTo(body.y, 0.001));
   });
 
   testWidgets('locked object selects but does not move', (tester) async {

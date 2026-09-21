@@ -46,14 +46,70 @@ SceneObject? llmKitBodyForSelection({
   for (final object in document.objects) {
     if (isLlmKitObject(object) &&
         object.props[skapieRoleProp] == 'body' &&
-        _bodyBelongsToFrame(object, selected)) {
+        llmBodyBelongsToFrame(object, selected)) {
       return object;
     }
   }
   return null;
 }
 
-bool _bodyBelongsToFrame(SceneObject body, SceneObject frame) {
+/// Frame + body for a selected LLM object, or null if selection is not LLM.
+List<SceneObject>? llmKitMembers({
+  required SceneDocument document,
+  required String? selectedId,
+}) {
+  if (selectedId == null) {
+    return null;
+  }
+  final selected = document.objectById(selectedId);
+  if (selected == null || !isLlmKitObject(selected)) {
+    return null;
+  }
+  SceneObject? frame;
+  SceneObject? body;
+  final role = selected.props[skapieRoleProp];
+  if (role == 'body') {
+    body = selected;
+    for (final object in document.objects) {
+      if (isLlmKitObject(object) &&
+          object.props[skapieRoleProp] == 'frame' &&
+          llmBodyBelongsToFrame(body, object)) {
+        frame = object;
+        break;
+      }
+    }
+  } else if (role == 'frame') {
+    frame = selected;
+    body = llmKitBodyForSelection(document: document, selectedId: selectedId);
+  } else {
+    return [selected];
+  }
+  if (frame == null) {
+    return [selected];
+  }
+  if (body == null || body.id == frame.id) {
+    return [frame];
+  }
+  return [frame, body];
+}
+
+SceneObject? llmKitFrameForSelection({
+  required SceneDocument document,
+  required String? selectedId,
+}) {
+  final members = llmKitMembers(document: document, selectedId: selectedId);
+  if (members == null) {
+    return null;
+  }
+  for (final object in members) {
+    if (object.props[skapieRoleProp] == 'frame') {
+      return object;
+    }
+  }
+  return null;
+}
+
+bool llmBodyBelongsToFrame(SceneObject body, SceneObject frame) {
   return body.x >= frame.x - 0.5 &&
       body.y >= frame.y - 0.5 &&
       body.x + body.width <= frame.x + frame.width + 0.5 &&

@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/builtin_types.dart';
@@ -17,6 +19,7 @@ class InspectorPanel extends StatefulWidget {
     required this.selection,
     KitApi? kitApi,
     this.lastLlmBodyId,
+    this.controller,
   }) : kitApi =
            kitApi ?? KitApi(store: store, registry: createBuiltinRegistry());
 
@@ -24,6 +27,7 @@ class InspectorPanel extends StatefulWidget {
   final SelectionController selection;
   final KitApi kitApi;
   final String? lastLlmBodyId;
+  final AgentController? controller;
 
   @override
   State<InspectorPanel> createState() => _InspectorPanelState();
@@ -225,6 +229,11 @@ class _InspectorPanelState extends State<InspectorPanel> {
       return const SizedBox.shrink();
     }
     final textTheme = Theme.of(context).textTheme;
+    final llmBody = llmKitBodyForSelection(
+      document: widget.store.document,
+      selectedId: object.id,
+    );
+    final controller = widget.controller;
 
     return Material(
       type: MaterialType.transparency,
@@ -235,7 +244,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
           children: [
             Text('Inspector', style: textTheme.labelLarge),
             const SizedBox(height: 12),
-            _readOnly('Type', object.type),
+            _readOnly('Type', llmBody != null ? 'LLM' : object.type),
             _readOnly('Id', object.id, mono: true),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -266,17 +275,19 @@ class _InspectorPanelState extends State<InspectorPanel> {
                 }
               },
             ),
-            ..._typeFields(object),
-            if (isLlmKitObject(object))
+            if (llmBody != null && controller != null)
+              LlmKitInput(
+                body: llmBody,
+                kitApi: widget.kitApi,
+                controller: controller,
+              )
+            else
+              ..._typeFields(object),
+            if (llmBody != null)
               _readOnly('Tools', () {
                 final names = attachedToolNames(
                   kitApi: widget.kitApi,
-                  llmBodyId:
-                      llmKitBodyForSelection(
-                        document: widget.store.document,
-                        selectedId: object.id,
-                      )?.id ??
-                      object.id,
+                  llmBodyId: llmBody.id,
                 );
                 return names.isEmpty ? 'none' : names.join(', ');
               }()),

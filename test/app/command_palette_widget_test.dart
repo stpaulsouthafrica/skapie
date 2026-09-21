@@ -1,9 +1,12 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_provider.dart';
+import 'package:skapie/app/inspector_panel.dart';
+import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -66,6 +69,46 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsOneWidget);
   });
 
+  testWidgets('hover then Enter runs the hovered palette action', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    await pumpHome(tester, store: store, kitApi: kitApi);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: Offset.zero);
+    addTearDown(gesture.removePointer);
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(find.byKey(const Key('command-palette')), findsOneWidget);
+
+    await gesture.moveTo(
+      tester.getCenter(
+        find.byKey(const Key('command-action-add-system-prompt')),
+      ),
+    );
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(find.byKey(const Key('command-palette')), findsNothing);
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == harnessSystemPromptKitId,
+      ),
+      isNotEmpty,
+    );
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == harnessLlmKitId,
+      ),
+      isEmpty,
+    );
+  });
+
   testWidgets('arrow then Enter runs the highlighted palette action', (
     tester,
   ) async {
@@ -116,7 +159,21 @@ void main() {
       ),
       hasLength(2),
     );
-    expect(find.byKey(const Key('llm-kit-input')), findsOneWidget);
+    expect(find.byType(LlmKitInput), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(InspectorPanel),
+        matching: find.byKey(const Key('llm-kit-input')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(InspectorPanel),
+        matching: find.byKey(const Key('llm-kit-model')),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -283,6 +340,7 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('llm-kit-mark')), findsWidgets);
+    expect(find.byKey(const Key('llm-kit-chrome')), findsOneWidget);
     expect(find.byKey(const Key('llm-kit-model')), findsOneWidget);
     expect(find.text('Needs input'), findsWidgets);
 

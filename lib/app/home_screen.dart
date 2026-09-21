@@ -5,7 +5,6 @@ import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/app/agent_settings_panel.dart';
 import 'package:skapie/app/command_palette.dart';
 import 'package:skapie/app/inspector_panel.dart';
-import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -298,10 +297,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final path = widget.store.sceneFilePath;
     final label = path == null ? null : scenePathLabel(path);
-    final llmBody = llmKitBodyForSelection(
-      document: widget.store.document,
-      selectedId: _selection.selectedId,
-    );
     final emptyWorld = widget.store.document.objects.isEmpty;
     final tokens = PaintScope.of(context);
 
@@ -313,125 +308,110 @@ class _HomeScreenState extends State<HomeScreen> {
         const SingleActivator(LogicalKeyboardKey.f3): _openPaletteIfIdle,
       },
       child: Scaffold(
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            final stripWidth = (constraints.maxWidth / 3).clamp(220.0, 420.0);
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                CanvasViewport(
-                  key: _viewportKey,
-                  store: widget.store,
-                  registry: widget.registry,
-                  selection: _selection,
-                  kitApi: widget.kitApi,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            CanvasViewport(
+              key: _viewportKey,
+              store: widget.store,
+              registry: widget.registry,
+              selection: _selection,
+              kitApi: widget.kitApi,
+            ),
+            if (_selection.selectedId != null)
+              Positioned(
+                top: 16,
+                right: 16,
+                bottom: 16,
+                child: PaintPanel(
+                  padding: EdgeInsets.zero,
+                  child: InspectorPanel(
+                    store: widget.store,
+                    selection: _selection,
+                    kitApi: widget.kitApi,
+                    lastLlmBodyId: _lastLlmBodyId,
+                    controller: widget.agentController,
+                  ),
                 ),
-                if (_selection.selectedId != null)
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: PaintPanel(
-                      padding: EdgeInsets.zero,
-                      child: InspectorPanel(
-                        store: widget.store,
-                        selection: _selection,
-                        kitApi: widget.kitApi,
-                        lastLlmBodyId: _lastLlmBodyId,
-                      ),
-                    ),
+              ),
+            if (emptyWorld && !_paletteOpen && !_settingsOpen)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 24,
+                child: IgnorePointer(
+                  child: Text(
+                    'Space to add',
+                    key: const Key('empty-world-hint'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: tokens.muted),
                   ),
-                if (emptyWorld && !_paletteOpen && !_settingsOpen)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 24,
-                    child: IgnorePointer(
-                      child: Text(
-                        'Space to add',
-                        key: const Key('empty-world-hint'),
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: tokens.muted),
-                      ),
+                ),
+              ),
+            if (_paletteOpen)
+              Positioned.fill(
+                child: Stack(
+                  children: [
+                    ModalBarrier(
+                      dismissible: true,
+                      color: Colors.black.withValues(alpha: 0.28),
+                      onDismiss: _closePalette,
                     ),
-                  ),
-                if (llmBody != null && !_paletteOpen && !_settingsOpen)
-                  Positioned(
-                    left: (constraints.maxWidth - stripWidth) / 2,
-                    width: stripWidth,
-                    bottom: 16,
-                    child: LlmKitInput(
-                      body: llmBody,
-                      kitApi: widget.kitApi,
-                      controller: widget.agentController,
-                    ),
-                  ),
-                if (_paletteOpen)
-                  Positioned.fill(
-                    child: Stack(
-                      children: [
-                        ModalBarrier(
-                          dismissible: true,
-                          color: Colors.black.withValues(alpha: 0.28),
-                          onDismiss: _closePalette,
+                    Align(
+                      alignment: const Alignment(0, -0.45),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: 360,
+                          maxHeight: 420,
                         ),
-                        Align(
-                          alignment: const Alignment(0, -0.45),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              maxWidth: 360,
-                              maxHeight: 420,
-                            ),
-                            child: Material(
-                              type: MaterialType.transparency,
-                              child: CommandPalette(
-                                key: const Key('command-palette'),
-                                actions: _paletteActions(),
-                                onClose: _closePalette,
-                                onRun: _runCommand,
-                              ),
-                            ),
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: CommandPalette(
+                            key: const Key('command-palette'),
+                            actions: _paletteActions(),
+                            onClose: _closePalette,
+                            onRun: _runCommand,
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                if (_settingsOpen)
-                  Positioned.fill(
-                    child: Stack(
-                      children: [
-                        ModalBarrier(
-                          dismissible: true,
-                          color: Colors.black.withValues(alpha: 0.28),
-                          onDismiss: _closeSettings,
+                  ],
+                ),
+              ),
+            if (_settingsOpen)
+              Positioned.fill(
+                child: Stack(
+                  children: [
+                    ModalBarrier(
+                      dismissible: true,
+                      color: Colors.black.withValues(alpha: 0.28),
+                      onDismiss: _closeSettings,
+                    ),
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: 360,
+                          maxHeight: 520,
                         ),
-                        Center(
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(
-                              maxWidth: 360,
-                              maxHeight: 520,
-                            ),
-                            child: PaintPanel(
-                              child: ListView(
-                                shrinkWrap: true,
-                                children: [
-                                  _settingsChrome(label),
-                                  AgentSettingsPanel(
-                                    controller: widget.agentController,
-                                    onClose: _closeSettings,
-                                  ),
-                                ],
+                        child: PaintPanel(
+                          child: ListView(
+                            shrinkWrap: true,
+                            children: [
+                              _settingsChrome(label),
+                              AgentSettingsPanel(
+                                controller: widget.agentController,
+                                onClose: _closeSettings,
                               ),
-                            ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-              ],
-            );
-          },
+                  ],
+                ),
+              ),
+          ],
         ),
       ),
     );

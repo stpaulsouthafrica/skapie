@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/agent/llm_kit_mark.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -16,6 +17,7 @@ class SceneObjectLayer extends StatelessWidget {
     required this.registry,
     this.selectedId,
     this.previewDelta = Offset.zero,
+    this.previewIds = const {},
   });
 
   final CanvasCamera camera;
@@ -24,6 +26,7 @@ class SceneObjectLayer extends StatelessWidget {
   final ObjectRegistry registry;
   final String? selectedId;
   final Offset previewDelta;
+  final Set<String> previewIds;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +47,9 @@ class SceneObjectLayer extends StatelessWidget {
   }
 
   Widget _placed(BuildContext context, SceneObject object) {
-    final preview = object.id == selectedId ? previewDelta : Offset.zero;
+    final preview = previewIds.contains(object.id) || object.id == selectedId
+        ? previewDelta
+        : Offset.zero;
     final topLeft = worldToScreen(
       Offset(object.x + preview.dx, object.y + preview.dy),
       viewportSize,
@@ -58,26 +63,85 @@ class SceneObjectLayer extends StatelessWidget {
     );
     if (object.props[skapieKitProp] == harnessLlmKitId &&
         object.props[skapieRoleProp] == 'frame') {
-      final tokens = PaintScope.of(context);
-      final mark = (10.0 * camera.zoom).clamp(8.0, 16.0);
-      child = Stack(
-        children: [
-          child,
-          Positioned(
-            left: 6 * camera.zoom,
-            top: 6 * camera.zoom,
-            child: LlmKitMark(
-              key: const Key('llm-kit-mark'),
-              color: tokens.accent,
-              size: mark,
-            ),
-          ),
-        ],
-      );
+      child = _llmChrome(context, object, child);
     }
     if (object.rotation != 0) {
       child = Transform.rotate(angle: object.rotation, child: child);
     }
     return Positioned(left: topLeft.dx, top: topLeft.dy, child: child);
+  }
+
+  Widget _llmChrome(BuildContext context, SceneObject frame, Widget child) {
+    final tokens = PaintScope.of(context);
+    final zoom = camera.zoom;
+    final barH = (28.0 * zoom).clamp(22.0, 34.0);
+    final mark = (12.0 * zoom).clamp(10.0, 16.0);
+    final model = _modelForFrame(frame);
+    return Stack(
+      children: [
+        child,
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          height: barH,
+          child: ColoredBox(
+            key: const Key('llm-kit-chrome'),
+            color: tokens.accent.withValues(alpha: 0.22),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8 * zoom),
+              child: Row(
+                children: [
+                  LlmKitMark(
+                    key: const Key('llm-kit-mark'),
+                    color: tokens.accent,
+                    size: mark,
+                  ),
+                  SizedBox(width: 6 * zoom),
+                  Text(
+                    'LLM',
+                    style: TextStyle(
+                      color: tokens.ink,
+                      fontSize: (12.0 * zoom).clamp(10.0, 13.0),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (model != null) ...[
+                    SizedBox(width: 8 * zoom),
+                    Expanded(
+                      child: Text(
+                        model,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: tokens.muted,
+                          fontSize: (11.0 * zoom).clamp(9.0, 12.0),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String? _modelForFrame(SceneObject frame) {
+    for (final object in objects) {
+      if (!isLlmKitObject(object) ||
+          object.props[skapieRoleProp] != 'body' ||
+          !llmBodyBelongsToFrame(object, frame)) {
+        continue;
+      }
+      final model = object.props['model']?.toString().trim() ?? '';
+      if (model.isEmpty) {
+        return null;
+      }
+      return model;
+    }
+    return null;
   }
 }

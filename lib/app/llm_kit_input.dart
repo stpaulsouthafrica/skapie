@@ -9,7 +9,7 @@ import 'package:skapie/paint/paint.dart';
 import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
 import 'package:skapie/scene/scene.dart';
 
-/// Selection-scoped prompt field for a compound LLM kit. Enter runs vanilla.
+/// Inspector-hosted prompt, model, output, and run for a compound LLM kit.
 class LlmKitInput extends StatefulWidget {
   const LlmKitInput({
     super.key,
@@ -38,11 +38,6 @@ class _LlmKitInputState extends State<LlmKitInput> {
     super.initState();
     widget.controller.addListener(_onController);
     _bind(force: true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _focus.requestFocus();
-      }
-    });
   }
 
   @override
@@ -54,7 +49,6 @@ class _LlmKitInputState extends State<LlmKitInput> {
     }
     if (oldWidget.body.id != widget.body.id) {
       _bind(force: true);
-      _focus.requestFocus();
     } else if (!_focus.hasFocus && !_busy) {
       _bind(force: true);
     }
@@ -126,6 +120,18 @@ class _LlmKitInputState extends State<LlmKitInput> {
     return null;
   }
 
+  String get _output {
+    final error = widget.body.props['error']?.toString().trim() ?? '';
+    if (error.isNotEmpty) {
+      return error;
+    }
+    final reply = widget.body.props['reply']?.toString().trim() ?? '';
+    if (reply.isNotEmpty) {
+      return reply;
+    }
+    return '—';
+  }
+
   void _onModel(String? id) {
     if (id == null) {
       return;
@@ -187,64 +193,78 @@ class _LlmKitInputState extends State<LlmKitInput> {
   @override
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
+    final textTheme = Theme.of(context).textTheme;
     final needsInput = _input.text.trim().isEmpty;
     final choices = _choices;
     final selected = _selectedModel;
-    return PaintPanel(
-      capsule: true,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          KeyedSubtree(
-            key: ValueKey('llm-model-${choices.length}-$selected'),
-            child: DropdownButtonFormField<String>(
-              key: const Key('llm-kit-model'),
-              initialValue: selected,
-              isExpanded: true,
-              menuMaxHeight: 240,
-              decoration: const InputDecoration(
-                isDense: true,
-                labelText: 'Model',
-                border: OutlineInputBorder(),
-              ),
-              hint: const Text('Model'),
-              items: [
-                for (final model in choices)
-                  DropdownMenuItem(
-                    value: model.id,
-                    child: Text(
-                      model.displayName,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        KeyedSubtree(
+          key: ValueKey('llm-model-${choices.length}-$selected'),
+          child: DropdownButtonFormField<String>(
+            key: const Key('llm-kit-model'),
+            initialValue: selected,
+            isExpanded: true,
+            menuMaxHeight: 240,
+            decoration: const InputDecoration(
+              isDense: true,
+              labelText: 'Model',
+              border: OutlineInputBorder(),
+            ),
+            hint: const Text('Model'),
+            items: [
+              for (final model in choices)
+                DropdownMenuItem(
+                  value: model.id,
+                  child: Text(
+                    model.displayName,
+                    overflow: TextOverflow.ellipsis,
                   ),
-              ],
-              onChanged: _busy ? null : _onModel,
+                ),
+            ],
+            onChanged: _busy ? null : _onModel,
+          ),
+        ),
+        const SizedBox(height: 8),
+        PaintTextField(
+          key: const Key('llm-kit-input'),
+          controller: _input,
+          focusNode: _focus,
+          hint: 'Input',
+          label: 'Input',
+          enabled: !_busy,
+          onChanged: _onChanged,
+          onSubmitted: _submit,
+        ),
+        if (needsInput)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Needs input',
+              style: TextStyle(color: tokens.muted, fontSize: 11),
             ),
           ),
-          const SizedBox(height: 8),
-          PaintTextField(
-            key: const Key('llm-kit-input'),
-            controller: _input,
-            focusNode: _focus,
-            autofocus: true,
-            hint: 'Input',
-            label: 'Input',
-            enabled: !_busy,
-            onChanged: _onChanged,
-            onSubmitted: _submit,
+        const SizedBox(height: 8),
+        Text('Output', style: textTheme.labelSmall),
+        Text(
+          _output,
+          key: const Key('llm-kit-output'),
+          maxLines: 8,
+          overflow: TextOverflow.ellipsis,
+          style: textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        KeyedSubtree(
+          key: const Key('llm-kit-run'),
+          child: PaintButton(
+            label: _busy ? 'Running' : 'Run',
+            onPressed: _busy ? null : () => _submit(_input.text),
           ),
-          if (needsInput)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'Needs input',
-                style: TextStyle(color: tokens.muted, fontSize: 11),
-              ),
-            ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 }

@@ -5,7 +5,7 @@ The **world is the harness.** There is no persistent chat bar. Authoring is:
 1. **Space / F3 command palette** to search and add primitives and kits, or open Settings.
 2. **Selection typing** on a compound LLM kit: keystrokes edit that kit’s prompt; Enter runs vanilla onto that kit.
 
-**Principle kits** are dumb data/structure (Note, System prompt, Tools, and the LLM kit’s Input region). **Specialized kits** have irreducible behavior. `harness.llm` is specialized: diamond mark, per-kit model, Needs input, vanilla completion into Output. Still one compound kit. No cables. No detach.
+**Principle kits** are dumb data/structure (Note, System prompt, Tools, and the LLM kit’s Input region). **Specialized kits** have irreducible behavior. `harness.llm` is specialized: title-bar chrome, per-kit model, Needs input, vanilla completion into Output. Frame and body move as one. No cables.
 
 Completions/responses/messages clients live under `lib/providers/`. **System prompt** and **Tools** remain unwired stubs. The tool-loop `AgentSession` stays in `lib/agent/` until a later board wire. Wiring those stubs onto the HTTP payload is later.
 
@@ -26,7 +26,7 @@ Living sub-agent kits (status, tokens, workers) remain a dream goal. These harne
 
 1. Settings supply the **pipe**: provider, base URL, API key, and the Connect catalog. No second credentials store.
 2. Palette **Add LLM** places a specialized `harness.llm` via KitApi near the view center.
-3. Select that kit, pick a **model** on the kit (catalog from Settings/Connect, or the OpenCode Go chart when nothing is connected), type in **Input**, Enter. Vanilla runs for **that kit’s** model/surface onto **Output** (Fake Echo offline). Empty Input shows **Needs input** and does not call the network.
+3. Select that kit. Inspector hosts **model** (catalog from Settings/Connect, or the OpenCode Go chart when nothing is connected) and **Input**. Enter or Run. Vanilla runs for **that kit’s** model/surface onto **Output** (Fake Echo offline). Empty Input shows **Needs input** and does not call the network.
 4. `harness.system-prompt` and `harness.tools` can sit on the board. They do **not** change the vanilla payload.
 5. With nothing selected as an LLM kit, Space opens the palette. Typing does not talk to a hidden global agent.
 6. `AgentSession` is kept for a later wire. Selection Enter does not call `session.sendUser`.
@@ -131,7 +131,7 @@ Timeouts (60s) and non-2xx throw `AgentHttpException`. `lastDiagnostic` records 
 
 ## Command palette
 
-Space or F3 (canvas focused, not typing in a field) opens a transient paint panel in the upper third. Esc, click-away, or running an action closes it. Filter is case-insensitive substring (spaces/hyphens ignored). **Up/Down** (optional **Ctrl-N/P**) move the highlighted row; **Enter** runs the highlight (same as click). Focus stays in Search; arrows do not move the caret between actions. Highlight clamps at the list ends and scrolls into view. The palette does **not** send chat.
+Space or F3 (canvas focused, not typing in a field) opens a transient paint panel in the upper third. Esc, click-away, or running an action closes it. Filter is case-insensitive substring (spaces/hyphens ignored). **Hover** and **Up/Down** (optional **Ctrl-N/P**) share one highlight index; **Enter** runs the highlight (same as click). Focus stays in Search; arrows do not move the caret between actions. Highlight clamps at the list ends and scrolls into view. The palette does **not** send chat.
 
 Actions: Add LLM, Add System Prompt, Add Tools, Add Box/Text/Button/Debug rect/Note card, Settings.
 
@@ -141,9 +141,9 @@ Cmd+, still opens Agent settings (also listed in the palette). Add remains in th
 
 ## Selection typing (compound LLM)
 
-`harness.llm` is a **specialized** compound kit: diamond mark on the frame, stacked **Input** (editable) and **Output** (read-only reply/error) regions, per-kit `provider` / `model` / `surface` props. Labels live in visible `content`; props stay `prompt` vs `reply`/`error`. Not separate scene kits.
+`harness.llm` is a **specialized** compound kit: title-bar chrome (diamond + LLM + model if set) on the frame, stacked **Input** and **Output** regions, per-kit `provider` / `model` / `surface` props. Frame and body move together; the body is not a free-floating note. Labels live in visible `content`; props stay `prompt` vs `reply`/`error`. Not separate scene kits.
 
-When selection is an LLM kit frame or body, an Input field binds to `prompt` via `KitApi.updateProps`, and a model picker writes that kit’s model through KitApi (same catalog/keys as Settings). Enter calls `sendUser` with that body’s id and the kit’s model/surface, then writes Output. Empty prompt shows **Needs input** and is a no-op. Other selection: Space is palette only; there is no global agent capture.
+When selection is an LLM kit frame or body, the inspector hosts the model picker, Input, read-only Output, Run, and attached Tools. Input binds to `prompt` via `KitApi.updateProps`. Enter or Run calls `sendUser` with that body’s id and the kit’s model/surface. Empty prompt shows **Needs input** and is a no-op. There is no bottom LLM bar. Other selection: Space is palette only; there is no global agent capture.
 
 `lib/agent/` is transitional runtime (controller, session, tool loop). Those capabilities become board kits later. Do not treat the agent folder as a chatbot.
 
@@ -151,7 +151,7 @@ When selection is an LLM kit frame or body, an Input field binds to `prompt` via
 
 | Kit id | Role this phase |
 |---|---|
-| `harness.llm` | Specialized compound: diamond mark, per-kit model, Needs input, Input region, Output region. Props: `prompt`, `reply`, `error`, `model`, `provider`, `surface`, plus visible `content`. Palette instantiates. Selection Enter publishes onto **that** body. |
+| `harness.llm` | Specialized compound: title-bar chrome, per-kit model, Needs input, Input region, Output region. Frame and body stay glued. Props: `prompt`, `reply`, `error`, `model`, `provider`, `surface`, plus visible `content`. Palette instantiates. Inspector Enter/Run publishes onto **that** body. |
 | `harness.system-prompt` | Stub. Editable text. Reserved `attachedTo` prop (empty). Add from the palette. Does not inject. |
 | `harness.tools` | Stub. Lists current kit tool names as text. Reserved `attachedTo`. Does not attach `tools` to the vanilla request. |
 

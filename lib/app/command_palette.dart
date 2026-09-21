@@ -150,11 +150,7 @@ class _CommandPaletteState extends State<CommandPalette> {
       final id = _filtered[_highlight].id;
       final ctx = _keyFor(id).currentContext;
       if (ctx != null) {
-        Scrollable.ensureVisible(
-          ctx,
-          alignment: 0.5,
-          duration: Duration.zero,
-        );
+        Scrollable.ensureVisible(ctx, alignment: 0.5, duration: Duration.zero);
       }
     });
   }
@@ -209,25 +205,39 @@ class _CommandPaletteState extends State<CommandPalette> {
                 itemBuilder: (context, index) {
                   final action = filtered[index];
                   final selected = index == highlight;
-                  return DecoratedBox(
-                    key: _keyFor(action.id),
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? tokens.accent.withValues(alpha: 0.22)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: InkWell(
-                      key: Key('command-action-${action.id}'),
-                      onTap: () => _run(action),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
-                        ),
-                        child: Text(
-                          action.label,
-                          style: TextStyle(color: tokens.ink, fontSize: 13),
+                  return MouseRegion(
+                    onEnter: (_) {
+                      if (_highlight == index) {
+                        return;
+                      }
+                      setState(() => _highlight = index);
+                    },
+                    child: DecoratedBox(
+                      key: _keyFor(action.id),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? tokens.accent.withValues(alpha: 0.22)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: InkWell(
+                        key: Key('command-action-${action.id}'),
+                        onTap: () => _run(action),
+                        onHover: (inside) {
+                          if (!inside || _highlight == index) {
+                            return;
+                          }
+                          setState(() => _highlight = index);
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          child: Text(
+                            action.label,
+                            style: TextStyle(color: tokens.ink, fontSize: 13),
+                          ),
                         ),
                       ),
                     ),

@@ -211,7 +211,8 @@ class CanvasViewportState extends State<CanvasViewport> {
       _beginInlineEdit(hit);
       return;
     }
-    if (objectAllowsMove(hit)) {
+    final movers = _moveMembers(hit);
+    if (movers.every(objectAllowsMove)) {
       _dragKind = _DragKind.move;
       _moveWorldStart = world;
       widget.selection.beginMove(originX: hit.x, originY: hit.y);
@@ -263,12 +264,41 @@ class CanvasViewportState extends State<CanvasViewport> {
       widget.selection.cancelMove();
       return;
     }
+    final delta = widget.selection.previewDelta;
     final commit = widget.selection.endMove();
     final id = widget.selection.selectedId;
     if (commit == null || id == null) {
       return;
     }
-    widget.kitApi.updateFrame(id: id, x: commit.x, y: commit.y);
+    final selected = widget.store.document.objectById(id);
+    if (selected == null) {
+      return;
+    }
+    final members = _moveMembers(selected);
+    for (final member in members) {
+      widget.kitApi.updateFrame(
+        id: member.id,
+        x: member.x + delta.dx,
+        y: member.y + delta.dy,
+      );
+    }
+  }
+
+  List<SceneObject> _moveMembers(SceneObject hit) {
+    return llmKitMembers(document: widget.store.document, selectedId: hit.id) ??
+        [hit];
+  }
+
+  Set<String> get _previewIds {
+    final id = widget.selection.selectedId;
+    if (id == null || !widget.selection.isMoving) {
+      return const {};
+    }
+    final selected = widget.store.document.objectById(id);
+    if (selected == null) {
+      return {id};
+    }
+    return {for (final member in _moveMembers(selected)) member.id};
   }
 
   void _clearSelectionOrCancelMove() {
@@ -504,12 +534,18 @@ class CanvasViewportState extends State<CanvasViewport> {
                       registry: widget.registry,
                       selectedId: widget.selection.selectedId,
                       previewDelta: widget.selection.previewDelta,
+                      previewIds: _previewIds,
                     ),
                     if (_selectedObject != null)
                       SceneSelectionOverlay(
                         camera: _camera,
                         viewportSize: size,
-                        object: _selectedObject!,
+                        object:
+                            llmKitFrameForSelection(
+                              document: widget.store.document,
+                              selectedId: widget.selection.selectedId,
+                            ) ??
+                            _selectedObject!,
                         previewDelta: widget.selection.previewDelta,
                       ),
                     ?_inlineEditor(size),

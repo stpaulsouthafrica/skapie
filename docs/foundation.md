@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces. **10.4** is the command palette and selection-scoped LLM typing. **10.5** is providers vanilla hygiene plus compound LLM Input/Output regions. **Specialized LLM kit UX** added palette arrows, inspector typing, inline text edit, and `harness.llm` as a specialized kit. **10.6** (current) is per-file world tools plus spawnable `tools.*` kits attached to an LLM.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces. **10.4** is the command palette and selection-scoped LLM typing. **10.5** is providers vanilla hygiene plus compound LLM Input/Output regions. **Specialized LLM kit UX** added palette arrows, inspector typing, inline text edit, and `harness.llm` as a specialized kit. **10.6** is per-file world tools plus spawnable `tools.*` kits attached to an LLM. **10.5.1** (current) is cleanup only: palette hover, solid LLM compound, inspector-hosted model/input. Tools architecture is unchanged.
 
 ## Phase 1 gate — done
 
@@ -155,13 +155,21 @@ The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, 
 - `harness.system-prompt` and `harness.tools` remain stubs. Wiring them onto the vanilla payload is later. Do not delete `lib/agent/` tool-loop code.
 - `flutter analyze` clean; `flutter test` green.
 
-## Phase 10.6 gate (current)
+## Phase 10.6 gate — done
 
 - Each world tool is one Dart file under `lib/tools/world/` plus one spawnable kit `kits/tools.<name>/`. The kit is a visible grant, not the runner. See [tools](tools.md).
 - Palette lists `Tool: <name>` actions. Attach to LLM / Detach write `attachedTo` through KitApi.
 - LLM with no attached grants stays vanilla. LLM with attached grants runs the existing tool loop with exactly those tools. Unknown `toolName` errors on the kit and is omitted from the request.
 - `createKitAgentTools` is a thin wrapper over `createWorldTools`. The old session loop is not deleted.
 - No coding pack. No cable editor.
+- `flutter analyze` clean; `flutter test` green.
+
+## Phase 10.5.1 gate (current)
+
+- Cleanup only after 10.6. Do not redesign tools. Attach / world tool loop stay as 10.6.
+- Command palette: hovering a row sets the same highlight index as arrow keys. Enter runs the highlight; click runs that row.
+- `harness.llm` moves as one compound: dragging frame or body keeps the relative offset. Selecting either is the LLM kit for inspector / attach. Chrome is a title bar (mark + LLM + model if set), not a tiny corner mark.
+- Inspector hosts provider/model, prompt input, read-only output/error, Needs input, Run, and attached Tools. No bottom `LlmKitInput` bar. `tools.*` attach/detach stay in the inspector.
 - `flutter analyze` clean; `flutter test` green.
 
 ## Dream goal (not scheduled)
