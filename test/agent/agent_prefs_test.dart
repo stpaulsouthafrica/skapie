@@ -23,6 +23,7 @@ void main() {
     expect(loaded.model, prefs.model);
     expect(loaded.thinkingLevel, 'high');
     expect(loaded.apiKey, 'or-local');
+    expect(loaded.sendKitTools, isTrue);
   });
 
   test('fromJson without apiKey still loads provider and model', () {
@@ -60,6 +61,24 @@ void main() {
     expect(loaded.model, 'anthropic/claude-sonnet-4');
     expect(loaded.thinkingLevel, 'medium');
     expect(loaded.apiKey, 'or-local');
+  });
+
+  test('prefs file save then load keeps sendKitTools false', () async {
+    final dir = await Directory.systemTemp.createTemp('skapie_agent_prefs_');
+    addTearDown(() => dir.delete(recursive: true));
+    final store = AgentPrefsStore(agentPrefsFile(dir));
+    await store.save(
+      const AgentPrefs(
+        providerId: 'opencode-go',
+        model: 'kimi-k2.6',
+        apiKey: 'oc-local',
+        sendKitTools: false,
+      ),
+    );
+    final loaded = await store.load();
+    expect(loaded!.sendKitTools, isFalse);
+    expect(loaded.apiKey, 'oc-local');
+    expect(loaded.model, 'kimi-k2.6');
   });
 
   test('missing prefs file loads as null', () async {

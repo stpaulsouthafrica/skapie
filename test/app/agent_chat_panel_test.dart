@@ -33,9 +33,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text('hello'), findsNothing);
-    expect(store.document.objects, isEmpty);
+    expect(store.document.objects, isNotEmpty);
+    final body = store.document.objects.firstWhere(
+      (object) => object.props['skapieRole'] == 'body',
+    );
+    expect(body.props['skapieKit'], harnessLlmKitId);
+    expect(body.props['content'], contains('Echo: hello'));
     expect(tester.getSize(find.byType(CanvasViewport)), before);
-    expect(session.messages.last.content, 'Echo: hello');
+    expect(session.messages, hasLength(1));
   });
 
   testWidgets('chat strip is about one third of the window width', (

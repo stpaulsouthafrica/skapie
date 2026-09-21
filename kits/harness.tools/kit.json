@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "harness.tools",
+  "displayName": "Tools",
+  "description": "Stub tools kit. Wiring is later.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 280,
+      "height": 180,
+      "props": {
+        "skapieKit": "harness.tools",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 256,
+      "height": 148,
+      "props": {
+        "content": "Kit tools (stub)\n\nlist_kits, get_kit, instantiate_kit, add_object, remove_object, update_frame, update_props, set_locked, save_kit, reload_packages, register_kit",
+        "fontSize": 14,
+        "toolNames": "list_kits, get_kit, instantiate_kit, add_object, remove_object, update_frame, update_props, set_locked, save_kit, reload_packages, register_kit",
+        "attachedTo": "",
+        "skapieKit": "harness.tools",
+        "skapieRole": "tools"
+      }
+    }
+  ]
+}

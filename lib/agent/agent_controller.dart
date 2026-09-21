@@ -2,9 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
+import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/agent/vanilla_completion.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 
-/// Owns the replaceable [AgentSession]. Apply rebuilds it on the same [KitApi].
+/// Owns the replaceable [AgentSession] (later harness) and the vanilla on-ramp.
 class AgentController extends ChangeNotifier {
   AgentController({
     required this.kitApi,
@@ -14,6 +17,7 @@ class AgentController extends ChangeNotifier {
     this.sources = const AgentRuntimeSources(),
     this.memoryApiKey,
     this.prefs,
+    this.vanilla,
   });
 
   final KitApi kitApi;
@@ -24,6 +28,8 @@ class AgentController extends ChangeNotifier {
   ResolvedAgentRuntime runtime;
   String? memoryApiKey;
   AgentPrefs? prefs;
+  VanillaCompletionClient? vanilla;
+  AgentHttpDiagnostic? lastDiagnostic;
 
   String get statusChip => agentStatusChip(runtime);
 
@@ -33,6 +39,7 @@ class AgentController extends ChangeNotifier {
     String? model,
     String? apiKey,
     String? thinkingLevel,
+    bool? sendKitTools,
   }) async {
     final pasted = apiKey?.trim();
     if (pasted != null && pasted.isNotEmpty) {
@@ -44,6 +51,7 @@ class AgentController extends ChangeNotifier {
       model: model,
       thinkingLevel: thinkingLevel,
       apiKey: keyForRuntime,
+      sendKitTools: sendKitTools ?? prefs?.sendKitTools ?? true,
     );
     prefs = nextPrefs;
     await prefsStore?.save(nextPrefs);
@@ -53,9 +61,52 @@ class AgentController extends ChangeNotifier {
       sources: sources,
     );
     session = buildAgentSession(kitApi: kitApi, runtime: resolved);
+    vanilla = buildVanillaCompletion(runtime: resolved, sessionId: session.id);
     runtime = resolved;
     notifyListeners();
   }
 
-  Future<void> useFake() => applySettings(providerId: 'fake');
+  Future<void> useFake() => applySettings(
+    providerId: 'fake',
+    model: prefs?.model,
+    thinkingLevel: prefs?.thinkingLevel,
+  );
+
+  /// Chat on-ramp: vanilla completion, then spawn or update the LLM kit.
+  Future<void> sendUser(String text) async {
+    Object? failure;
+    String? reply;
+    try {
+      if (runtime.useFake) {
+        reply = 'Echo: $text';
+        lastDiagnostic = null;
+      } else {
+        final client = vanilla;
+        if (client == null) {
+          throw StateError('No vanilla completion client');
+        }
+        reply = await client.complete(userText: text);
+        lastDiagnostic = client.lastDiagnostic;
+      }
+    } catch (error) {
+      failure = error;
+      final client = vanilla;
+      if (client != null) {
+        lastDiagnostic = client.lastDiagnostic;
+      }
+    }
+    publishLlmKit(
+      kitApi: kitApi,
+      prompt: text,
+      reply: failure == null ? reply : null,
+      error: failure?.toString(),
+      model: runtime.model,
+      provider: runtime.presetId,
+      diagnostic: lastDiagnostic,
+    );
+    notifyListeners();
+    if (failure != null) {
+      throw failure;
+    }
+  }
 }

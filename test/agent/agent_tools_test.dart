@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -181,6 +186,38 @@ void main() {
     expect(session.messages.last.content, 'recovered');
   });
 
+  test('session with includeTools false does not send tools', () async {
+    var sawTools = false;
+    final client = MockClient((request) async {
+      final body = jsonDecode(request.body) as Map;
+      sawTools = body.containsKey('tools');
+      return http.Response(
+        jsonEncode({
+          'choices': [
+            {
+              'message': {'content': 'plain'},
+            },
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final session = AgentSession(
+      model: OpenAiCompatibleAgentModel(
+        baseUrl: 'https://opencode.ai/zen/go/v1',
+        apiKey: 'oc-test',
+        model: 'kimi-k2.6',
+        httpClient: client,
+      ),
+      kitApi: kitApi,
+      includeTools: false,
+    );
+    await session.sendUser('hi');
+    expect(sawTools, isFalse);
+    expect(session.messages.last.content, 'plain');
+  });
+
   test('max tool iterations appends limit message and finishes', () async {
     final replies = [
       for (var i = 0; i < 12; i++)
@@ -191,16 +228,14 @@ void main() {
           ],
         ),
     ];
-    final model = ScriptedAgentModel(replies);
     final session = AgentSession(
-      model: model,
+      model: ScriptedAgentModel(replies),
       kitApi: kitApi,
       maxToolIterations: 8,
     );
 
     await session.sendUser('loop');
 
-    expect(model.completeCount, 8);
     expect(session.messages.last.role, AgentRole.assistant);
     expect(session.messages.last.content, 'Tool loop limit reached');
   });

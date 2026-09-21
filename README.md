@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 10.2** — cosmetic paint on the finished core (dark luxury chrome, bottom chat bar, transient settings). Streaming, Pi/MCP, sandbox kits, and visible sub-agent kits are later arcs.
+This repository is **Phase 10.2.1** — the world is the harness: vanilla first completion, LLM kit on the canvas, stub system-prompt and tools kits. Streaming, Pi/MCP, sandbox kits, and living sub-agent kits are later arcs.
 
 ## Run on macOS
 
@@ -41,7 +41,7 @@ flutter run -d macos \
 # or: --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
-**Agent:** A capsule chat strip at the bottom (about one third of the window). Canvas does not reflow. `/settings` or Cmd+, opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`.
+**Agent:** A capsule chat strip at the bottom (about one third of the window) is an on-ramp. Enter sends a vanilla completion (user text only). The latest turn shows on the `harness.llm` kit. System prompt and tools are separate stub kits you can add to the board; they do not silently attach to first Enter. `/settings` or Cmd+, opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`.
 
 ```bash
 # OpenCode Go (preferred for local testing)

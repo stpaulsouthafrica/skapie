@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "harness.llm",
+  "displayName": "LLM",
+  "description": "Vanilla completion on the canvas. No animation.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 200,
+      "props": {
+        "skapieKit": "harness.llm",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 296,
+      "height": 168,
+      "props": {
+        "content": "",
+        "fontSize": 14,
+        "prompt": "",
+        "reply": "",
+        "error": "",
+        "model": "",
+        "provider": "",
+        "skapieKit": "harness.llm",
+        "skapieRole": "body"
+      }
+    }
+  ]
+}

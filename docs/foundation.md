@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits: vanilla first completion plus LLM / system-prompt / tools kits.
 
 ## Phase 1 gate — done
 
@@ -88,7 +88,7 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 
 - `OpenAiCompatibleAgentModel` POST `{baseUrl}/chat/completions`; inject `http.Client` in tests.
 - Named presets `opencode-go`, `openrouter`, `openai`, `custom` (one HTTP client). Missing key/model → `FakeAgentModel`.
-- Overlay chat panel calls `AgentSession.sendUser` only; canvas does not reflow. Failures visible in chat.
+- Overlay chat is an on-ramp. Vanilla first Enter; failures land on `harness.llm`.
 
 ## Phase 10 gate — done
 
@@ -102,15 +102,24 @@ The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, 
 
 - Settings UX: provider → paste key → **Connect** → `GET /models` → Model dropdown. No typed model id. No Base URL field. `custom` not in the panel.
 - Thinking row only when the catalog lists efforts. OpenRouter `reasoning.effort` on chat completions; OpenCode Go / OpenAI thinking is UI-reserved / hidden when the catalog has none.
-- Prefs schema 2: `provider`, `model`, optional `thinkingLevel`. No API key. No base URL written from the UI.
+- Prefs schema 2: `provider`, `model`, optional `thinkingLevel`. Optional `apiKey` was added so settings reopen and relaunch keep Connect state (never in `scene.json`). No base URL written from the UI.
 - `flutter analyze` clean; `flutter test` covers catalog parse, Connect mock HTTP, prefs, session swap, and Fake Echo chat.
 
-## Phase 10.2 gate (current)
+## Phase 10.2 gate — done
 
 - Cosmetic only. `lib/paint/` holds tokens, chrome widgets, and a theme bridge. App imports paint. Paint does not own scene, kits, or the agent loop.
 - Fixed dark + champagne gold. No appearance prefs. No glass window or transparency slider. The macOS window is opaque.
 - Chat is a thin bar over the bottom third. Settings open from `/settings` and Cmd+, as a transient sheet. Inspector stays an overlay.
 - Engine seams (Kit API, scene schema, registry, tool loop) unchanged.
+
+## Phase 10.2.1 gate (current)
+
+- Thesis: the world is the harness. The bottom chat bar is an on-ramp, not a hidden full agent stack.
+- Prefs: `provider`, `model`, optional `thinkingLevel`, optional `apiKey`. File is Application Support `skapie/agent_prefs.json`. Cold start rebuilds live pipe when key+model resolve. **Never** write the key into `scene.json`. No Keychain.
+- First Enter is vanilla POST `{baseUrl}/chat/completions` with body `{ model, messages: [{ role: user, content }] }` only. No tools. No Skapie system prompt. No reasoning.
+- `harness.llm` shows the turn (or redacted HTTP error) via `KitApi`. `harness.system-prompt` and `harness.tools` are real stub kit packages; they do not re-fat the vanilla payload. Reserved `attachedTo` seam only.
+- `AgentSession` tool loop is kept but is not the default first Enter.
+- `flutter analyze` clean; `flutter test` green. No animations.
 
 ## Dream goal (not scheduled)
 

@@ -11,6 +11,7 @@ class AgentPrefs {
     this.thinkingLevel,
     this.baseUrl,
     this.apiKey,
+    this.sendKitTools = true,
   });
 
   final String providerId;
@@ -18,6 +19,7 @@ class AgentPrefs {
   final String? thinkingLevel;
   final String? baseUrl;
   final String? apiKey;
+  final bool sendKitTools;
 
   Map<String, Object?> toJson() {
     return {
@@ -29,6 +31,7 @@ class AgentPrefs {
           thinkingLevel != 'off')
         'thinkingLevel': thinkingLevel,
       if (apiKey != null && apiKey!.trim().isNotEmpty) 'apiKey': apiKey,
+      if (!sendKitTools) 'sendKitTools': false,
     };
   }
 
@@ -44,6 +47,7 @@ class AgentPrefs {
       thinkingLevel: trim(json['thinkingLevel']),
       baseUrl: trim(json['baseUrl']),
       apiKey: trim(json['apiKey']),
+      sendKitTools: json['sendKitTools'] == false ? false : true,
     );
   }
 }

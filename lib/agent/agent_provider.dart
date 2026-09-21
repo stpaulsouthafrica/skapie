@@ -1,6 +1,8 @@
+import 'package:http/http.dart' as http;
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/agent/vanilla_completion.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 
 class AgentHttpPreset {
@@ -43,6 +45,7 @@ class ResolvedAgentRuntime {
     this.model,
     this.thinkingLevel,
     this.warning,
+    this.sendKitTools = true,
   });
 
   final String presetId;
@@ -52,6 +55,7 @@ class ResolvedAgentRuntime {
   final String? model;
   final String? thinkingLevel;
   final String? warning;
+  final bool sendKitTools;
 }
 
 String? _nonEmpty(String? value) {
@@ -224,7 +228,11 @@ ResolvedAgentRuntime mergeAgentRuntime({
   if (prefs != null) {
     final provider = prefs.providerId.trim();
     if (provider.isEmpty || provider == 'fake') {
-      return const ResolvedAgentRuntime(presetId: 'fake', useFake: true);
+      return ResolvedAgentRuntime(
+        presetId: 'fake',
+        useFake: true,
+        sendKitTools: prefs.sendKitTools,
+      );
     }
     final preset = agentHttpPresets[provider];
     final baseOverride = preset?.defaultBaseUrl == null
@@ -252,6 +260,7 @@ ResolvedAgentRuntime mergeAgentRuntime({
       model: resolved.model,
       thinkingLevel: prefs.thinkingLevel,
       warning: resolved.warning,
+      sendKitTools: prefs.sendKitTools,
     );
   }
   return resolveAgentRuntime(
@@ -284,7 +293,11 @@ AgentSession buildAgentSession({
   required ResolvedAgentRuntime runtime,
 }) {
   if (runtime.useFake) {
-    return AgentSession(model: const FakeAgentModel(), kitApi: kitApi);
+    return AgentSession(
+      model: const FakeAgentModel(),
+      kitApi: kitApi,
+      includeTools: runtime.sendKitTools,
+    );
   }
   final sessionId = 'agent_${DateTime.now().microsecondsSinceEpoch}';
   return AgentSession(
@@ -292,6 +305,7 @@ AgentSession buildAgentSession({
       baseUrl: runtime.baseUrl!,
       apiKey: runtime.apiKey!,
       model: runtime.model!,
+      presetId: runtime.presetId,
       headers: agentProviderHeaders(
         presetId: runtime.presetId,
         sessionId: sessionId,
@@ -302,5 +316,27 @@ AgentSession buildAgentSession({
     ),
     kitApi: kitApi,
     id: sessionId,
+    includeTools: runtime.sendKitTools,
+  );
+}
+
+VanillaCompletionClient? buildVanillaCompletion({
+  required ResolvedAgentRuntime runtime,
+  String? sessionId,
+  http.Client? httpClient,
+}) {
+  if (runtime.useFake) {
+    return null;
+  }
+  return VanillaCompletionClient(
+    baseUrl: runtime.baseUrl!,
+    apiKey: runtime.apiKey!,
+    model: runtime.model!,
+    presetId: runtime.presetId,
+    headers: agentProviderHeaders(
+      presetId: runtime.presetId,
+      sessionId: sessionId ?? 'vanilla',
+    ),
+    httpClient: httpClient,
   );
 }

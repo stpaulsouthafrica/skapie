@@ -5,10 +5,55 @@ import 'package:http/http.dart' as http;
 import 'package:skapie/agent/agent.dart';
 
 class AgentHttpException implements Exception {
-  AgentHttpException(this.message);
+  AgentHttpException(this.message, {this.statusCode, this.body, this.url});
   final String message;
+  final int? statusCode;
+  final String? body;
+  final String? url;
   @override
   String toString() => message;
+}
+
+class AgentHttpDiagnostic {
+  const AgentHttpDiagnostic({
+    required this.baseUrl,
+    required this.model,
+    required this.url,
+    this.presetId,
+    this.statusCode,
+    this.responseBody = '',
+    this.toolNames = const [],
+    this.reasoningAttached = false,
+  });
+
+  final String? presetId;
+  final String baseUrl;
+  final String model;
+  final String url;
+  final int? statusCode;
+  final String responseBody;
+  final List<String> toolNames;
+  final bool reasoningAttached;
+
+  String get summary {
+    final tools = toolNames.isEmpty
+        ? 'tools=off'
+        : 'tools=${toolNames.length} (${toolNames.join(', ')})';
+    final reason = reasoningAttached ? 'reasoning=on' : 'reasoning=off';
+    final status = statusCode == null ? 'no-status' : 'HTTP $statusCode';
+    final body = responseBody.length > 400
+        ? '${responseBody.substring(0, 400)}...'
+        : responseBody;
+    return [
+      presetId ?? 'http',
+      model,
+      status,
+      tools,
+      reason,
+      url,
+      if (body.isNotEmpty) body,
+    ].join(' · ');
+  }
 }
 
 String openaiNormalizedBaseUrl(String baseUrl) {
@@ -31,6 +76,22 @@ List<Map<String, Object?>> openaiMessagesFromSession(
   return [for (final message in messages) _openaiMessage(message)];
 }
 
+Map<String, Object?> openaiToolParameters(Map<String, Object?>? parameters) {
+  final properties = parameters?['properties'];
+  final required = parameters?['required'];
+  return {
+    'type': 'object',
+    'properties': properties is Map
+        ? <String, Object?>{
+            for (final entry in properties.entries)
+              entry.key.toString(): entry.value,
+          }
+        : <String, Object?>{},
+    'additionalProperties': parameters?['additionalProperties'] ?? false,
+    if (required is List) 'required': required,
+  };
+}
+
 List<Map<String, Object?>> openaiToolsFromAgent(List<AgentTool> tools) {
   return [
     for (final tool in tools)
@@ -39,12 +100,7 @@ List<Map<String, Object?>> openaiToolsFromAgent(List<AgentTool> tools) {
         'function': {
           'name': tool.name,
           'description': tool.description,
-          'parameters':
-              tool.parameters ??
-              const <String, Object?>{
-                'type': 'object',
-                'properties': <String, Object?>{},
-              },
+          'parameters': openaiToolParameters(tool.parameters),
         },
       },
   ];
@@ -85,6 +141,7 @@ class OpenAiCompatibleAgentModel implements AgentModel {
     required this.baseUrl,
     required this.apiKey,
     required this.model,
+    this.presetId,
     this.headers = const {},
     http.Client? httpClient,
     this.timeout = const Duration(seconds: 60),
@@ -94,24 +151,47 @@ class OpenAiCompatibleAgentModel implements AgentModel {
   final String baseUrl;
   final String apiKey;
   final String model;
+  final String? presetId;
   final Map<String, String> headers;
   final Duration timeout;
   final String? reasoningEffort;
   final http.Client _client;
+  AgentHttpDiagnostic? lastDiagnostic;
+
+  bool get _reasoningAttached {
+    final effort = reasoningEffort?.trim();
+    return effort != null && effort.isNotEmpty && effort != 'off';
+  }
+
+  void _recordDiagnostic({
+    required List<AgentTool> tools,
+    int? statusCode,
+    String responseBody = '',
+  }) {
+    lastDiagnostic = AgentHttpDiagnostic(
+      presetId: presetId,
+      baseUrl: openaiNormalizedBaseUrl(baseUrl),
+      model: model,
+      url: openaiChatCompletionsUrl(baseUrl),
+      statusCode: statusCode,
+      responseBody: responseBody,
+      toolNames: [for (final tool in tools) tool.name],
+      reasoningAttached: _reasoningAttached,
+    );
+  }
 
   @override
   Future<AgentModelReply> complete({
     required List<AgentMessage> messages,
     List<AgentTool> tools = const [],
   }) async {
-    final effort = reasoningEffort?.trim();
     final body = <String, Object?>{
       'model': model,
       'messages': openaiMessagesFromSession(messages),
       if (tools.isNotEmpty) 'tools': openaiToolsFromAgent(tools),
-      if (effort != null && effort.isNotEmpty && effort != 'off')
-        'reasoning': {'effort': effort},
+      if (_reasoningAttached) 'reasoning': {'effort': reasoningEffort!.trim()},
     };
+    _recordDiagnostic(tools: tools);
     final http.Response response;
     try {
       response = await _client
@@ -126,10 +206,21 @@ class OpenAiCompatibleAgentModel implements AgentModel {
           )
           .timeout(timeout);
     } on TimeoutException {
+      _recordDiagnostic(tools: tools);
       throw AgentHttpException('Request timed out after ${timeout.inSeconds}s');
     }
+    _recordDiagnostic(
+      tools: tools,
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw AgentHttpException('HTTP ${response.statusCode}: ${response.body}');
+      throw AgentHttpException(
+        'HTTP ${response.statusCode}: ${response.body}',
+        statusCode: response.statusCode,
+        body: response.body,
+        url: openaiChatCompletionsUrl(baseUrl),
+      );
     }
     final decoded = jsonDecode(response.body);
     if (decoded is! Map) {

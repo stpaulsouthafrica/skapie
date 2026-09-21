@@ -89,6 +89,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Text(
             kit.id == demoNoteCardKitId
                 ? 'Demo kit: note card'
+                : kit.id.startsWith('harness.')
+                ? 'Harness: ${kit.displayName}'
                 : 'Kit: ${kit.displayName}',
           ),
         ),

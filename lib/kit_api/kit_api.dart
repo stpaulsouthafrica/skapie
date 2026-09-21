@@ -5,6 +5,14 @@ import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 
 const String demoNoteCardKitId = 'demo.note-card';
+const String harnessLlmKitId = 'harness.llm';
+const String harnessSystemPromptKitId = 'harness.system-prompt';
+const String harnessToolsKitId = 'harness.tools';
+const String skapieKitProp = 'skapieKit';
+const String skapieRoleProp = 'skapieRole';
+const String attachedToProp = 'attachedTo';
+const String harnessToolsRoster =
+    'list_kits, get_kit, instantiate_kit, add_object, remove_object, update_frame, update_props, set_locked, save_kit, reload_packages, register_kit';
 
 Size defaultObjectSize(String typeId) {
   return switch (typeId) {
@@ -58,6 +66,98 @@ const KitRecipe demoNoteCardRecipe = KitRecipe(
       width: 176,
       height: 56,
       props: {'content': 'Note'},
+    ),
+  ],
+);
+
+const KitRecipe harnessLlmRecipe = KitRecipe(
+  id: harnessLlmKitId,
+  displayName: 'LLM',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 320,
+      height: 200,
+      props: {skapieKitProp: harnessLlmKitId, skapieRoleProp: 'frame'},
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 16,
+      width: 296,
+      height: 168,
+      props: {
+        'content': '',
+        'fontSize': 14,
+        'prompt': '',
+        'reply': '',
+        'error': '',
+        'model': '',
+        'provider': '',
+        skapieKitProp: harnessLlmKitId,
+        skapieRoleProp: 'body',
+      },
+    ),
+  ],
+);
+
+const KitRecipe harnessSystemPromptRecipe = KitRecipe(
+  id: harnessSystemPromptKitId,
+  displayName: 'System prompt',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 280,
+      height: 140,
+      props: {skapieKitProp: harnessSystemPromptKitId, skapieRoleProp: 'frame'},
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 16,
+      width: 256,
+      height: 108,
+      props: {
+        'content': 'System prompt',
+        'fontSize': 14,
+        attachedToProp: '',
+        skapieKitProp: harnessSystemPromptKitId,
+        skapieRoleProp: 'prompt',
+      },
+    ),
+  ],
+);
+
+const KitRecipe harnessToolsRecipe = KitRecipe(
+  id: harnessToolsKitId,
+  displayName: 'Tools',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 280,
+      height: 180,
+      props: {skapieKitProp: harnessToolsKitId, skapieRoleProp: 'frame'},
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 16,
+      width: 256,
+      height: 148,
+      props: {
+        'content': 'Kit tools (stub)\n\n$harnessToolsRoster',
+        'fontSize': 14,
+        'toolNames': harnessToolsRoster,
+        attachedToProp: '',
+        skapieKitProp: harnessToolsKitId,
+        skapieRoleProp: 'tools',
+      },
     ),
   ],
 );
@@ -220,5 +320,8 @@ KitApi createAppKitApi({
     packages: packages,
   );
   api.registerKit(demoNoteCardRecipe);
+  api.registerKit(harnessLlmRecipe);
+  api.registerKit(harnessSystemPromptRecipe);
+  api.registerKit(harnessToolsRecipe);
   return api;
 }

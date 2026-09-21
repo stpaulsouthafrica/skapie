@@ -132,9 +132,11 @@ Future<AgentController> bootstrapAgentController({
         ? 'Skapie agent: FakeAgentModel'
         : 'Skapie agent: ${runtime.presetId} model=${runtime.model}',
   );
+  final session = buildAgentSession(kitApi: kitApi, runtime: runtime);
   return AgentController(
     kitApi: kitApi,
-    session: buildAgentSession(kitApi: kitApi, runtime: runtime),
+    session: session,
+    vanilla: buildVanillaCompletion(runtime: runtime, sessionId: session.id),
     runtime: runtime,
     prefsStore: prefsStore,
     sources: sources,

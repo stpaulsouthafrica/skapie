@@ -50,7 +50,10 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
     if (!agentProviderChoices.contains(_provider)) {
       _provider = 'fake';
     }
-    final remembered = widget.controller.memoryApiKey?.trim() ?? '';
+    final remembered =
+        widget.controller.memoryApiKey?.trim() ??
+        widget.controller.prefs?.apiKey?.trim() ??
+        '';
     _apiKey = TextEditingController(text: remembered);
     _thinking = prefs?.thinkingLevel ?? _thinkingOff;
     final lastModel = prefs?.model ?? runtime.model;
@@ -81,7 +84,8 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
       _selectedModel != null &&
       _models.isNotEmpty &&
       (_apiKey.text.trim().isNotEmpty ||
-          (widget.controller.memoryApiKey?.trim().isNotEmpty ?? false));
+          (widget.controller.memoryApiKey?.trim().isNotEmpty ?? false) ||
+          (widget.controller.prefs?.apiKey?.trim().isNotEmpty ?? false));
 
   Future<void> _connect() async {
     if (_busy || _provider == 'fake') {

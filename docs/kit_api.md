@@ -27,7 +27,7 @@ App bootstrap (`lib/main.dart`):
 
 1. `bootstrapSceneStore()` loads `scene.json`.
 2. `bootstrapKitApi()` resolves the kits root (see [kit packages](kit_packages.md)).
-3. `createAppKitApi(...)` constructs `KitApi` and `registerKit(demoNoteCardRecipe)` as fallback.
+3. `createAppKitApi(...)` constructs `KitApi` and registers `demoNoteCardRecipe` plus the harness kit recipes (`harness.llm`, `harness.system-prompt`, `harness.tools`) as fallbacks.
 4. `await reloadPackages()` — disk packages win when present.
 5. UI / future agent call `listKits`, `instantiate`, `addObject`, `saveKit`, …
 
@@ -228,7 +228,7 @@ KitApi createAppKitApi({
 })
 ```
 
-Uses `createBuiltinRegistry()` if `registry` is omitted. Always `registerKit(demoNoteCardRecipe)` first. Call `reloadPackages` afterward so disk wins.
+Uses `createBuiltinRegistry()` if `registry` is omitted. Always registers `demoNoteCardRecipe` and the harness kit recipes. Call `reloadPackages` afterward so disk wins.
 
 ## Errors
 
@@ -346,9 +346,21 @@ Implemented by `createKitAgentTools` + `AgentToolDispatcher` inside `AgentSessio
 
 Unknown `typeId` / unknown kit → tool error, scene unchanged.
 
-## Demo kit
+## Demo kits
 
-`demo.note-card` (`demoNoteCardKitId`): `box` 200×88 + inset `text` (`content`: `Note`). Shipped as the kit package [`kits/demo.note-card/kit.json`](../kits/demo.note-card/kit.json). `createAppKitApi` registers the same numbers as a kit recipe; a loaded package replaces it.
+`demo.note-card` (`demoNoteCardKitId`): `box` 200×88 + inset `text` (`content`: `Note`). Shipped as [`kits/demo.note-card/kit.json`](../kits/demo.note-card/kit.json).
+
+## Harness kits
+
+Ordinary kits. They are the visible first principles of the agent harness. See [agent.md](agent.md) and [glossary](glossary.md).
+
+| Id | Package | This phase |
+|---|---|---|
+| `harness.llm` | [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json) | Latest vanilla turn via `publishLlmKit` |
+| `harness.system-prompt` | [`kits/harness.system-prompt/kit.json`](../kits/harness.system-prompt/kit.json) | Stub. Editable text. `attachedTo` reserved. |
+| `harness.tools` | [`kits/harness.tools/kit.json`](../kits/harness.tools/kit.json) | Stub. Tool names as text. `attachedTo` reserved. |
+
+`createAppKitApi` registers all of these as kit recipes; a loaded package replaces the matching id. No animation.
 
 ## Dream goal (not scheduled)
 

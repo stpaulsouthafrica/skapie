@@ -30,6 +30,110 @@ const Map<String, Object?> demoNoteCardJson = {
   ],
 };
 
+const Map<String, Object?> harnessLlmJson = {
+  'schemaVersion': kitPackageSchemaVersion,
+  'id': harnessLlmKitId,
+  'displayName': 'LLM',
+  'description': 'Vanilla completion on the canvas. No animation.',
+  'capabilities': <Object?>[],
+  'objects': [
+    {
+      'typeId': 'box',
+      'x': 0,
+      'y': 0,
+      'width': 320,
+      'height': 200,
+      'props': {skapieKitProp: harnessLlmKitId, skapieRoleProp: 'frame'},
+    },
+    {
+      'typeId': 'text',
+      'x': 12,
+      'y': 16,
+      'width': 296,
+      'height': 168,
+      'props': {
+        'content': '',
+        'fontSize': 14,
+        'prompt': '',
+        'reply': '',
+        'error': '',
+        'model': '',
+        'provider': '',
+        skapieKitProp: harnessLlmKitId,
+        skapieRoleProp: 'body',
+      },
+    },
+  ],
+};
+
+const Map<String, Object?> harnessSystemPromptJson = {
+  'schemaVersion': kitPackageSchemaVersion,
+  'id': harnessSystemPromptKitId,
+  'displayName': 'System prompt',
+  'description': 'Stub system prompt kit. Wiring is later.',
+  'capabilities': <Object?>[],
+  'objects': [
+    {
+      'typeId': 'box',
+      'x': 0,
+      'y': 0,
+      'width': 280,
+      'height': 140,
+      'props': {
+        skapieKitProp: harnessSystemPromptKitId,
+        skapieRoleProp: 'frame',
+      },
+    },
+    {
+      'typeId': 'text',
+      'x': 12,
+      'y': 16,
+      'width': 256,
+      'height': 108,
+      'props': {
+        'content': 'System prompt',
+        'fontSize': 14,
+        attachedToProp: '',
+        skapieKitProp: harnessSystemPromptKitId,
+        skapieRoleProp: 'prompt',
+      },
+    },
+  ],
+};
+
+const Map<String, Object?> harnessToolsJson = {
+  'schemaVersion': kitPackageSchemaVersion,
+  'id': harnessToolsKitId,
+  'displayName': 'Tools',
+  'description': 'Stub tools kit. Wiring is later.',
+  'capabilities': <Object?>[],
+  'objects': [
+    {
+      'typeId': 'box',
+      'x': 0,
+      'y': 0,
+      'width': 280,
+      'height': 180,
+      'props': {skapieKitProp: harnessToolsKitId, skapieRoleProp: 'frame'},
+    },
+    {
+      'typeId': 'text',
+      'x': 12,
+      'y': 16,
+      'width': 256,
+      'height': 148,
+      'props': {
+        'content': 'Kit tools (stub)\n\n$harnessToolsRoster',
+        'fontSize': 14,
+        'toolNames': harnessToolsRoster,
+        attachedToProp: '',
+        skapieKitProp: harnessToolsKitId,
+        skapieRoleProp: 'tools',
+      },
+    },
+  ],
+};
+
 class ParsedKitPackage {
   const ParsedKitPackage({
     required this.schemaVersion,

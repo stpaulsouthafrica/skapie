@@ -166,5 +166,6 @@ void main() {
       'oc-remember',
     );
     expect(find.byKey(const Key('agent-settings-apply')), findsOneWidget);
+    expect(find.byKey(const Key('agent-settings-send-tools')), findsNothing);
   });
 }

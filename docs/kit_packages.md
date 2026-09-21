@@ -99,7 +99,7 @@ flutter run -d macos \
   --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
-If the resolved folder is empty or unreadable, `createAppKitApi` still has the in-memory `demo.note-card` fallback. After a successful disk load, **disk replaces memory** for that id ([`reloadPackages`](kit_api.md#reloadpackages)).
+If the resolved folder is empty or unreadable, `createAppKitApi` still has the in-memory `demo.note-card` and harness kit fallbacks. After a successful disk load, **disk replaces memory** for that id ([`reloadPackages`](kit_api.md#reloadpackages)).
 
 ## Load and save
 

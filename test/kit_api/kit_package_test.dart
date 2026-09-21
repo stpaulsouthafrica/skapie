@@ -35,6 +35,46 @@ void main() {
     expect(again.recipe.objects[1].height, 56);
   });
 
+  test('harness kit packages parse as real recipes', () {
+    final llm = parseKitPackageJson(harnessLlmJson, folderId: harnessLlmKitId);
+    expect(llm.recipe.displayName, 'LLM');
+    expect(
+      llm.recipe.objects.any((object) => object.props['skapieRole'] == 'body'),
+      isTrue,
+    );
+
+    final prompt = parseKitPackageJson(
+      harnessSystemPromptJson,
+      folderId: harnessSystemPromptKitId,
+    );
+    expect(prompt.recipe.displayName, 'System prompt');
+    expect(
+      prompt.recipe.objects.any(
+        (object) => object.props.containsKey('attachedTo'),
+      ),
+      isTrue,
+    );
+
+    final tools = parseKitPackageJson(
+      harnessToolsJson,
+      folderId: harnessToolsKitId,
+    );
+    expect(tools.recipe.displayName, 'Tools');
+    expect(
+      tools.recipe.objects.any(
+        (object) => object.props.containsKey('attachedTo'),
+      ),
+      isTrue,
+    );
+  });
+
+  test('createAppKitApi registers harness kits', () {
+    final api = createAppKitApi(store: SceneStore());
+    expect(api.getKit(harnessLlmKitId), isNotNull);
+    expect(api.getKit(harnessSystemPromptKitId), isNotNull);
+    expect(api.getKit(harnessToolsKitId), isNotNull);
+  });
+
   test('rejects missing schemaVersion', () {
     expect(
       () => parseKitPackageJson(const {

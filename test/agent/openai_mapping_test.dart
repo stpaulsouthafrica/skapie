@@ -85,6 +85,7 @@ void main() {
       }
       if (function['name'] == 'list_kits') {
         expect(parameters['properties'], isEmpty);
+        expect(parameters['additionalProperties'], isFalse);
       }
     }
   });

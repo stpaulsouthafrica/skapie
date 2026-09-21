@@ -1,61 +1,64 @@
 # Agent harness
 
-Phase 9 is the session/turn loop. **9.1** added kit **tools**. **9.2** added an OpenAI-compatible HTTP model, named presets, and overlay chat. **Phase 10** added settings, a Fake vs live chip, and empty-state prompts. **Phase 10.1** replaces the typed model/base-URL form with a Pi-like **Connect → fetch `/models` → pick** flow. The tool loop is unchanged.
+The **world is the harness.** The bottom chat bar is an on-ramp, not a hidden full agent stack.
 
-The message log is session state. The **scene document** remains the source of truth for the canvas. Tools never call `SceneStore.apply` themselves — they go `AgentSession` → dispatcher → `KitApi` → `apply`. Settings UI and chat must not edit the scene. **Kit** / **kit recipe** / **kit package**: [glossary](glossary.md).
+**Phase 10.2.1:** first Enter is a vanilla chat completion (user text only). The reply lands on an **LLM kit**. **System prompt** and **Tools** are separate stub kits you can place on the board. Wiring those kits into the HTTP payload is later. The tool-loop `AgentSession` still exists for that later wire; chat Enter does not use it.
+
+The **scene document** remains the source of truth. Mutations go `KitApi` → `SceneStore.apply`. Settings and the chat widget do not call `KitApi`. `AgentController.sendUser` publishes the LLM kit through `KitApi`. **Kit** / **kit recipe** / **kit package**: [glossary](glossary.md).
 
 ## What this is / isn’t
 
-| In 10 / 10.1 | Later (not this core) |
+| In 10.2.1 | Later |
 |---|---|
-| Settings: provider → paste key → Connect → model picker | Streaming tokens |
-| Thinking dropdown when the catalog lists efforts | Pi port, MCP, OAuth, Anthropic Messages path |
-| Prefs: provider + model + thinkingLevel + local key (never scene.json) | Chat history persistence, markdown chrome |
-| Overlay chat + Fake/live chip + empty-state prompts | Sandbox kits, visible sub-agent kits, workers |
+| Vanilla first Enter: `{ model, messages: [user] }` | Inject system prompt + tools from board kits |
+| LLM kit, system-prompt stub kit, tools stub kit | Cable/graph connection renderer |
+| Prefs: provider + model + local key (never scene.json) | Streaming, MCP, OAuth, Keychain |
+| Minimal chat field | Fat chat transcript chrome |
 
-Dream goal (visible sub-agent kits on the canvas) is **not** this harness.
+Living sub-agent kits (status, tokens, workers) remain a dream goal. These harness kits are static box + text first principles.
 
 ## Mental model
 
-1. A **session** holds messages (starts with one system message) and a stable `id`.
-2. A **turn** = user message → model → optional tool calls → tool result messages → model again → assistant text.
-3. Chat listens to `events` and the message list. It only calls `session.sendUser`.
-4. `AgentController` owns the current session. **Apply** in settings replaces it (new `id`, system prompt kept, prior user/assistant/tool turns cleared so a new provider does not see old tool-call history).
-5. The **model** is an interface. Tests use Fake or Scripted. Real runs use `OpenAiCompatibleAgentModel` when config resolves.
+1. Settings supply the **pipe**: provider, base URL, API key, model.
+2. Chat Enter sends **vanilla** completion when live (or Fake Echo offline).
+3. Success or failure materializes / updates `harness.llm` on the world.
+4. `harness.system-prompt` and `harness.tools` can sit on the board. They do **not** change the vanilla payload.
+5. `AgentSession` (system prompt + kit tools loop) is kept for a later wire. First Enter does not call `session.sendUser`.
 
 ```
-sendUser("add a box")
-  → append user
-  → AgentTurnStarted
-  → AgentMessageAppended (user)
-  → loop (max 8):
-       model.complete(messages, tools)
-       if no toolCalls:
-         append assistant text → finished → return
-       else:
-         append assistant (stores toolCalls)
-         for each call: dispatch → KitApi → append role=tool (toolCallId + JSON)
-  → if still calling tools after 8: append "Tool loop limit reached", finished
+controller.sendUser("hello")
+  → if Fake: reply = "Echo: hello"
+  → else VanillaCompletionClient.complete(userText)
+       POST {baseUrl}/chat/completions
+       body: { model, messages: [{ role: user, content }] }
+  → publishLlmKit via KitApi (success or failure)
 ```
 
-Default system prompt (`defaultAgentSystemPrompt`): use kit tools to change the scene; prefer `instantiate_kit` / `list_kits` / `add_object`; say **kit** / **kit recipe** / **kit package**, never bare “recipe.” Override with `AgentSession(systemPrompt: …)`.
+Later (not this phase) a wired harness could become:
+
+```
+session.sendUser(...)
+  → system message from a system-prompt kit
+  → tools from a tools kit
+  → tool loop → KitApi
+```
+
+Default system prompt (`defaultAgentSystemPrompt`) still seeds **AgentSession** only. It is not in the vanilla payload.
 
 ## Public surface
 
 | Type | Role |
 |---|---|
-| `AgentRole` | `system`, `user`, `assistant`, `tool` |
-| `AgentMessage` | `role` + `content`. Assistant tool-call steps set `toolCalls`. Tool results set `toolCallId`. |
-| `AgentModel` | `complete(messages:, tools:)` → `AgentModelReply` |
-| `FakeAgentModel` | `Echo: <last user text>` — ignores tools |
-| `ScriptedAgentModel` | Dequeues `AgentModelReply` values (for tests) |
-| `OpenAiCompatibleAgentModel` | One HTTP client; POST `{baseUrl}/chat/completions`; optional OpenRouter `reasoning.effort` |
-| `fetchAgentModels` / `AgentModelInfo` | `GET {baseUrl}/models`; thinkingLevels empty ⇒ no Thinking row |
-| `AgentSession` | Requires `kitApi`. `id`, `messages`, `events`, `sendUser`, `maxToolIterations` (default 8) |
-| `AgentController` | Replaceable session + runtime; `applySettings` / `useFake` |
-| `AgentPrefs` / `AgentPrefsStore` | Non-secret prefs file (no API key) |
-| `resolveAgentRuntime` / `mergeAgentRuntime` | Env/defines vs last Apply |
-| `createKitAgentTools` | The kit tool list bound to one `KitApi` |
+| `VanillaCompletionClient` | Plain POST `/chat/completions`. One user message. No tools. No system. No reasoning. |
+| `AgentHttpException` | Non-2xx / timeout. Carries `statusCode` + `body` when HTTP. |
+| `AgentHttpDiagnostic` | Redacted request summary. Never includes the API key. |
+| `publishLlmKit` | Instantiates or updates `harness.llm` through `KitApi` |
+| `AgentController.sendUser` | Vanilla on-ramp, then LLM kit |
+| `AgentSession` | Later tool-loop harness. Not the default first Enter. |
+| `OpenAiCompatibleAgentModel` | Session HTTP model (tools + optional OpenRouter reasoning) |
+| `FakeAgentModel` | `Echo: <last user text>` for session tests |
+| `AgentPrefs` / `AgentPrefsStore` | Application Support prefs (optional local `apiKey`) |
+| `createKitAgentTools` | Kit tool list for the later session loop |
 
 ## Provider presets
 
@@ -63,117 +66,135 @@ One HTTP client. A const table fills base URL, key env, and optional headers.
 
 | Preset id | Default base URL | Key env (also dart-define twin) | Extra headers |
 |---|---|---|---|
-| `opencode-go` | `https://opencode.ai/zen/go/v1` | `OPENCODE_API_KEY` / `SKAPIE_AGENT_API_KEY` | `x-opencode-session: <AgentSession.id>` (stable for the session), `User-Agent: skapie/0.1` |
+| `opencode-go` | `https://opencode.ai/zen/go/v1` | `OPENCODE_API_KEY` / `SKAPIE_AGENT_API_KEY` | `x-opencode-session: <session id>`, `User-Agent: skapie/0.1` |
 | `openrouter` | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` / `SKAPIE_AGENT_API_KEY` | `HTTP-Referer: https://skapie.local`, `X-Title: Skapie` |
 | `openai` | `https://api.openai.com/v1` | `OPENAI_API_KEY` / `SKAPIE_AGENT_API_KEY` | none |
 | `custom` | from `SKAPIE_AGENT_BASE_URL` (env/dart-define only; not in the settings panel) | `SKAPIE_AGENT_API_KEY` | none |
 | `fake` | — | — | — |
 
-Known presets own their base URL. Settings does **not** ask for a base URL or a typed model id. `custom` remains in the preset table for env/dart-define only.
+Known presets own their base URL. Settings does **not** ask for a base URL or a typed model id.
 
-OpenCode Go’s `x-opencode-session` is generated once per `AgentSession` and sent on every chat request. **Apply** creates a new session id. Stay on `/v1/chat/completions`. Connect uses `GET /models` (API order, deduped by id).
+OpenCode Go’s `x-opencode-session` is generated once per `AgentSession` and reused on vanilla requests for that controller. **Apply** creates a new session id. Stay on `/v1/chat/completions`. Connect uses `GET /models`.
 
 ### Config resolution
 
 1. **Last Apply** from settings (`AgentPrefs` + in-memory key) wins.
-2. Else dart-define / env (`resolveAgentRuntime` as in 9.2).
+2. Else dart-define / env (`resolveAgentRuntime`).
 3. Else Fake.
 
-`String.fromEnvironment` dart-defines plus `Platform.environment`, same pattern as the scene / kits roots.
-
-Within a resolve: `SKAPIE_AGENT_API_KEY` wins over the preset’s native env. Explicit base URL wins over the preset default. `SKAPIE_AGENT_MODEL` is required when not Fake. Missing key, missing model, unknown provider, or `custom` without a base URL → `FakeAgentModel`.
-
-Suggested model examples only (not hardcoded as runtime defaults): OpenCode Go `kimi-k2.6`; OpenRouter `anthropic/claude-sonnet-4`; OpenAI `gpt-4o-mini`.
+Missing key, missing model, unknown provider, or `custom` without a base URL → Fake.
 
 ### Prefs vs API key
 
-Prefs persist at **`<Application Support>/skapie/agent_prefs.json`** (same family as `scene.json`): `provider`, `model`, optional `thinkingLevel`, optional `apiKey`. Schema version 2. **The API key is never written into `scene.json` and never committed.** Base URL is not written from the UI (old `baseUrl` keys are ignored for known presets). Reopening settings restores the last provider, model, and key so Apply still works. Next launch uses that file unless env/dart-define supplies a key.
+Prefs persist at **`<Application Support>/skapie/agent_prefs.json`**: schema version 2.
 
-### Request mapping
+| Field | Written |
+|---|---|
+| `provider` | always |
+| `model` | when non-empty |
+| `thinkingLevel` | when set and not `off` |
+| `apiKey` | when non-empty. Local Application Support only. |
+| `sendKitTools` | only when `false` (legacy; vanilla first Enter never sends tools) |
 
-Session messages map to OpenAI `messages` with roles `system` / `user` / `assistant` / `tool`. Assistant steps that called tools include `tool_calls`; tool results include `tool_call_id`. Kit `AgentTool`s become OpenAI `tools` function entries with JSON Schema `parameters` (OpenCode Go rejects empty schemas). The model returns the same `AgentModelReply` shape Fake/Scripted already use — there is no second tool loop.
+**The API key may live in Application Support prefs so quit/relaunch and reopening settings keep Connect state. It is never written into `scene.json` and never committed. No Keychain in this phase.**
 
-Timeouts (60s) and non-2xx responses throw `AgentHttpException`. Chat shows the error; the user message stays.
+### Vanilla payload (first Enter)
+
+`VanillaCompletionClient` sends:
+
+```
+POST {normalizedBaseUrl}/chat/completions
+```
+
+Headers:
+
+- `Authorization: Bearer <apiKey>` (never logged, never shown on the kit)
+- `Content-Type: application/json`
+- Preset extras from the table above
+
+JSON body **only**:
+
+```json
+{
+  "model": "<id>",
+  "messages": [
+    { "role": "user", "content": "<typed text>" }
+  ]
+}
+```
+
+No `tools`. No system message. No `reasoning`. Stub kits on the board do not change this body.
+
+Timeouts (60s) and non-2xx throw `AgentHttpException`. `lastDiagnostic` records preset, URL, model, status, truncated body, `tools=off`, `reasoning=off`. Never the API key.
+
+### Future wired harness payload (not first Enter)
+
+`OpenAiCompatibleAgentModel` + `AgentSession.sendUser` still map the full session: system / user / assistant / tool messages, optional function `tools` with object JSON Schema, and OpenRouter-only `reasoning.effort`. Chat Enter does not take this path in 10.2.1.
 
 ## Chat panel
 
-Overlay at the **bottom center** of the canvas (inspector stays on the right). The strip is about one third of the window width, capsule-shaped, field only. Opening settings does **not** shrink the viewport.
+Overlay at the **bottom center**. About one third of the window width, capsule, field only. `/settings`, `/settings/`, or Cmd+, opens Agent settings. Add lives in that sheet.
 
-`/settings`, `/settings/`, or Cmd+, opens **Agent settings** as a transient sheet (close without Apply leaves the running session unchanged). Add lives in that sheet.
+The strip calls `controller.sendUser` on Return. The widget never calls `KitApi`.
 
-The strip calls `session.sendUser` on Return, never `KitApi`. One shared `AgentController` is created at bootstrap with the live `KitApi`. Tests may pass `SkapieApp(agentSession: …)` (wrapped as Fake) or `agentController:`.
+### Harness kits
+
+| Kit id | Role this phase |
+|---|---|
+| `harness.llm` | Latest vanilla turn. Props: `prompt`, `reply`, `error`, `model`, `provider`, plus visible `content`. Instantiated/updated by `publishLlmKit`. Origin `(24, 24)`. |
+| `harness.system-prompt` | Stub. Editable text. Reserved `attachedTo` prop (empty). Add from the menu. Does not inject. |
+| `harness.tools` | Stub. Lists current kit tool names as read-only-ish text. Reserved `attachedTo`. Does not attach `tools` to the vanilla request. |
+
+Packages: [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json), [`kits/harness.system-prompt/kit.json`](../kits/harness.system-prompt/kit.json), [`kits/harness.tools/kit.json`](../kits/harness.tools/kit.json). `createAppKitApi` registers the same kit recipes; disk replaces memory.
+
+Later turns update the same LLM kit. No transcript UI in the strip. No drop animation.
 
 ### Settings (Connect → pick)
 
-Provider dropdown: `fake`, `opencode-go`, `openrouter`, `openai` (no `custom` in the panel). Paste API key → **Connect** → `GET {preset baseUrl}/models` with Bearer token (plus preset headers). Success fills the Model dropdown (`id` value; `name` or `id` label). Preselect last prefs model id if present, else the first item. Connect does **not** rebuild the session.
+Provider dropdown: `fake`, `opencode-go`, `openrouter`, `openai`. Paste API key → **Connect** → `GET {preset baseUrl}/models`. Thinking row only when the catalog lists efforts (OpenRouter). Thinking does **not** ride on vanilla first Enter.
 
-**Thinking:** shown only when the selected catalog entry has `supported_efforts` or `reasoning.efforts` (OpenRouter). Includes an **off** choice. OpenRouter Apply sends `reasoning: { effort }` on chat completions when a non-off level is selected. OpenCode Go / OpenAI catalogs are id-only today — Thinking is hidden; no fake header.
+- **Apply** — requires a selected model and a key. Saves prefs, rebuilds `AgentSession` and the vanilla client.
+- **Use Fake** — persists provider `fake` without requiring a key.
 
-- **Apply** — requires a selected model and a key (from the field, last Apply, or env). Saves prefs, rebuilds `AgentSession`. Clears prior turns; keeps the default system prompt.
-- **Use Fake** — one-click `FakeAgentModel` (also persisted as provider `fake`).
-- Changing provider clears the fetched catalog and disables Model.
+## Kit tools (9.1, later wire)
 
-Bad Connect (401 / timeout): one error line; Model stays disabled; current session unchanged.
+Implemented from the [kit API tool table](kit_api.md#agent-tools-phase-91). The tools stub kit **shows** those names. Vanilla first Enter does not send them.
 
-## Kit tools (9.1)
+## Fake vs HTTP
 
-Implemented from the [kit API tool table](kit_api.md#agent-tools-phase-91). Snake_case tool names; Dart methods stay `addObject`, `instantiate`, etc.
-
-Success shapes: `list_kits` → `{kits:[{id,displayName}]}`; `get_kit` → `{kit:…}` or error; `add_object` → `{id}`; `instantiate_kit` → `{ids}`; mutations → `{ok:true}` (`save_kit` / `register_kit` also `id`; `reload_packages` also `count`).
-
-Failures (unknown tool, bad JSON, unknown `typeId` / kit, thrown `ArgumentError`): `{ "ok": false, "error": "…" }` as the **tool message content**. The session does **not** throw. Scene unchanged when `KitApi` rejects.
-
-## Fake vs Scripted vs HTTP
-
-- **Fake:** always plain text. Used when no key/model, **Use Fake**, and widget tests.
-- **Scripted:** first replies may include `toolCalls`; a later reply with empty `toolCalls` is the final assistant text.
-- **HTTP:** OpenAI-compatible chat completions. Same tool loop underneath.
+- **Fake:** `Echo: <text>` locally. No network. Still publishes `harness.llm`. Session messages stay at the system prompt.
+- **Vanilla HTTP:** one user message. LLM kit shows reply or redacted error.
+- **Session HTTP:** still available via `session.sendUser` for tests and a later board wire.
 
 ## Errors
 
-If `complete` throws:
+If vanilla `complete` throws:
 
-1. The user message **stays**.
-2. `AgentTurnFailed` is emitted (no `AgentTurnFinished`).
-3. `sendUser` **rethrows** (chat shows it).
-4. Tool dispatch errors do **not** use this path.
-
-**Max iterations:** after `maxToolIterations` model replies that still have tool calls, append assistant `Tool loop limit reached`, emit finished, do not throw.
+1. `AgentController.sendUser` still publishes the LLM kit with the error.
+2. Then it rethrows.
+3. The chat strip swallows the throw; the kit is the visible surface.
 
 ## Run with a real model
 
-Never commit API keys. Startup env/dart-define still works. You can also paste a key in **Agent settings**; it is stored in Application Support prefs, not the scene.
+Never commit API keys. Paste in **Agent settings**; stored in Application Support prefs, not the scene.
 
 ```bash
-# OpenCode Go
 flutter run -d macos \
   --dart-define=SKAPIE_AGENT_PROVIDER=opencode-go \
   --dart-define=SKAPIE_AGENT_API_KEY="$OPENCODE_API_KEY" \
   --dart-define=SKAPIE_AGENT_MODEL=kimi-k2.6
-
-# OpenRouter
-flutter run -d macos \
-  --dart-define=SKAPIE_AGENT_PROVIDER=openrouter \
-  --dart-define=SKAPIE_AGENT_API_KEY="$OPENROUTER_API_KEY" \
-  --dart-define=SKAPIE_AGENT_MODEL=anthropic/claude-sonnet-4
 ```
 
-Or export `OPENCODE_API_KEY` / `OPENROUTER_API_KEY` in the shell and only pass provider + model defines. Or run with no key, open Chat → gear, paste, **Connect**, pick a model, Apply.
+No key → Fake Echo on `harness.llm`.
 
-No key → Fake; Chat Echo works; the canvas is unchanged by chat text alone.
+macOS sandbox needs `com.apple.security.network.client` for outbound HTTP.
 
-macOS sandbox needs `com.apple.security.network.client` (Debug and Release) for outbound HTTP.
+## Later arcs (not Phase 10.2.1)
 
-## Later arcs (not Phase 10 / 10.1)
-
+- Wire system-prompt + tools kits into the HTTP payload
+- Cable/graph visualization
 - Streaming tokens
-- Pi port / MCP / sub-agents / OAuth
-- Custom/base-URL editor in the settings panel
-- Richer OpenCode Go thinking (catalog is id-only today)
-- Anthropic-native OpenCode Go endpoints
-- Sandbox kits / `capabilities` / workers
-- Visible sub-agent kits on the canvas (dream goal)
-- Personal coding-agent kit (allowlisted FS/shell)
-- Multi-session history persistence
-- Fancy markdown chat chrome
+- Pi / MCP / OAuth / Keychain
+- Sandbox kits / workers
+- Living sub-agent kits
 - Direct `SceneStore.apply` from chat or settings

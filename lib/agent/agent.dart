@@ -127,6 +127,7 @@ class AgentSession {
     String? systemPrompt,
     String? id,
     this.maxToolIterations = defaultMaxToolIterations,
+    this.includeTools = true,
   }) : id = id ?? 'agent_${DateTime.now().microsecondsSinceEpoch}',
        _tools = createKitAgentTools(kitApi),
        _messages = [
@@ -143,6 +144,7 @@ class AgentSession {
   final AgentModel model;
   final KitApi kitApi;
   final int maxToolIterations;
+  final bool includeTools;
   final List<AgentTool> _tools;
   late final AgentToolDispatcher _dispatcher;
   final List<AgentMessage> _messages;
@@ -166,7 +168,7 @@ class AgentSession {
       for (var i = 0; i < maxToolIterations; i++) {
         final reply = await model.complete(
           messages: List.unmodifiable(_messages),
-          tools: List.unmodifiable(_tools),
+          tools: includeTools ? List.unmodifiable(_tools) : const <AgentTool>[],
         );
         final calls = reply.toolCalls;
         if (calls == null || calls.isEmpty) {

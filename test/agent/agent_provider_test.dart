@@ -127,6 +127,20 @@ void main() {
     expect(resolved.useFake, isFalse);
   });
 
+  test('prefs sendKitTools false is kept on a live runtime', () {
+    final resolved = mergeAgentRuntime(
+      prefs: const AgentPrefs(
+        providerId: 'opencode-go',
+        model: 'kimi-k2.6',
+        apiKey: 'oc-secret',
+        sendKitTools: false,
+      ),
+    );
+    expect(resolved.useFake, isFalse);
+    expect(resolved.sendKitTools, isFalse);
+    expect(resolved.model, 'kimi-k2.6');
+  });
+
   test('status chip is Fake or preset · model', () {
     expect(
       agentStatusChip(

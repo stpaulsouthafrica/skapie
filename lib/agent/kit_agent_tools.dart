@@ -14,9 +14,10 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
       'y': {'type': 'number'},
       'width': {'type': 'number'},
       'height': {'type': 'number'},
-      'props': {'type': 'object'},
+      'props': {'type': 'object', 'additionalProperties': true},
     },
     'required': ['typeId'],
+    'additionalProperties': false,
   };
   const kitRecipe = {
     'type': 'object',
@@ -26,13 +27,14 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
       'objects': {'type': 'array', 'items': objectSpec},
     },
     'required': ['id', 'displayName'],
+    'additionalProperties': false,
   };
 
   return [
     AgentTool(
       name: 'list_kits',
       description: 'List registered kits.',
-      parameters: const {'type': 'object', 'properties': <String, Object?>{}},
+      parameters: jsonSchemaObject(),
       run: (_) async {
         return {
           'kits': [
@@ -45,11 +47,10 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'get_kit',
       description: 'Get one kit recipe by id.',
-      parameters: {
-        'type': 'object',
-        'properties': {'kitId': kitId},
-        'required': ['kitId'],
-      },
+      parameters: jsonSchemaObject(
+        properties: {'kitId': kitId},
+        required: const ['kitId'],
+      ),
       run: (args) async {
         final kitId = requiredString(args, 'kitId');
         final kit = kitApi.getKit(kitId);
@@ -62,15 +63,14 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'instantiate_kit',
       description: 'Instantiate a kit into the scene.',
-      parameters: {
-        'type': 'object',
-        'properties': {
+      parameters: jsonSchemaObject(
+        properties: {
           'kitId': kitId,
           'originX': {'type': 'number'},
           'originY': {'type': 'number'},
         },
-        'required': ['kitId', 'originX', 'originY'],
-      },
+        required: const ['kitId', 'originX', 'originY'],
+      ),
       run: (args) async {
         final ids = kitApi.instantiate(
           requiredString(args, 'kitId'),
@@ -85,18 +85,17 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'add_object',
       description: 'Add one scene object.',
-      parameters: {
-        'type': 'object',
-        'properties': {
+      parameters: jsonSchemaObject(
+        properties: {
           'typeId': {'type': 'string'},
           'x': {'type': 'number'},
           'y': {'type': 'number'},
           'width': {'type': 'number'},
           'height': {'type': 'number'},
-          'props': {'type': 'object'},
+          'props': {'type': 'object', 'additionalProperties': true},
         },
-        'required': ['typeId'],
-      },
+        required: const ['typeId'],
+      ),
       run: (args) async {
         final id = kitApi.addObject(
           typeId: requiredString(args, 'typeId'),
@@ -112,11 +111,10 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'remove_object',
       description: 'Remove a scene object by id.',
-      parameters: {
-        'type': 'object',
-        'properties': {'id': objectId},
-        'required': ['id'],
-      },
+      parameters: jsonSchemaObject(
+        properties: {'id': objectId},
+        required: const ['id'],
+      ),
       run: (args) async {
         kitApi.removeObject(requiredString(args, 'id'));
         return {'ok': true};
@@ -125,9 +123,8 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'update_frame',
       description: 'Patch a scene object frame.',
-      parameters: {
-        'type': 'object',
-        'properties': {
+      parameters: jsonSchemaObject(
+        properties: {
           'id': objectId,
           'x': {'type': 'number'},
           'y': {'type': 'number'},
@@ -135,8 +132,8 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
           'height': {'type': 'number'},
           'rotation': {'type': 'number'},
         },
-        'required': ['id'],
-      },
+        required: const ['id'],
+      ),
       run: (args) async {
         kitApi.updateFrame(
           id: requiredString(args, 'id'),
@@ -152,14 +149,13 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'update_props',
       description: 'Shallow-merge props. Null values remove keys.',
-      parameters: {
-        'type': 'object',
-        'properties': {
+      parameters: jsonSchemaObject(
+        properties: {
           'id': objectId,
-          'patch': {'type': 'object'},
+          'patch': {'type': 'object', 'additionalProperties': true},
         },
-        'required': ['id', 'patch'],
-      },
+        required: const ['id', 'patch'],
+      ),
       run: (args) async {
         kitApi.updateProps(
           requiredString(args, 'id'),
@@ -171,14 +167,13 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'set_locked',
       description: 'Set SceneObject.locked.',
-      parameters: {
-        'type': 'object',
-        'properties': {
+      parameters: jsonSchemaObject(
+        properties: {
           'id': objectId,
           'locked': {'type': 'boolean'},
         },
-        'required': ['id', 'locked'],
-      },
+        required: const ['id', 'locked'],
+      ),
       run: (args) async {
         kitApi.setLocked(
           requiredString(args, 'id'),
@@ -200,7 +195,7 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'reload_packages',
       description: 'Reload kit packages from disk.',
-      parameters: const {'type': 'object', 'properties': <String, Object?>{}},
+      parameters: jsonSchemaObject(),
       run: (_) async {
         await kitApi.reloadPackages();
         return {'ok': true, 'count': kitApi.listKits().length};
@@ -217,6 +212,18 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
       },
     ),
   ];
+}
+
+Map<String, Object?> jsonSchemaObject({
+  Map<String, Object?> properties = const {},
+  List<String> required = const [],
+}) {
+  return {
+    'type': 'object',
+    'properties': properties,
+    'additionalProperties': false,
+    if (required.isNotEmpty) 'required': required,
+  };
 }
 
 String requiredString(Map<String, Object?> args, String key) {

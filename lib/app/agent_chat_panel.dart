@@ -5,7 +5,8 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/paint/paint.dart';
 
-/// Bottom chat strip. Calls [AgentSession.sendUser] only, never KitApi.
+/// Bottom chat strip. Vanilla on-ramp: [AgentController.sendUser] then an LLM kit.
+/// The widget never touches KitApi.
 class AgentChatPanel extends StatefulWidget {
   const AgentChatPanel({
     super.key,
@@ -89,7 +90,9 @@ class _AgentChatPanelState extends State<AgentChatPanel> {
     _input.clear();
     setState(() => _busy = true);
     try {
-      await _session.sendUser(text);
+      await widget.controller.sendUser(text);
+    } catch (_) {
+      // Failure is visible on the LLM kit.
     } finally {
       if (mounted) {
         setState(() => _busy = false);
