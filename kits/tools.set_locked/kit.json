@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.set_locked",
+  "displayName": "set_locked",
+  "description": "Set SceneObject.locked.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.set_locked",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "set_locked",
+        "fontSize": 14,
+        "toolName": "set_locked",
+        "attachedTo": "",
+        "skapieKit": "tools.set_locked",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

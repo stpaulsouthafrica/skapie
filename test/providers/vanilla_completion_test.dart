@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:skapie/agent/openai_compatible.dart';
-import 'package:skapie/agent/vanilla_completion.dart';
+import 'package:skapie/providers/vanilla_completion.dart';
 
 void main() {
   test(

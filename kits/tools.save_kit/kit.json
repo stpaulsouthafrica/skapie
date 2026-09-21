@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.save_kit",
+  "displayName": "save_kit",
+  "description": "Write a kit package to disk and register it.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.save_kit",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "save_kit",
+        "fontSize": 14,
+        "toolName": "save_kit",
+        "attachedTo": "",
+        "skapieKit": "tools.save_kit",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

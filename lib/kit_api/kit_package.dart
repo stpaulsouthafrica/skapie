@@ -34,7 +34,8 @@ const Map<String, Object?> harnessLlmJson = {
   'schemaVersion': kitPackageSchemaVersion,
   'id': harnessLlmKitId,
   'displayName': 'LLM',
-  'description': 'Vanilla completion on the canvas. No animation.',
+  'description':
+      'Compound vanilla kit: Input and Output regions. No animation.',
   'capabilities': <Object?>[],
   'objects': [
     {
@@ -42,23 +43,24 @@ const Map<String, Object?> harnessLlmJson = {
       'x': 0,
       'y': 0,
       'width': 320,
-      'height': 200,
+      'height': 260,
       'props': {skapieKitProp: harnessLlmKitId, skapieRoleProp: 'frame'},
     },
     {
       'typeId': 'text',
       'x': 12,
-      'y': 16,
+      'y': 12,
       'width': 296,
-      'height': 168,
+      'height': 236,
       'props': {
-        'content': '',
+        'content': 'Needs input\n\nInput\n\nOutput\n\nTools: none',
         'fontSize': 14,
         'prompt': '',
         'reply': '',
         'error': '',
         'model': '',
         'provider': '',
+        'surface': '',
         skapieKitProp: harnessLlmKitId,
         skapieRoleProp: 'body',
       },

@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/agent_models_catalog.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
 import 'package:skapie/providers/vanilla_client.dart';
+import 'package:skapie/tools/attach.dart';
 
 /// Owns the replaceable [AgentSession] (later harness) and the vanilla on-ramp.
 class AgentController extends ChangeNotifier {
@@ -30,8 +33,33 @@ class AgentController extends ChangeNotifier {
   AgentPrefs? prefs;
   VanillaSurfaceClient? vanilla;
   AgentHttpDiagnostic? lastDiagnostic;
+  List<AgentModelInfo> catalogModels = const [];
 
   String get statusChip => agentStatusChip(runtime);
+
+  List<AgentModelInfo> get kitModelChoices {
+    final connected = [
+      for (final model in catalogModels)
+        if (model.selectable) model,
+    ];
+    if (connected.isNotEmpty) {
+      return connected;
+    }
+    return [
+      for (final model in opencodeGoCatalog)
+        if (model.show)
+          AgentModelInfo(
+            id: model.id,
+            displayName: model.displayName ?? model.id,
+            surface: model.surface,
+          ),
+    ];
+  }
+
+  void rememberCatalog(List<AgentModelInfo> models) {
+    catalogModels = List<AgentModelInfo>.unmodifiable(models);
+    notifyListeners();
+  }
 
   /// Rebuild the session. Keeps the system prompt; clears prior turns.
   Future<void> applySettings({
@@ -83,14 +111,55 @@ class AgentController extends ChangeNotifier {
     if (target == null) {
       return;
     }
+    final kitModel = target.props['model']?.toString().trim() ?? '';
+    final kitProvider = target.props['provider']?.toString().trim() ?? '';
+    final kitSurface = target.props['surface']?.toString().trim() ?? '';
+    final model = kitModel.isNotEmpty ? kitModel : runtime.model;
+    final provider = kitProvider.isNotEmpty ? kitProvider : runtime.presetId;
+    final attached = worldToolsForLlm(kitApi: kitApi, llmBodyId: bodyId);
     Object? failure;
     String? reply;
     try {
-      if (runtime.useFake) {
+      if (attached.isNotEmpty) {
+        final turn = AgentSession(
+          model: session.model,
+          kitApi: kitApi,
+          tools: attached,
+          includeTools: true,
+          systemPrompt: '',
+        );
+        await turn.sendUser(prompt);
+        reply = turn.messages
+            .lastWhere((message) => message.role == AgentRole.assistant)
+            .content;
+        final sessionModel = session.model;
+        if (sessionModel is OpenAiCompatibleAgentModel) {
+          lastDiagnostic = sessionModel.lastDiagnostic;
+        } else {
+          lastDiagnostic = null;
+        }
+      } else if (runtime.useFake) {
         reply = 'Echo: $prompt';
         lastDiagnostic = null;
       } else {
-        final client = vanilla;
+        final override =
+            kitModel.isNotEmpty ||
+            kitProvider.isNotEmpty ||
+            kitSurface.isNotEmpty;
+        final client = override
+            ? buildVanillaClient(
+                runtime: ResolvedAgentRuntime(
+                  presetId: provider,
+                  useFake: false,
+                  baseUrl: runtime.baseUrl,
+                  apiKey: runtime.apiKey,
+                  model: model,
+                  thinkingLevel: runtime.thinkingLevel,
+                  sendKitTools: runtime.sendKitTools,
+                ),
+                sessionId: session.id,
+              )
+            : vanilla;
         if (client == null) {
           throw StateError('No vanilla client');
         }
@@ -99,9 +168,15 @@ class AgentController extends ChangeNotifier {
       }
     } catch (error) {
       failure = error;
-      final client = vanilla;
-      if (client != null) {
-        lastDiagnostic = client.lastDiagnostic;
+      final sessionModel = session.model;
+      if (sessionModel is OpenAiCompatibleAgentModel &&
+          sessionModel.lastDiagnostic != null) {
+        lastDiagnostic = sessionModel.lastDiagnostic;
+      } else {
+        final client = vanilla;
+        if (client != null) {
+          lastDiagnostic = client.lastDiagnostic;
+        }
       }
     }
     publishLlmKit(
@@ -110,9 +185,10 @@ class AgentController extends ChangeNotifier {
       prompt: prompt,
       reply: failure == null ? reply : null,
       error: failure?.toString(),
-      model: runtime.model,
-      provider: runtime.presetId,
+      model: model,
+      provider: provider,
       diagnostic: lastDiagnostic,
+      surface: kitSurface.isNotEmpty ? kitSurface : lastDiagnostic?.surface,
     );
     notifyListeners();
     if (failure != null) {

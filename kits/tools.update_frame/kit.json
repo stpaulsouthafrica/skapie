@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.update_frame",
+  "displayName": "update_frame",
+  "description": "Patch a scene object frame.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.update_frame",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "update_frame",
+        "fontSize": 14,
+        "toolName": "update_frame",
+        "attachedTo": "",
+        "skapieKit": "tools.update_frame",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

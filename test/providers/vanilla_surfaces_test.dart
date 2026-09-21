@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/openai_compatible.dart';
-import 'package:skapie/agent/vanilla_completion.dart';
+import 'package:skapie/providers/vanilla_completion.dart';
 import 'package:skapie/providers/unverified_vanilla.dart';
 import 'package:skapie/providers/vanilla_extract.dart';
 import 'package:skapie/providers/vanilla_messages.dart';

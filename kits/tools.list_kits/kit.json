@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.list_kits",
+  "displayName": "list_kits",
+  "description": "List registered kits.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.list_kits",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "list_kits",
+        "fontSize": 14,
+        "toolName": "list_kits",
+        "attachedTo": "",
+        "skapieKit": "tools.list_kits",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

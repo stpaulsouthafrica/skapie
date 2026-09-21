@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/world/kits.dart';
 
 const String demoNoteCardKitId = 'demo.note-card';
 const String harnessLlmKitId = 'harness.llm';
@@ -79,23 +80,24 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
       x: 0,
       y: 0,
       width: 320,
-      height: 200,
+      height: 260,
       props: {skapieKitProp: harnessLlmKitId, skapieRoleProp: 'frame'},
     ),
     KitObjectSpec(
       typeId: textTypeId,
       x: 12,
-      y: 16,
+      y: 12,
       width: 296,
-      height: 168,
+      height: 236,
       props: {
-        'content': '',
+        'content': 'Needs input\n\nInput\n\nOutput\n\nTools: none',
         'fontSize': 14,
         'prompt': '',
         'reply': '',
         'error': '',
         'model': '',
         'provider': '',
+        'surface': '',
         skapieKitProp: harnessLlmKitId,
         skapieRoleProp: 'body',
       },
@@ -323,5 +325,6 @@ KitApi createAppKitApi({
   api.registerKit(harnessLlmRecipe);
   api.registerKit(harnessSystemPromptRecipe);
   api.registerKit(harnessToolsRecipe);
+  registerWorldToolKits(api);
   return api;
 }

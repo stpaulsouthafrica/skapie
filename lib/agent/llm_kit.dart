@@ -60,6 +60,9 @@ bool _bodyBelongsToFrame(SceneObject body, SceneObject frame) {
       body.y + body.height <= frame.y + frame.height + 0.5;
 }
 
+const String llmKitEmptyContent =
+    'Needs input\n\nInput\n\nOutput\n\nTools: none';
+
 void setLlmKitPrompt({
   required KitApi kitApi,
   required String bodyId,
@@ -75,6 +78,9 @@ void setLlmKitPrompt({
       prompt: prompt,
       reply: body.props['reply']?.toString(),
       error: body.props['error']?.toString(),
+      model: body.props['model']?.toString(),
+      surface: body.props['surface']?.toString(),
+      attachedTools: llmAttachedToolNames(kitApi.store.document, bodyId),
     ),
   });
 }
@@ -83,25 +89,68 @@ String formatLlmKitContent({
   required String prompt,
   String? reply,
   String? error,
+  String? model,
+  String? surface,
   AgentHttpDiagnostic? diagnostic,
+  List<String>? attachedTools,
 }) {
-  final buffer = StringBuffer('You: ${_shorten(prompt.trim(), 120)}');
-  final text = reply?.trim();
-  if (text != null && text.isNotEmpty) {
-    buffer.write('\n\n$text');
+  final buffer = StringBuffer();
+  final input = _shorten(prompt.trim(), 120);
+  if (input.isEmpty) {
+    buffer.write('Needs input\n\n');
   }
+  buffer.write('Input');
+  if (input.isNotEmpty) {
+    buffer.write('\n$input');
+  }
+  buffer.write('\n\nOutput');
   final fail = error?.trim();
+  final text = reply?.trim();
   if (fail != null && fail.isNotEmpty) {
-    buffer.write('\n\n$fail');
+    buffer.write('\n$fail');
+    final summary = diagnostic?.summary.trim();
+    if (summary != null && summary.isNotEmpty && summary != fail) {
+      buffer.write('\n\n$summary');
+    }
+  } else if (text != null && text.isNotEmpty) {
+    buffer.write('\n$text');
   }
-  final summary = diagnostic?.summary.trim();
-  if (fail != null &&
-      summary != null &&
-      summary.isNotEmpty &&
-      summary != fail) {
-    buffer.write('\n\n$summary');
+  final chrome = _kitChrome(model, surface ?? diagnostic?.surface);
+  if (chrome.isNotEmpty) {
+    buffer.write('\n\n$chrome');
   }
+  final names = attachedTools ?? const <String>[];
+  buffer.write('\n\nTools: ${names.isEmpty ? 'none' : names.join(', ')}');
   return buffer.toString();
+}
+
+List<String> llmAttachedToolNames(SceneDocument document, String llmBodyId) {
+  final names = <String>[];
+  for (final object in document.objects) {
+    if (object.props[attachedToProp]?.toString() != llmBodyId) {
+      continue;
+    }
+    final name = object.props['toolName']?.toString().trim() ?? '';
+    if (name.isNotEmpty && !names.contains(name)) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
+String _kitChrome(String? model, String? surface) {
+  final id = model?.trim() ?? '';
+  final seat = surface?.trim() ?? '';
+  if (id.isEmpty && seat.isEmpty) {
+    return '';
+  }
+  if (id.isEmpty) {
+    return seat;
+  }
+  if (seat.isEmpty) {
+    return id;
+  }
+  return '$id · $seat';
 }
 
 /// Update a compound LLM kit body via [KitApi] only. Does not instantiate.
@@ -113,6 +162,7 @@ void publishLlmKit({
   String? error,
   String? model,
   String? provider,
+  String? surface,
   AgentHttpDiagnostic? diagnostic,
 }) {
   final body = kitApi.store.document.objectById(bodyId);
@@ -121,17 +171,22 @@ void publishLlmKit({
       body.props[skapieRoleProp] != 'body') {
     throw StateError('harness.llm body is missing');
   }
+  final seat = surface ?? diagnostic?.surface;
   kitApi.updateProps(body.id, {
     'prompt': prompt,
     'reply': reply ?? '',
     'error': error ?? '',
     'model': model ?? '',
     'provider': provider ?? '',
+    'surface': seat ?? '',
     'content': formatLlmKitContent(
       prompt: prompt,
       reply: reply,
       error: error,
+      model: model,
+      surface: seat,
       diagnostic: diagnostic,
+      attachedTools: llmAttachedToolNames(kitApi.store.document, body.id),
     ),
   });
 }

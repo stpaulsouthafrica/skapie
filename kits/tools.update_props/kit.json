@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.update_props",
+  "displayName": "update_props",
+  "description": "Shallow-merge props. Null values remove keys.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.update_props",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "update_props",
+        "fontSize": 14,
+        "toolName": "update_props",
+        "attachedTo": "",
+        "skapieKit": "tools.update_props",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.add_object",
+  "displayName": "add_object",
+  "description": "Add one scene object.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.add_object",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "add_object",
+        "fontSize": 14,
+        "toolName": "add_object",
+        "attachedTo": "",
+        "skapieKit": "tools.add_object",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:skapie/agent/agent_tool.dart';
 import 'package:skapie/agent/agent_tool_dispatcher.dart';
-import 'package:skapie/agent/kit_agent_tools.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/tools/world/register.dart';
 
 export 'package:skapie/agent/agent_tool.dart';
 export 'package:skapie/agent/agent_tool_dispatcher.dart';
@@ -128,8 +128,9 @@ class AgentSession {
     String? id,
     this.maxToolIterations = defaultMaxToolIterations,
     this.includeTools = true,
+    List<AgentTool>? tools,
   }) : id = id ?? 'agent_${DateTime.now().microsecondsSinceEpoch}',
-       _tools = createKitAgentTools(kitApi),
+       _tools = tools ?? createWorldTools(kitApi),
        _messages = [
          AgentMessage(
            role: AgentRole.system,

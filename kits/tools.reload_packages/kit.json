@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.reload_packages",
+  "displayName": "reload_packages",
+  "description": "Reload kit packages from disk.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.reload_packages",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "reload_packages",
+        "fontSize": 14,
+        "toolName": "reload_packages",
+        "attachedTo": "",
+        "skapieKit": "tools.reload_packages",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

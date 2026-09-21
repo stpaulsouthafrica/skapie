@@ -12,6 +12,7 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/paint/paint.dart';
+import 'package:skapie/tools/attach.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -36,6 +37,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final _selection = SelectionController();
   var _settingsOpen = false;
   var _paletteOpen = false;
+  String? _lastLlmBodyId;
+  String? _lastToolObjectId;
 
   @override
   void initState() {
@@ -66,7 +69,23 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {});
   }
 
-  void _onSelection() => setState(() {});
+  void _onSelection() {
+    final id = _selection.selectedId;
+    if (id != null) {
+      final llm = llmKitBodyForSelection(
+        document: widget.store.document,
+        selectedId: id,
+      );
+      if (llm != null) {
+        _lastLlmBodyId = llm.id;
+      }
+      final object = widget.store.document.objectById(id);
+      if (object != null && isWorldToolKit(object)) {
+        _lastToolObjectId = object.id;
+      }
+    }
+    setState(() {});
+  }
 
   bool _isEditingText() {
     final primary = FocusManager.instance.primaryFocus;
@@ -105,6 +124,17 @@ class _HomeScreenState extends State<HomeScreen> {
         for (final id in ids) {
           final object = widget.store.document.objectById(id);
           if (object != null && object.props[skapieRoleProp] == 'body') {
+            _lastLlmBodyId = id;
+            _selection.select(id);
+            break;
+          }
+        }
+      } else if (value.startsWith('tools.')) {
+        for (final id in ids) {
+          final object = widget.store.document.objectById(id);
+          if (object != null &&
+              (object.props['toolName']?.toString().trim() ?? '').isNotEmpty) {
+            _lastToolObjectId = id;
             _selection.select(id);
             break;
           }
@@ -113,6 +143,38 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     _viewportKey.currentState?.addTypedObject(value);
+  }
+
+  void _attachToLlm() {
+    final toolId = _lastToolObjectId;
+    final llmId = _lastLlmBodyId;
+    if (toolId == null || llmId == null) {
+      return;
+    }
+    attachToolKit(
+      kitApi: widget.kitApi,
+      toolObjectId: toolId,
+      llmBodyId: llmId,
+    );
+  }
+
+  void _detachTool() {
+    final toolId = _lastToolObjectId ?? _selection.selectedId;
+    if (toolId == null) {
+      return;
+    }
+    detachToolKit(kitApi: widget.kitApi, toolObjectId: toolId);
+  }
+
+  List<CommandAction> _paletteActions() {
+    return [
+      ...defaultCommandActions,
+      for (final kit in widget.kitApi.listKits())
+        if (kit.id.startsWith('tools.'))
+          CommandAction(id: 'add-${kit.id}', label: 'Tool: ${kit.displayName}'),
+      const CommandAction(id: 'attach-to-llm', label: 'Attach to LLM'),
+      const CommandAction(id: 'detach-tool', label: 'Detach tool'),
+    ];
   }
 
   void _runCommand(CommandAction action) {
@@ -136,6 +198,14 @@ class _HomeScreenState extends State<HomeScreen> {
         _add(debugRectType);
       case 'add-note-card':
         _add(demoNoteCardKitId);
+      case 'attach-to-llm':
+        _attachToLlm();
+      case 'detach-tool':
+        _detachTool();
+      default:
+        if (action.id.startsWith('add-tools.')) {
+          _add(action.id.substring(4));
+        }
     }
   }
 
@@ -153,6 +223,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? 'Demo kit: note card'
                 : kit.id.startsWith('harness.')
                 ? 'Harness: ${kit.displayName}'
+                : kit.id.startsWith('tools.')
+                ? 'Tool: ${kit.displayName}'
                 : 'Kit: ${kit.displayName}',
           ),
         ),
@@ -265,6 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         store: widget.store,
                         selection: _selection,
                         kitApi: widget.kitApi,
+                        lastLlmBodyId: _lastLlmBodyId,
                       ),
                     ),
                   ),
@@ -314,7 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               type: MaterialType.transparency,
                               child: CommandPalette(
                                 key: const Key('command-palette'),
-                                actions: defaultCommandActions,
+                                actions: _paletteActions(),
                                 onClose: _closePalette,
                                 onRun: _runCommand,
                               ),

@@ -212,4 +212,47 @@ void main() {
     expect(store.document.objects.single.x, closeTo(-40, 0.001));
     expect(key.currentState!.camera.offset.dx, isNot(closeTo(0, 0.001)));
   });
+
+  testWidgets('double-click text enters inline edit and commits via KitApi', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    store.apply(
+      AddObject(
+        const SceneObject(
+          id: 't1',
+          type: 'text',
+          x: -40,
+          y: -20,
+          width: 80,
+          height: 40,
+          props: {'content': 'old', 'fontSize': 18, 'color': '#1B1B1B'},
+        ),
+      ),
+    );
+    final selection = SelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(store: store, selection: selection),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.tapAt(center);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(center);
+    await tester.pump();
+
+    expect(selection.selectedId, 't1');
+    expect(find.byKey(const Key('inline-text-edit')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('inline-text-edit')), 'hello');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(store.document.objects.single.props['content'], 'hello');
+    expect(find.byKey(const Key('inline-text-edit')), findsNothing);
+  });
 }

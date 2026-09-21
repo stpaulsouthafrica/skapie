@@ -66,6 +66,37 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsOneWidget);
   });
 
+  testWidgets('arrow then Enter runs the highlighted palette action', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    await pumpHome(tester, store: store, kitApi: kitApi);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(find.byKey(const Key('command-palette')), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(find.byKey(const Key('command-palette')), findsNothing);
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == harnessSystemPromptKitId,
+      ),
+      isNotEmpty,
+    );
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == harnessLlmKitId,
+      ),
+      isEmpty,
+    );
+  });
+
   testWidgets('Add LLM from the palette instantiates harness.llm via KitApi', (
     tester,
   ) async {
@@ -112,6 +143,8 @@ void main() {
       );
       expect(body.props['prompt'], 'hello');
       expect(body.props['content'], contains('Echo: hello'));
+      expect(body.props['content'], contains('Input'));
+      expect(body.props['content'], contains('Output'));
       expect(find.byKey(const Key('agent-chat-input')), findsNothing);
     },
   );
@@ -129,6 +162,78 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('command-palette')), findsNothing);
     expect(find.text('Agent settings'), findsOneWidget);
+  });
+
+  testWidgets('palette Tool: list_kits instantiates tools.list_kits', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    await pumpHome(tester, store: store, kitApi: kitApi);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('command-palette-search')),
+      'list_kits',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Tool: list_kits'));
+    await tester.pump();
+
+    expect(find.byKey(const Key('command-palette')), findsNothing);
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == 'tools.list_kits',
+      ),
+      isNotEmpty,
+    );
+  });
+
+  testWidgets('palette Attach to LLM writes attachedTo and Tools chrome', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    await pumpHome(tester, store: store, kitApi: kitApi);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.tap(find.text('Add LLM'));
+    await tester.pump();
+
+    final canvas = tester.getTopLeft(find.byType(CanvasViewport));
+    await tester.tapAt(canvas + const Offset(8, 8));
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('command-palette-search')),
+      'list_kits',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Tool: list_kits'));
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('command-palette-search')),
+      'attach',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('command-action-attach-to-llm')));
+    await tester.pump();
+
+    final llmBody = store.document.objects.firstWhere(
+      (object) => object.props[skapieRoleProp] == 'body',
+    );
+    final grant = store.document.objects.firstWhere(
+      (object) => object.props['toolName'] == 'list_kits',
+    );
+    expect(grant.props[attachedToProp], llmBody.id);
+    expect(llmBody.props['content'], contains('Tools: list_kits'));
   });
 
   testWidgets('settings Use Fake swaps session and does not resize canvas', (
@@ -163,5 +268,36 @@ void main() {
     expect(controller.runtime.useFake, isTrue);
     expect(store.document.objects, isEmpty);
     expect(tester.getSize(find.byType(CanvasViewport)), before);
+  });
+
+  testWidgets('LLM kit shows mark, model picker, and Needs input', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    await pumpHome(tester, store: store, kitApi: kitApi);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.tap(find.text('Add LLM'));
+    await tester.pump();
+
+    expect(find.byKey(const Key('llm-kit-mark')), findsWidgets);
+    expect(find.byKey(const Key('llm-kit-model')), findsOneWidget);
+    expect(find.text('Needs input'), findsWidgets);
+
+    await tester.tap(find.byKey(const Key('llm-kit-model')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('GLM-5.3-Flash').last);
+    await tester.pump();
+
+    final body = store.document.objects.firstWhere(
+      (object) =>
+          object.props[skapieKitProp] == harnessLlmKitId &&
+          object.props[skapieRoleProp] == 'body',
+    );
+    expect(body.props['model'], 'glm-5.3-flash');
+    expect(body.props['provider'], 'opencode-go');
+    expect(body.props['surface'], 'completions');
   });
 }

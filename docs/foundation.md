@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces. **10.4** is the command palette and selection-scoped LLM typing.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces. **10.4** is the command palette and selection-scoped LLM typing. **10.5** is providers vanilla hygiene plus compound LLM Input/Output regions. **Specialized LLM kit UX** added palette arrows, inspector typing, inline text edit, and `harness.llm` as a specialized kit. **10.6** (current) is per-file world tools plus spawnable `tools.*` kits attached to an LLM.
 
 ## Phase 1 gate — done
 
@@ -129,13 +129,39 @@ The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, 
 - LLM kit diagnostics include provider, model, surface, URL, status, body. Never the API key.
 - `flutter analyze` clean; `flutter test` green.
 
-## Phase 10.4 gate (current)
+## Phase 10.4 gate — done
 
 - No persistent bottom chat bar. The world is full-bleed. Quiet empty hint: `Space to add`.
 - Space / F3 opens a paint-styled command palette (Esc, click-away, or an action closes it). Palette adds kits/primitives via KitApi and opens Settings. It does not send chat.
 - LLM kit stays a **compound** (`harness.llm` with prompt/reply on one kit). Selecting it shows a prompt field. Typing updates `prompt` through KitApi. Enter runs vanilla onto **that** kit body.
 - With nothing selected as an LLM kit, keystrokes do not talk to a hidden global agent.
 - Cmd+, still opens settings. No Input/Output kit split. No cables.
+- `flutter analyze` clean; `flutter test` green.
+
+## Phase 10.5 gate — done
+
+- Completions vanilla lives with responses/messages under `lib/providers/`. Vanilla is the HTTP kernel. `lib/agent/` stays as transitional runtime (session, tool loop, kit publish). Not deleted.
+- Compound `harness.llm` shows stacked **Input** and **Output** regions on one kit (not separate scene objects/kits). Typing edits Input; Enter fills Output via vanilla. Quiet chrome: model · surface.
+- `harness.system-prompt` and `harness.tools` remain addable stubs and do not change the HTTP body.
+- `flutter analyze` clean; `flutter test` green.
+
+## Specialized LLM kit UX — done
+
+- **Principle kits** are dumb data/structure: Input (as a region), Note, System prompt, Tools. They hold text. They do not run a network.
+- **Specialized kits** have irreducible behavior. `harness.llm` is specialized: diamond mark on the frame, per-kit model from Settings/Connect catalog (same keys, no second credentials store), **Needs input** when prompt is empty, Enter runs vanilla for that kit’s model/surface into Output. Still one compound scene kit. No cables. No detach.
+- Command palette: Up/Down (optional Ctrl-N/P) move highlight; Enter runs the highlight; Esc closes. Search keeps focus; arrows do not move the caret between actions.
+- Inspector content does not reset/select-all while that field is focused. Sync from the object on selection id change; while focused, trust the controller.
+- Double-click a non-LLM `text` object enters inline edit on the canvas. Single-click still selects. Esc or unfocus saves through KitApi.
+- `harness.system-prompt` and `harness.tools` remain stubs. Wiring them onto the vanilla payload is later. Do not delete `lib/agent/` tool-loop code.
+- `flutter analyze` clean; `flutter test` green.
+
+## Phase 10.6 gate (current)
+
+- Each world tool is one Dart file under `lib/tools/world/` plus one spawnable kit `kits/tools.<name>/`. The kit is a visible grant, not the runner. See [tools](tools.md).
+- Palette lists `Tool: <name>` actions. Attach to LLM / Detach write `attachedTo` through KitApi.
+- LLM with no attached grants stays vanilla. LLM with attached grants runs the existing tool loop with exactly those tools. Unknown `toolName` errors on the kit and is omitted from the request.
+- `createKitAgentTools` is a thin wrapper over `createWorldTools`. The old session loop is not deleted.
+- No coding pack. No cable editor.
 - `flutter analyze` clean; `flutter test` green.
 
 ## Dream goal (not scheduled)

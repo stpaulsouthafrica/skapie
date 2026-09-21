@@ -2,7 +2,7 @@ import 'package:http/http.dart' as http;
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/openai_compatible.dart';
-import 'package:skapie/agent/vanilla_completion.dart';
+import 'package:skapie/providers/vanilla_completion.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/providers/model_surface.dart';
 import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';

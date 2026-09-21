@@ -27,4 +27,20 @@ void main() {
       'add-system-prompt',
     ]);
   });
+
+  test('highlight clamps at the filtered list ends', () {
+    expect(
+      moveCommandHighlight(index: 0, delta: -1, length: 3),
+      0,
+    );
+    expect(
+      moveCommandHighlight(index: 0, delta: 1, length: 3),
+      1,
+    );
+    expect(
+      moveCommandHighlight(index: 2, delta: 1, length: 3),
+      2,
+    );
+    expect(moveCommandHighlight(index: 0, delta: 1, length: 0), 0);
+  });
 }

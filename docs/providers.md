@@ -12,9 +12,9 @@ Remote / WordPress overlays are out of scope. Edit the JSON in the repo.
 | [`lib/providers/opencode_go/opencode_go_catalog.dart`](../lib/providers/opencode_go/opencode_go_catalog.dart) | Parser + embedded copy (keep identical to the JSON) |
 | [`lib/providers/model_surface.dart`](../lib/providers/model_surface.dart) | `completions` / `responses` / `messages` |
 | [`lib/providers/merge_live_models.dart`](../lib/providers/merge_live_models.dart) | Connect join: live ∩ chart |
+| [`lib/providers/vanilla_completion.dart`](../lib/providers/vanilla_completion.dart) | Vanilla POST `/chat/completions` |
 | [`lib/providers/vanilla_responses.dart`](../lib/providers/vanilla_responses.dart) | Vanilla POST `/responses` |
 | [`lib/providers/vanilla_messages.dart`](../lib/providers/vanilla_messages.dart) | Vanilla POST `/messages` |
-| [`lib/agent/vanilla_completion.dart`](../lib/agent/vanilla_completion.dart) | Vanilla POST `/chat/completions` |
 
 Base URL stays `https://opencode.ai/zen/go/v1` (same as the `opencode-go` preset).
 
@@ -29,6 +29,10 @@ For `opencode-go` only:
 5. Selected model id is persisted as today. On send, surface is resolved from the chart, never guessed.
 
 Unknown live ids are **not** posted as completions.
+
+Vanilla clients are the HTTP kernel: user text only, no tools, no Skapie system prompt. All three live under `lib/providers/`. `lib/agent/` is transitional runtime (session, tool loop, kit publish). It is not the chatbot.
+
+The specialized LLM kit model picker uses the same sources: saved Settings keys plus the merged OpenCode Go catalog (and last Connect list on the controller). There is no second credentials store. Per-kit `provider` / `model` / `surface` persist on that kit’s props via KitApi.
 
 ## Surfaces (vanilla first Enter)
 

@@ -35,6 +35,24 @@ List<CommandAction> filterCommandActions(
   ];
 }
 
+int moveCommandHighlight({
+  required int index,
+  required int delta,
+  required int length,
+}) {
+  if (length <= 0) {
+    return 0;
+  }
+  final next = index + delta;
+  if (next < 0) {
+    return 0;
+  }
+  if (next >= length) {
+    return length - 1;
+  }
+  return next;
+}
+
 bool _matches(CommandAction action, String query) {
   final hay = '${action.label} ${action.id}'.toLowerCase();
   if (hay.contains(query)) {
@@ -63,12 +81,15 @@ class CommandPalette extends StatefulWidget {
 
 class _CommandPaletteState extends State<CommandPalette> {
   final _query = TextEditingController();
-  final _searchFocus = FocusNode();
+  late final FocusNode _searchFocus;
+  final _itemKeys = <String, GlobalKey>{};
+  var _highlight = 0;
 
   @override
   void initState() {
     super.initState();
-    _query.addListener(() => setState(() {}));
+    _searchFocus = FocusNode(onKeyEvent: _onSearchKey);
+    _query.addListener(_onQuery);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _searchFocus.requestFocus();
@@ -78,6 +99,7 @@ class _CommandPaletteState extends State<CommandPalette> {
 
   @override
   void dispose() {
+    _query.removeListener(_onQuery);
     _query.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -86,20 +108,81 @@ class _CommandPaletteState extends State<CommandPalette> {
   List<CommandAction> get _filtered =>
       filterCommandActions(widget.actions, _query.text);
 
+  void _onQuery() {
+    setState(() => _highlight = 0);
+  }
+
+  KeyEventResult _onSearchKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final control = HardwareKeyboard.instance.isControlPressed;
+    if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+        (control && event.logicalKey == LogicalKeyboardKey.keyN)) {
+      _moveHighlight(1);
+      return KeyEventResult.handled;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+        (control && event.logicalKey == LogicalKeyboardKey.keyP)) {
+      _moveHighlight(-1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  GlobalKey _keyFor(String id) {
+    return _itemKeys.putIfAbsent(id, GlobalKey.new);
+  }
+
+  void _moveHighlight(int delta) {
+    final filtered = _filtered;
+    setState(() {
+      _highlight = moveCommandHighlight(
+        index: _highlight,
+        delta: delta,
+        length: filtered.length,
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || filtered.isEmpty) {
+        return;
+      }
+      final id = _filtered[_highlight].id;
+      final ctx = _keyFor(id).currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.5,
+          duration: Duration.zero,
+        );
+      }
+    });
+  }
+
   void _run(CommandAction action) => widget.onRun(action);
 
-  void _runFirst() {
+  void _runHighlighted() {
     final filtered = _filtered;
     if (filtered.isEmpty) {
       return;
     }
-    _run(filtered.first);
+    final index = moveCommandHighlight(
+      index: _highlight,
+      delta: 0,
+      length: filtered.length,
+    );
+    _run(filtered[index]);
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
     final filtered = _filtered;
+    final highlight = moveCommandHighlight(
+      index: _highlight,
+      delta: 0,
+      length: filtered.length,
+    );
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
@@ -115,16 +198,26 @@ class _CommandPaletteState extends State<CommandPalette> {
               focusNode: _searchFocus,
               autofocus: true,
               hint: 'Search',
-              onSubmitted: (_) => _runFirst(),
+              onSubmitted: (_) => _runHighlighted(),
             ),
             const SizedBox(height: 8),
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),
-              child: ListView(
+              child: ListView.builder(
                 shrinkWrap: true,
-                children: [
-                  for (final action in filtered)
-                    InkWell(
+                itemCount: filtered.length,
+                itemBuilder: (context, index) {
+                  final action = filtered[index];
+                  final selected = index == highlight;
+                  return DecoratedBox(
+                    key: _keyFor(action.id),
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? tokens.accent.withValues(alpha: 0.22)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: InkWell(
                       key: Key('command-action-${action.id}'),
                       onTap: () => _run(action),
                       child: Padding(
@@ -138,7 +231,8 @@ class _CommandPaletteState extends State<CommandPalette> {
                         ),
                       ),
                     ),
-                ],
+                  );
+                },
               ),
             ),
           ],

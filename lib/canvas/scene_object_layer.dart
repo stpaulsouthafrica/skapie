@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:skapie/agent/llm_kit_mark.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
+import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene_object.dart';
 
@@ -53,6 +56,25 @@ class SceneObjectLayer extends StatelessWidget {
       height: object.height * camera.zoom,
       child: registry.build(context, object, ctx: ctx),
     );
+    if (object.props[skapieKitProp] == harnessLlmKitId &&
+        object.props[skapieRoleProp] == 'frame') {
+      final tokens = PaintScope.of(context);
+      final mark = (10.0 * camera.zoom).clamp(8.0, 16.0);
+      child = Stack(
+        children: [
+          child,
+          Positioned(
+            left: 6 * camera.zoom,
+            top: 6 * camera.zoom,
+            child: LlmKitMark(
+              key: const Key('llm-kit-mark'),
+              color: tokens.accent,
+              size: mark,
+            ),
+          ),
+        ],
+      );
+    }
     if (object.rotation != 0) {
       child = Transform.rotate(angle: object.rotation, child: child);
     }

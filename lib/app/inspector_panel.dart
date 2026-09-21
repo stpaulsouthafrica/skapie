@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/builtin_types.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/attach.dart';
 
 /// Thin inspector. Edits go through [KitApi] → [SceneStore.apply] only.
 class InspectorPanel extends StatefulWidget {
@@ -14,12 +16,14 @@ class InspectorPanel extends StatefulWidget {
     required this.store,
     required this.selection,
     KitApi? kitApi,
+    this.lastLlmBodyId,
   }) : kitApi =
            kitApi ?? KitApi(store: store, registry: createBuiltinRegistry());
 
   final SceneStore store;
   final SelectionController selection;
   final KitApi kitApi;
+  final String? lastLlmBodyId;
 
   @override
   State<InspectorPanel> createState() => _InspectorPanelState();
@@ -31,6 +35,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
   final _x = TextEditingController();
   final _y = TextEditingController();
   final _content = TextEditingController();
+  final _contentFocus = FocusNode();
   final _fontSize = TextEditingController();
   final _color = TextEditingController();
   final _fill = TextEditingController();
@@ -43,6 +48,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
     super.initState();
     widget.store.addListener(_onStore);
     widget.selection.addListener(_onSelection);
+    _contentFocus.addListener(_onContentFocus);
     _bindObject(force: true);
   }
 
@@ -65,9 +71,11 @@ class _InspectorPanelState extends State<InspectorPanel> {
     _debounce?.cancel();
     widget.store.removeListener(_onStore);
     widget.selection.removeListener(_onSelection);
+    _contentFocus.removeListener(_onContentFocus);
     _x.dispose();
     _y.dispose();
     _content.dispose();
+    _contentFocus.dispose();
     _fontSize.dispose();
     _color.dispose();
     _fill.dispose();
@@ -83,11 +91,19 @@ class _InspectorPanelState extends State<InspectorPanel> {
       setState(() {});
       return;
     }
-    _bindObject(force: true);
+    _bindObject(force: false);
     setState(() {});
   }
 
   void _onSelection() {
+    _bindObject(force: true);
+    setState(() {});
+  }
+
+  void _onContentFocus() {
+    if (_contentFocus.hasFocus) {
+      return;
+    }
     _bindObject(force: true);
     setState(() {});
   }
@@ -106,19 +122,54 @@ class _InspectorPanelState extends State<InspectorPanel> {
       _boundId = null;
       return;
     }
-    if (!force && _boundId == object.id) {
+    final idChanged = _boundId != object.id;
+    if (!force && !idChanged) {
+      _syncField(
+        _content,
+        _string(object.props, 'content'),
+        skip: _contentFocus.hasFocus,
+      );
+      _syncField(_x, _fmt(object.x));
+      _syncField(_y, _fmt(object.y));
+      _syncField(_fontSize, _string(object.props, 'fontSize'));
+      _syncField(_color, _string(object.props, 'color'));
+      _syncField(_fill, _string(object.props, 'fill'));
+      _syncField(_cornerRadius, _string(object.props, 'cornerRadius'));
+      _syncField(_opacity, _string(object.props, 'opacity'));
+      _syncField(_label, _string(object.props, 'label'));
       return;
     }
     _boundId = object.id;
-    _x.text = _fmt(object.x);
-    _y.text = _fmt(object.y);
-    _content.text = _string(object.props, 'content');
-    _fontSize.text = _string(object.props, 'fontSize');
-    _color.text = _string(object.props, 'color');
-    _fill.text = _string(object.props, 'fill');
-    _cornerRadius.text = _string(object.props, 'cornerRadius');
-    _opacity.text = _string(object.props, 'opacity');
-    _label.text = _string(object.props, 'label');
+    _syncField(_x, _fmt(object.x));
+    _syncField(_y, _fmt(object.y));
+    _syncField(
+      _content,
+      _string(object.props, 'content'),
+      skip: !idChanged && _contentFocus.hasFocus,
+    );
+    _syncField(_fontSize, _string(object.props, 'fontSize'));
+    _syncField(_color, _string(object.props, 'color'));
+    _syncField(_fill, _string(object.props, 'fill'));
+    _syncField(_cornerRadius, _string(object.props, 'cornerRadius'));
+    _syncField(_opacity, _string(object.props, 'opacity'));
+    _syncField(_label, _string(object.props, 'label'));
+  }
+
+  void _syncField(
+    TextEditingController controller,
+    String value, {
+    bool skip = false,
+  }) {
+    if (skip) {
+      return;
+    }
+    if (controller.text == value) {
+      return;
+    }
+    controller.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
   }
 
   String _fmt(double value) {
@@ -216,6 +267,54 @@ class _InspectorPanelState extends State<InspectorPanel> {
               },
             ),
             ..._typeFields(object),
+            if (isLlmKitObject(object))
+              _readOnly('Tools', () {
+                final names = attachedToolNames(
+                  kitApi: widget.kitApi,
+                  llmBodyId:
+                      llmKitBodyForSelection(
+                        document: widget.store.document,
+                        selectedId: object.id,
+                      )?.id ??
+                      object.id,
+                );
+                return names.isEmpty ? 'none' : names.join(', ');
+              }()),
+            if (isWorldToolKit(object)) ...[
+              _readOnly(
+                'Attached to',
+                (object.props[attachedToProp]?.toString().trim().isNotEmpty ??
+                        false)
+                    ? object.props[attachedToProp].toString()
+                    : 'none',
+              ),
+              if (widget.lastLlmBodyId != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: PaintButton(
+                    label: 'Attach to LLM',
+                    onPressed: () {
+                      attachToolKit(
+                        kitApi: widget.kitApi,
+                        toolObjectId: object.id,
+                        llmBodyId: widget.lastLlmBodyId!,
+                      );
+                    },
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: PaintButton(
+                  label: 'Detach tool',
+                  onPressed: () {
+                    detachToolKit(
+                      kitApi: widget.kitApi,
+                      toolObjectId: object.id,
+                    );
+                  },
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             PaintButton(label: 'Delete', onPressed: _delete),
           ],
@@ -262,6 +361,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
             key: const Key('inspector-content'),
             label: 'Content',
             controller: _content,
+            focusNode: _contentFocus,
             onChanged: (value) => _applyProps({'content': value}),
             onSubmitted: (value) =>
                 _applyProps({'content': value}, immediate: true),
@@ -337,6 +437,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
     Key? key,
     required String label,
     required TextEditingController controller,
+    FocusNode? focusNode,
     ValueChanged<String>? onChanged,
     ValueChanged<String>? onSubmitted,
   }) {
@@ -345,6 +446,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
       child: PaintTextField(
         key: key,
         controller: controller,
+        focusNode: focusNode,
         label: label,
         onChanged: onChanged,
         onSubmitted: onSubmitted,

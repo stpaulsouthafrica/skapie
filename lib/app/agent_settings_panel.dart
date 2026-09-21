@@ -159,6 +159,7 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
         _selectedModel = selected;
         _thinking = thinking;
       });
+      widget.controller.rememberCatalog(models);
     } catch (error) {
       if (mounted) {
         setState(() {

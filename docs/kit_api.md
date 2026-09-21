@@ -27,7 +27,7 @@ App bootstrap (`lib/main.dart`):
 
 1. `bootstrapSceneStore()` loads `scene.json`.
 2. `bootstrapKitApi()` resolves the kits root (see [kit packages](kit_packages.md)).
-3. `createAppKitApi(...)` constructs `KitApi` and registers `demoNoteCardRecipe` plus the harness kit recipes (`harness.llm`, `harness.system-prompt`, `harness.tools`) as fallbacks.
+3. `createAppKitApi(...)` constructs `KitApi` and registers `demoNoteCardRecipe`, the harness kit recipes (`harness.llm`, `harness.system-prompt`, `harness.tools`), and every `tools.*` world-tool grant as fallbacks.
 4. `await reloadPackages()` — disk packages win when present.
 5. UI / future agent call `listKits`, `instantiate`, `addObject`, `saveKit`, …
 
@@ -228,7 +228,7 @@ KitApi createAppKitApi({
 })
 ```
 
-Uses `createBuiltinRegistry()` if `registry` is omitted. Always registers `demoNoteCardRecipe` and the harness kit recipes. Call `reloadPackages` afterward so disk wins.
+Uses `createBuiltinRegistry()` if `registry` is omitted. Always registers `demoNoteCardRecipe`, the harness kit recipes, and world-tool grants (`tools.*`). Call `reloadPackages` afterward so disk wins.
 
 ## Errors
 
@@ -328,7 +328,7 @@ for (final kit in kitApi.listKits()) {
 
 ## Agent tools (Phase 9.1)
 
-Implemented by `createKitAgentTools` + `AgentToolDispatcher` inside `AgentSession`. The harness calls `KitApi` methods; it does not poke `SceneStore` fields. Overlay chat and HTTP live in [agent.md](agent.md).
+Implemented by `createWorldTools` (per-file runners) + `AgentToolDispatcher` inside `AgentSession`. `createKitAgentTools` is a wrapper. LLM Enter uses attached grants only. See [world tools](tools.md).
 
 | Tool name | Maps to | Args (conceptual JSON) | Notes |
 |---|---|---|---|
@@ -356,9 +356,11 @@ Ordinary kits. They are the visible first principles of the agent harness. See [
 
 | Id | Package | This phase |
 |---|---|---|
-| `harness.llm` | [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json) | Latest vanilla turn via `publishLlmKit` |
+| `harness.llm` | [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json) | Specialized compound: diamond mark, per-kit model, Needs input, Input + Output regions via `publishLlmKit` |
 | `harness.system-prompt` | [`kits/harness.system-prompt/kit.json`](../kits/harness.system-prompt/kit.json) | Stub. Editable text. `attachedTo` reserved. |
 | `harness.tools` | [`kits/harness.tools/kit.json`](../kits/harness.tools/kit.json) | Stub. Tool names as text. `attachedTo` reserved. |
+
+World-tool grants (`tools.list_kits`, …) are listed in [world tools](tools.md). `createAppKitApi` registers those recipes too.
 
 `createAppKitApi` registers all of these as kit recipes; a loaded package replaces the matching id. No animation.
 

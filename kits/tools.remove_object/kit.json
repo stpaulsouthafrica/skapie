@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.remove_object",
+  "displayName": "remove_object",
+  "description": "Remove a scene object by id.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.remove_object",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "remove_object",
+        "fontSize": 14,
+        "toolName": "remove_object",
+        "attachedTo": "",
+        "skapieKit": "tools.remove_object",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

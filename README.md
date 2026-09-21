@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 10.4** — command palette (Space / F3) and selection-scoped typing on compound LLM kits. No persistent chat bar. Streaming, Pi/MCP, sandbox kits, and living sub-agent kits are later arcs.
+This repository is **Phase 10.6** — per-file world tools plus spawnable `tools.*` kits attached to an LLM. Vanilla HTTP kernel under `lib/providers/`. No persistent chat bar. Streaming, Pi/MCP, sandbox kits, and living sub-agent kits are later arcs.
 
 ## Run on macOS
 
@@ -41,7 +41,7 @@ flutter run -d macos \
 # or: --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
-**Agent:** No persistent chat bar. **Space** or **F3** opens a command palette to add kits and primitives or open Settings. Select a compound LLM kit, type a prompt, Enter to run vanilla onto that kit. OpenCode Go models are routed from the curated catalog (`lib/providers/opencode_go/`) to `/chat/completions`, `/responses`, or `/messages`. System prompt and tools are separate stub kits; they do not silently attach. Cmd+, (or palette **Settings**) opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`. See [`docs/providers.md`](docs/providers.md) and [`docs/agent.md`](docs/agent.md).
+**Agent:** No persistent chat bar. **Space** or **F3** opens a command palette. Select a compound LLM kit: **Input** is the prompt, Enter fills **Output** via vanilla. OpenCode Go models are routed from the curated catalog (`lib/providers/`) to `/chat/completions`, `/responses`, or `/messages`. System prompt and tools are separate stub kits; they do not silently attach. Cmd+, (or palette **Settings**) opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`. See [`docs/providers.md`](docs/providers.md) and [`docs/agent.md`](docs/agent.md).
 
 ```bash
 # OpenCode Go (preferred for local testing)
@@ -98,6 +98,12 @@ Skapie is built phase by phase. **The 10-phase core is complete.** Phase 10.1 is
 
 **Phase 10.4 gate:** command palette (Space / F3); no persistent chat bar; selection typing on compound LLM kits.
 
+**Phase 10.5 gate:** vanilla clients under `lib/providers/`; compound LLM Input and Output regions; stub kits stay unwired.
+
+**Specialized LLM kit:** diamond mark; per-kit model from the Settings catalog; Needs input; palette arrows; inspector typing without select-all; double-click text to edit in world.
+
+**Phase 10.6 gate:** `lib/tools/world/` one file per tool; `kits/tools.*/` grants; attach to LLM; unattached stays vanilla.
+
 ## Docs
 
 - [`docs/glossary.md`](docs/glossary.md) — canvas, world origin, scene object, kit, kit recipe, kit package, graph node
@@ -107,7 +113,8 @@ Skapie is built phase by phase. **The 10-phase core is complete.** Phase 10.1 is
 - [`docs/interaction.md`](docs/interaction.md) — select, move, inspector
 - [`docs/kit_api.md`](docs/kit_api.md) — Kit API reference, cookbook, agent tools
 - [`docs/kit_packages.md`](docs/kit_packages.md) — folder contract, `kit.json`, kits root
-- [`docs/agent.md`](docs/agent.md) — command palette, selection typing, compound LLM kit, Connect → models
+- [`docs/agent.md`](docs/agent.md) — command palette, selection typing, specialized LLM kit, Connect → models
+- [`docs/tools.md`](docs/tools.md) — world tool runners vs spawnable grants
 - [`docs/providers.md`](docs/providers.md) — OpenCode Go seating chart and surfaces
 - [`docs/paint.md`](docs/paint.md) — cosmetic identity: tokens, transient settings
 - **Dream goal / later arcs (not scheduled):** visible sub-agent kits, sandbox, personal coding-agent kit — the 10-phase core is not that

@@ -10,7 +10,8 @@ Selection, move, and inspector edits are UI. The scene document stays the source
 - **Trackpad pan / scroll / pinch zoom:** unchanged. Zoom still aims at the cursor.
 - While move-dragging, the camera does not pan.
 - **Escape:** cancel an in-progress move preview, otherwise clear selection. If the command palette is open, Escape closes it instead.
-- **Space / F3:** open the command palette when the canvas has focus and the user is not typing in a text field.
+- **Space / F3:** open the command palette when the canvas has focus and the user is not typing in a text field. Up/Down (optional Ctrl-N/P) move the highlighted action; Enter runs it; Esc closes. Search keeps focus.
+- **Double-click** a non-LLM `text` object: inline edit on the canvas (caret in world). Esc or unfocus saves through KitApi. Single-click still selects and shows the inspector.
 - **Delete / Backspace:** `RemoveObject` when the canvas has focus (inspector text fields keep those keys).
 
 Hit-test is world-space AABB from `x,y,width,height`. **Rotation is ignored** (same as camera content bounds). Invisible objects are skipped. Highest `zIndex` wins; later list order breaks ties.
@@ -34,4 +35,4 @@ Hardcoded fields per `typeId`:
 - `button`: label
 - `debug.rect` / unknown: type, id, frame; unknown also lists prop keys read-only
 
-Edits use `UpdateObjectProps` or `UpdateObjectFrame` (submit or ~200ms debounce). **Locked** uses `SetObjectLocked`. Delete uses `RemoveObject`.
+Edits use `UpdateObjectProps` or `UpdateObjectFrame` (submit or ~200ms debounce). **Locked** uses `SetObjectLocked`. Delete uses `RemoveObject`. Inspector content does not rewrite the field while it is focused (avoids select-all wipe). Sync from the object when the selected id changes or the field unfocuses.

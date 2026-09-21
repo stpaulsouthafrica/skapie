@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.register_kit",
+  "displayName": "register_kit",
+  "description": "Register an ephemeral in-memory kit.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.register_kit",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "register_kit",
+        "fontSize": 14,
+        "toolName": "register_kit",
+        "attachedTo": "",
+        "skapieKit": "tools.register_kit",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

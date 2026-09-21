@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.get_kit",
+  "displayName": "get_kit",
+  "description": "Get one kit recipe by id.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 88,
+      "props": {
+        "skapieKit": "tools.get_kit",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 16,
+      "width": 176,
+      "height": 56,
+      "props": {
+        "content": "get_kit",
+        "fontSize": 14,
+        "toolName": "get_kit",
+        "attachedTo": "",
+        "skapieKit": "tools.get_kit",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

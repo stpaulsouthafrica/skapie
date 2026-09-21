@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "harness.llm",
   "displayName": "LLM",
-  "description": "Vanilla completion on the canvas. No animation.",
+  "description": "Compound vanilla kit: Input and Output regions. No animation.",
   "capabilities": [],
   "objects": [
     {
@@ -10,7 +10,7 @@
       "x": 0,
       "y": 0,
       "width": 320,
-      "height": 200,
+      "height": 260,
       "props": {
         "skapieKit": "harness.llm",
         "skapieRole": "frame"
@@ -19,17 +19,18 @@
     {
       "typeId": "text",
       "x": 12,
-      "y": 16,
+      "y": 12,
       "width": 296,
-      "height": 168,
+      "height": 236,
       "props": {
-        "content": "",
+        "content": "Needs input\n\nInput\n\nOutput\n\nTools: none",
         "fontSize": 14,
         "prompt": "",
         "reply": "",
         "error": "",
         "model": "",
         "provider": "",
+        "surface": "",
         "skapieKit": "harness.llm",
         "skapieRole": "body"
       }

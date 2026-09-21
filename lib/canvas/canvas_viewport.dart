@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/canvas/canvas_bounds.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_grid_painter.dart';
@@ -11,6 +12,7 @@ import 'package:skapie/canvas/scene_object_layer.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -44,6 +46,11 @@ class CanvasViewportState extends State<CanvasViewport> {
   _DragKind _dragKind = _DragKind.none;
   Offset? _moveWorldStart;
   final _focus = FocusNode();
+  final _inlineController = TextEditingController();
+  final _inlineFocus = FocusNode();
+  String? _inlineEditId;
+  Duration? _lastTapStamp;
+  String? _lastTapId;
 
   Size _viewportSize = Size.zero;
 
@@ -102,6 +109,8 @@ class CanvasViewportState extends State<CanvasViewport> {
   void dispose() {
     widget.store.removeListener(_onStore);
     widget.selection.removeListener(_onSelection);
+    _inlineFocus.dispose();
+    _inlineController.dispose();
     _focus.dispose();
     super.dispose();
   }
@@ -162,25 +171,46 @@ class CanvasViewportState extends State<CanvasViewport> {
         (event.buttons & kPrimaryButton) == 0) {
       return;
     }
-    _focus.requestFocus();
     _dragPointer = event.pointer;
     _lastDrag = event.localPosition;
     if (middle) {
       _dragKind = _DragKind.pan;
+      _focus.requestFocus();
       return;
     }
     if (_viewportSize.isEmpty) {
       _dragKind = _DragKind.pan;
+      _focus.requestFocus();
       return;
     }
     final world = screenToWorld(event.localPosition, _viewportSize, _camera);
     final hit = hitTestObjects(widget.store.document.objects, world);
+    if (_inlineEditId != null) {
+      if (hit?.id == _inlineEditId) {
+        _dragKind = _DragKind.none;
+        return;
+      }
+      _commitInlineEdit();
+    }
+    _focus.requestFocus();
     if (hit == null) {
       widget.selection.select(null);
       _dragKind = _DragKind.pan;
       return;
     }
     widget.selection.select(hit.id);
+    final isDouble =
+        hit.id == _lastTapId &&
+        _lastTapStamp != null &&
+        event.timeStamp - _lastTapStamp! <= kDoubleTapTimeout;
+    _lastTapId = hit.id;
+    _lastTapStamp = event.timeStamp;
+    if (isDouble && _canInlineEdit(hit)) {
+      widget.selection.cancelMove();
+      _dragKind = _DragKind.none;
+      _beginInlineEdit(hit);
+      return;
+    }
     if (objectAllowsMove(hit)) {
       _dragKind = _DragKind.move;
       _moveWorldStart = world;
@@ -242,6 +272,10 @@ class CanvasViewportState extends State<CanvasViewport> {
   }
 
   void _clearSelectionOrCancelMove() {
+    if (_inlineEditId != null) {
+      _commitInlineEdit();
+      return;
+    }
     if (widget.selection.isMoving) {
       widget.selection.cancelMove();
       _dragPointer = null;
@@ -263,6 +297,84 @@ class CanvasViewportState extends State<CanvasViewport> {
     }
     widget.kitApi.removeObject(id);
     widget.selection.syncToDocument(widget.store.document);
+  }
+
+  bool _canInlineEdit(SceneObject object) {
+    return object.type == textTypeId && !isLlmKitObject(object);
+  }
+
+  void _beginInlineEdit(SceneObject object) {
+    final content = object.props['content']?.toString() ?? '';
+    _inlineEditId = object.id;
+    _inlineController.value = TextEditingValue(
+      text: content,
+      selection: TextSelection.collapsed(offset: content.length),
+    );
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _inlineFocus.requestFocus();
+      }
+    });
+  }
+
+  void _commitInlineEdit() {
+    final id = _inlineEditId;
+    if (id == null) {
+      return;
+    }
+    widget.kitApi.updateProps(id, {'content': _inlineController.text});
+    _inlineEditId = null;
+    _inlineFocus.unfocus();
+    setState(() {});
+    _focus.requestFocus();
+  }
+
+  Widget? _inlineEditor(Size viewportSize) {
+    final id = _inlineEditId;
+    if (id == null) {
+      return null;
+    }
+    final object = widget.store.document.objectById(id);
+    if (object == null) {
+      return null;
+    }
+    final tokens = PaintScope.of(context);
+    final topLeft = worldToScreen(
+      Offset(object.x, object.y),
+      viewportSize,
+      _camera,
+    );
+    return Positioned(
+      left: topLeft.dx,
+      top: topLeft.dy,
+      width: math.max(48, object.width * _camera.zoom),
+      height: math.max(28, object.height * _camera.zoom),
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): _commitInlineEdit,
+        },
+        child: Material(
+          color: tokens.panel,
+          child: TextField(
+            key: const Key('inline-text-edit'),
+            controller: _inlineController,
+            focusNode: _inlineFocus,
+            autofocus: true,
+            maxLines: null,
+            style: TextStyle(color: tokens.ink, fontSize: 13),
+            cursorColor: tokens.accent,
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            ),
+            onSubmitted: (_) => _commitInlineEdit(),
+            onTapOutside: (_) => _commitInlineEdit(),
+          ),
+        ),
+      ),
+    );
   }
 
   void _onPointerSignal(PointerSignalEvent event) {
@@ -400,6 +512,7 @@ class CanvasViewportState extends State<CanvasViewport> {
                         object: _selectedObject!,
                         previewDelta: widget.selection.previewDelta,
                       ),
+                    ?_inlineEditor(size),
                     Positioned(
                       right: 12,
                       bottom: 12,

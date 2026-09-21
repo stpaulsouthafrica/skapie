@@ -7,10 +7,11 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/openai_compatible.dart';
-import 'package:skapie/agent/vanilla_completion.dart';
+import 'package:skapie/providers/vanilla_completion.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/providers/vanilla_responses.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/attach.dart';
 
 void main() {
   late KitApi kitApi;
@@ -145,6 +146,33 @@ void main() {
   );
 
   test(
+    'sendUser publishes the kit-scoped model instead of settings model',
+    () async {
+      final ids = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+      kitApi.updateProps(ids.last, {
+        'model': 'deepseek-v4-flash',
+        'provider': 'opencode-go',
+        'surface': 'completions',
+      });
+      final controller = AgentController(
+        kitApi: kitApi,
+        session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+        runtime: const ResolvedAgentRuntime(
+          presetId: 'fake',
+          useFake: true,
+          model: 'settings-model',
+        ),
+      );
+      await controller.sendUser('hello', targetBodyId: ids.last);
+      final body = kitApi.store.document.objectById(ids.last)!;
+      expect(body.props['model'], 'deepseek-v4-flash');
+      expect(body.props['provider'], 'opencode-go');
+      expect(body.props['surface'], 'completions');
+      expect(body.props['reply'], 'Echo: hello');
+    },
+  );
+
+  test(
     'failed vanilla turn writes redacted HTTP body onto the LLM kit',
     () async {
       Map<String, Object?>? sent;
@@ -201,6 +229,79 @@ void main() {
         isNot(contains('sk-secret-key')),
       );
       expect(controller.lastDiagnostic?.surface, 'completions');
+    },
+  );
+
+  test(
+    'attached list_kits sendUser posts only that tool on the session path',
+    () async {
+      Map<String, Object?>? sent;
+      final client = MockClient((request) async {
+        sent = Map<String, Object?>.from(jsonDecode(request.body) as Map);
+        return http.Response(
+          jsonEncode({
+            'choices': [
+              {
+                'message': {'content': 'listed'},
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final model = OpenAiCompatibleAgentModel(
+        baseUrl: 'https://opencode.ai/zen/go/v1',
+        apiKey: 'sk-secret-key',
+        model: 'kimi-k2.6',
+        presetId: 'opencode-go',
+        httpClient: client,
+      );
+      final controller = AgentController(
+        kitApi: kitApi,
+        session: AgentSession(
+          model: model,
+          kitApi: kitApi,
+          includeTools: false,
+        ),
+        vanilla: VanillaCompletionClient(
+          baseUrl: 'https://opencode.ai/zen/go/v1',
+          apiKey: 'sk-secret-key',
+          model: 'kimi-k2.6',
+          presetId: 'opencode-go',
+          httpClient: client,
+        ),
+        runtime: const ResolvedAgentRuntime(
+          presetId: 'opencode-go',
+          useFake: false,
+          model: 'kimi-k2.6',
+          apiKey: 'sk-secret-key',
+        ),
+      );
+      final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+      final toolIds = kitApi.instantiate(
+        'tools.list_kits',
+        origin: const Offset(400, 0),
+      );
+      attachToolKit(
+        kitApi: kitApi,
+        toolObjectId: toolIds.first,
+        llmBodyId: llmIds.last,
+      );
+
+      await controller.sendUser('kits', targetBodyId: llmIds.last);
+
+      expect(sent, isNotNull);
+      final tools = sent!['tools'] as List;
+      expect(tools, hasLength(1));
+      expect(
+        (tools.single as Map)['function'],
+        containsPair('name', 'list_kits'),
+      );
+      expect(
+        kitApi.store.document.objectById(llmIds.last)!.props['reply'],
+        'listed',
+      );
     },
   );
 
