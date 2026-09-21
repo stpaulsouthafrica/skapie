@@ -118,4 +118,53 @@ void main() {
     expect(model.onChanged, isNull);
     expect(controller.runtime.useFake, isTrue);
   });
+
+  testWidgets('reopening settings keeps last model and remembered key', (
+    tester,
+  ) async {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(
+        presetId: 'opencode-go',
+        useFake: false,
+        model: 'kimi-k2.6',
+        apiKey: 'oc-remember',
+      ),
+      prefs: const AgentPrefs(
+        providerId: 'opencode-go',
+        model: 'kimi-k2.6',
+        apiKey: 'oc-remember',
+      ),
+      memoryApiKey: 'oc-remember',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 280,
+            height: 600,
+            child: AgentSettingsPanel(controller: controller, onClose: () {}),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('kimi-k2.6'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const Key('agent-settings-api-key')),
+              matching: find.byType(TextField),
+            ),
+          )
+          .controller!
+          .text,
+      'oc-remember',
+    );
+    expect(find.byKey(const Key('agent-settings-apply')), findsOneWidget);
+  });
 }

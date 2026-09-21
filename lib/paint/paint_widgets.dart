@@ -1,0 +1,191 @@
+import 'package:flutter/material.dart';
+import 'package:skapie/paint/paint_scope.dart';
+import 'package:skapie/paint/paint_tokens.dart';
+
+class PaintPanel extends StatelessWidget {
+  const PaintPanel({
+    super.key,
+    required this.child,
+    this.padding,
+    this.capsule = false,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  final bool capsule;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaintScope.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.panel,
+        borderRadius: BorderRadius.circular(
+          capsule ? 999 : PaintTokens.radiusPanel,
+        ),
+        border: Border.all(color: tokens.hairline),
+      ),
+      child: Padding(
+        padding: padding ?? const EdgeInsets.all(12),
+        child: child,
+      ),
+    );
+  }
+}
+
+class PaintButton extends StatelessWidget {
+  const PaintButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.filled = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool filled;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaintScope.of(context);
+    final enabled = onPressed != null;
+    final bg = filled
+        ? tokens.accent.withValues(alpha: enabled ? 1 : 0.4)
+        : Colors.transparent;
+    final fg = filled ? tokens.onAccent : tokens.ink;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onPressed,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(PaintTokens.radiusField),
+          border: Border.all(
+            color: filled ? Colors.transparent : tokens.hairline,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: fg.withValues(alpha: enabled ? 1 : 0.4),
+              fontSize: 12,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class PaintIconButton extends StatelessWidget {
+  const PaintIconButton({
+    super.key,
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+  });
+
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final String? tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaintScope.of(context);
+    final button = GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Icon(icon, size: 16, color: tokens.ink),
+      ),
+    );
+    if (tooltip == null) {
+      return button;
+    }
+    return Tooltip(message: tooltip, child: button);
+  }
+}
+
+class PaintTextField extends StatelessWidget {
+  const PaintTextField({
+    super.key,
+    required this.controller,
+    this.label,
+    this.hint,
+    this.enabled = true,
+    this.obscure = false,
+    this.onSubmitted,
+    this.onChanged,
+  });
+
+  final TextEditingController controller;
+  final String? label;
+  final String? hint;
+  final bool enabled;
+  final bool obscure;
+  final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaintScope.of(context);
+    return TextField(
+      controller: controller,
+      enabled: enabled,
+      obscureText: obscure,
+      onSubmitted: onSubmitted,
+      onChanged: onChanged,
+      style: TextStyle(color: tokens.ink, fontSize: 13),
+      cursorColor: tokens.accent,
+      decoration: InputDecoration(
+        isDense: true,
+        filled: false,
+        labelText: label,
+        hintText: hint,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        disabledBorder: InputBorder.none,
+      ),
+    );
+  }
+}
+
+class PaintChip extends StatelessWidget {
+  const PaintChip({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.selected = false,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaintScope.of(context);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onPressed,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: selected
+              ? tokens.accent.withValues(alpha: 0.22)
+              : tokens.canvas.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: selected ? tokens.accent : tokens.hairline),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          child: Text(label, style: TextStyle(color: tokens.ink, fontSize: 11)),
+        ),
+      ),
+    );
+  }
+}

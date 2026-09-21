@@ -119,7 +119,11 @@ Future<AgentController> bootstrapAgentController({
     envModel: Platform.environment['SKAPIE_AGENT_MODEL'] ?? '',
     environment: Map<String, String>.from(Platform.environment),
   );
-  final runtime = mergeAgentRuntime(prefs: prefs, sources: sources);
+  final runtime = mergeAgentRuntime(
+    prefs: prefs,
+    memoryApiKey: prefs?.apiKey,
+    sources: sources,
+  );
   if (runtime.warning != null) {
     debugPrint('Skapie: ${runtime.warning}');
   }
@@ -134,6 +138,7 @@ Future<AgentController> bootstrapAgentController({
     runtime: runtime,
     prefsStore: prefsStore,
     sources: sources,
+    memoryApiKey: prefs?.apiKey ?? runtime.apiKey,
     prefs: prefs,
   );
 }

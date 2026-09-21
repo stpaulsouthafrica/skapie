@@ -97,6 +97,18 @@ void main() {
     expect(resolved.presetId, 'fake');
   });
 
+  test('prefs file key is used when memory key is absent', () {
+    final resolved = mergeAgentRuntime(
+      prefs: const AgentPrefs(
+        providerId: 'opencode-go',
+        model: 'kimi-k2.6',
+        apiKey: 'oc-from-prefs',
+      ),
+    );
+    expect(resolved.useFake, isFalse);
+    expect(resolved.apiKey, 'oc-from-prefs');
+  });
+
   test('prefs without memory key still uses native env key', () {
     final resolved = mergeAgentRuntime(
       prefs: const AgentPrefs(providerId: 'opencode-go', model: 'kimi-k2.6'),

@@ -9,7 +9,7 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 
 void main() {
-  testWidgets('chat panel Echo with Fake model does not resize canvas', (
+  testWidgets('chat strip Echo with Fake model does not resize canvas', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(800, 600));
@@ -23,48 +23,30 @@ void main() {
     );
 
     final before = tester.getSize(find.byType(CanvasViewport));
-    await tester.tap(find.byTooltip('Chat'));
-    await tester.pump();
+    expect(find.byKey(const Key('agent-chat-input')), findsOneWidget);
+    expect(find.text('Add'), findsNothing);
     expect(tester.getSize(find.byType(CanvasViewport)), before);
 
     await tester.enterText(find.byKey(const Key('agent-chat-input')), 'hello');
-    await tester.tap(find.byKey(const Key('agent-chat-send')));
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    expect(find.text('hello'), findsWidgets);
-    expect(find.text('Echo: hello'), findsOneWidget);
+    expect(find.text('hello'), findsNothing);
     expect(store.document.objects, isEmpty);
     expect(tester.getSize(find.byType(CanvasViewport)), before);
+    expect(session.messages.last.content, 'Echo: hello');
   });
 
-  testWidgets('chat shows Fake chip and empty-state suggestions', (
+  testWidgets('chat strip is about one third of the window width', (
     tester,
   ) async {
-    await tester.binding.setSurfaceSize(const Size(800, 600));
+    await tester.binding.setSurfaceSize(const Size(900, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
-    await tester.pumpWidget(
-      SkapieApp(
-        store: store,
-        kitApi: kitApi,
-        agentController: AgentController(
-          kitApi: kitApi,
-          session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
-          runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
-        ),
-      ),
-    );
-
-    await tester.tap(find.byTooltip('Chat'));
-    await tester.pump();
-
-    expect(find.text('Fake'), findsOneWidget);
-    expect(find.text('Add a box near the center'), findsOneWidget);
-    expect(find.text('Instantiate the demo note kit'), findsOneWidget);
-    expect(find.text('List kits'), findsOneWidget);
+    await tester.pumpWidget(SkapieApp(store: SceneStore()));
+    final bar = tester.getSize(find.byKey(const Key('agent-chat-input')));
+    expect(bar.width, closeTo(300, 40));
   });
 
   testWidgets('settings Use Fake swaps session and does not resize canvas', (
@@ -84,11 +66,13 @@ void main() {
       SkapieApp(store: store, kitApi: kitApi, agentController: controller),
     );
 
-    await tester.tap(find.byTooltip('Chat'));
-    await tester.pump();
     final before = tester.getSize(find.byType(CanvasViewport));
 
-    await tester.tap(find.byTooltip('Agent settings'));
+    await tester.enterText(
+      find.byKey(const Key('agent-chat-input')),
+      '/settings',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     expect(tester.getSize(find.byType(CanvasViewport)), before);
 
@@ -99,8 +83,18 @@ void main() {
 
     expect(controller.session, isNot(same(sessionBefore)));
     expect(controller.runtime.useFake, isTrue);
-    expect(find.text('Fake'), findsWidgets);
     expect(store.document.objects, isEmpty);
     expect(tester.getSize(find.byType(CanvasViewport)), before);
+  });
+
+  testWidgets('tapping the chat field attaches text input', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(SkapieApp(store: SceneStore()));
+    await tester.tap(find.byKey(const Key('agent-chat-input')));
+    await tester.pump();
+
+    expect(tester.testTextInput.isRegistered, isTrue);
   });
 }

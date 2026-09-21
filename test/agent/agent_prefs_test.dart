@@ -1,45 +1,41 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 
 void main() {
-  test(
-    'prefs JSON round-trips provider, model, thinkingLevel without a key',
-    () {
-      const prefs = AgentPrefs(
-        providerId: 'openrouter',
-        model: 'anthropic/claude-sonnet-4',
-        thinkingLevel: 'high',
-      );
-      final json = prefs.toJson();
-      expect(json.containsKey('apiKey'), isFalse);
-      expect(json.containsKey('api_key'), isFalse);
-      expect(json.containsKey('baseUrl'), isFalse);
-      expect(json['provider'], 'openrouter');
-      expect(json['model'], 'anthropic/claude-sonnet-4');
-      expect(json['thinkingLevel'], 'high');
+  test('prefs JSON round-trips provider, model, thinkingLevel, and key', () {
+    const prefs = AgentPrefs(
+      providerId: 'openrouter',
+      model: 'anthropic/claude-sonnet-4',
+      thinkingLevel: 'high',
+      apiKey: 'or-local',
+    );
+    final json = prefs.toJson();
+    expect(json.containsKey('baseUrl'), isFalse);
+    expect(json['provider'], 'openrouter');
+    expect(json['model'], 'anthropic/claude-sonnet-4');
+    expect(json['thinkingLevel'], 'high');
+    expect(json['apiKey'], 'or-local');
 
-      final loaded = AgentPrefs.fromJson(json);
-      expect(loaded.providerId, prefs.providerId);
-      expect(loaded.model, prefs.model);
-      expect(loaded.thinkingLevel, 'high');
-    },
-  );
+    final loaded = AgentPrefs.fromJson(json);
+    expect(loaded.providerId, prefs.providerId);
+    expect(loaded.model, prefs.model);
+    expect(loaded.thinkingLevel, 'high');
+    expect(loaded.apiKey, 'or-local');
+  });
 
-  test('fromJson ignores an apiKey if a file ever contained one', () {
+  test('fromJson without apiKey still loads provider and model', () {
     final loaded = AgentPrefs.fromJson({
       'provider': 'openai',
       'model': 'gpt-4o-mini',
-      'apiKey': 'sk-should-not-load',
     });
     expect(loaded.providerId, 'openai');
     expect(loaded.model, 'gpt-4o-mini');
-    expect(jsonEncode(loaded.toJson()), isNot(contains('sk-should-not-load')));
+    expect(loaded.apiKey, isNull);
   });
 
-  test('prefs file save then load does not write a key or baseUrl', () async {
+  test('prefs file save then load keeps key and omits baseUrl', () async {
     final dir = await Directory.systemTemp.createTemp('skapie_agent_prefs_');
     addTearDown(() => dir.delete(recursive: true));
     final file = agentPrefsFile(dir);
@@ -50,18 +46,20 @@ void main() {
         providerId: 'openrouter',
         model: 'anthropic/claude-sonnet-4',
         thinkingLevel: 'medium',
+        apiKey: 'or-local',
       ),
     );
     final text = file.readAsStringSync();
-    expect(text.toLowerCase(), isNot(contains('apikey')));
-    expect(text, isNot(contains('sk-')));
+    expect(text, contains('or-local'));
     expect(text.contains('baseUrl'), isFalse);
+    expect(text, isNot(contains('scene')));
 
     final loaded = await store.load();
     expect(loaded, isNotNull);
     expect(loaded!.providerId, 'openrouter');
     expect(loaded.model, 'anthropic/claude-sonnet-4');
     expect(loaded.thinkingLevel, 'medium');
+    expect(loaded.apiKey, 'or-local');
   });
 
   test('missing prefs file loads as null', () async {

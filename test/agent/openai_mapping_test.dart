@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/scene/scene.dart';
 
 void main() {
   test('session messages map to OpenAI roles including tool_calls', () {
@@ -66,6 +68,25 @@ void main() {
     final reply = openaiReplyFromMessage({'content': 'Added a box.'});
     expect(reply.content, 'Added a box.');
     expect(reply.toolCalls, isNull);
+  });
+
+  test('kit tools send object parameters, never an empty schema', () {
+    final mapped = openaiToolsFromAgent(
+      createKitAgentTools(createAppKitApi(store: SceneStore())),
+    );
+    expect(mapped, isNotEmpty);
+    for (final tool in mapped) {
+      final function = tool['function'] as Map;
+      final parameters = function['parameters'] as Map;
+      expect(parameters['type'], 'object');
+      if (function['name'] == 'add_object') {
+        expect((parameters['properties'] as Map).containsKey('typeId'), isTrue);
+        expect(parameters['required'], contains('typeId'));
+      }
+      if (function['name'] == 'list_kits') {
+        expect(parameters['properties'], isEmpty);
+      }
+    }
   });
 
   test('normalize base URL for chat completions', () {

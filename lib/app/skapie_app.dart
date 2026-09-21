@@ -3,8 +3,8 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/home_screen.dart';
-import 'package:skapie/app/theme.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene_store.dart';
 import 'package:skapie/shared/app_info.dart';
@@ -56,14 +56,19 @@ class SkapieApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: AppInfo.windowTitle,
-      theme: buildAppTheme(),
-      home: HomeScreen(
-        store: store,
-        registry: registry,
-        kitApi: kitApi,
-        agentController: agentController,
+    final tokens = PaintTokens.dark();
+    return PaintScope(
+      tokens: tokens,
+      child: MaterialApp(
+        title: AppInfo.windowTitle,
+        theme: paintTheme(tokens),
+        debugShowCheckedModeBanner: false,
+        home: HomeScreen(
+          store: store,
+          registry: registry,
+          kitApi: kitApi,
+          agentController: agentController,
+        ),
       ),
     );
   }

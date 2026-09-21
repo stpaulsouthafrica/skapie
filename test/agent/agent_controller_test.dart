@@ -51,6 +51,7 @@ void main() {
     );
     expect(kitApi.store.document.objects, isEmpty);
     expect(controller.prefs?.model, 'kimi-k2.6');
+    expect(controller.prefs?.apiKey, 'oc-test');
     expect(controller.prefs?.thinkingLevel, isNull);
   });
 
@@ -67,6 +68,7 @@ void main() {
       thinkingLevel: 'high',
     );
     expect(controller.prefs?.thinkingLevel, 'high');
+    expect(controller.prefs?.apiKey, 'or-test');
     expect(controller.prefs?.toJson().containsKey('baseUrl'), isFalse);
     expect(controller.session.messages, hasLength(1));
   });

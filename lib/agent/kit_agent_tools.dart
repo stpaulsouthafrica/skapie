@@ -4,10 +4,35 @@ import 'package:skapie/agent/agent_tool.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 
 List<AgentTool> createKitAgentTools(KitApi kitApi) {
+  const objectId = {'type': 'string', 'description': 'Scene object id'};
+  const kitId = {'type': 'string', 'description': 'Kit id'};
+  const objectSpec = {
+    'type': 'object',
+    'properties': {
+      'typeId': {'type': 'string'},
+      'x': {'type': 'number'},
+      'y': {'type': 'number'},
+      'width': {'type': 'number'},
+      'height': {'type': 'number'},
+      'props': {'type': 'object'},
+    },
+    'required': ['typeId'],
+  };
+  const kitRecipe = {
+    'type': 'object',
+    'properties': {
+      'id': {'type': 'string'},
+      'displayName': {'type': 'string'},
+      'objects': {'type': 'array', 'items': objectSpec},
+    },
+    'required': ['id', 'displayName'],
+  };
+
   return [
     AgentTool(
       name: 'list_kits',
       description: 'List registered kits.',
+      parameters: const {'type': 'object', 'properties': <String, Object?>{}},
       run: (_) async {
         return {
           'kits': [
@@ -20,6 +45,11 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'get_kit',
       description: 'Get one kit recipe by id.',
+      parameters: {
+        'type': 'object',
+        'properties': {'kitId': kitId},
+        'required': ['kitId'],
+      },
       run: (args) async {
         final kitId = requiredString(args, 'kitId');
         final kit = kitApi.getKit(kitId);
@@ -32,6 +62,15 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'instantiate_kit',
       description: 'Instantiate a kit into the scene.',
+      parameters: {
+        'type': 'object',
+        'properties': {
+          'kitId': kitId,
+          'originX': {'type': 'number'},
+          'originY': {'type': 'number'},
+        },
+        'required': ['kitId', 'originX', 'originY'],
+      },
       run: (args) async {
         final ids = kitApi.instantiate(
           requiredString(args, 'kitId'),
@@ -46,6 +85,18 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'add_object',
       description: 'Add one scene object.',
+      parameters: {
+        'type': 'object',
+        'properties': {
+          'typeId': {'type': 'string'},
+          'x': {'type': 'number'},
+          'y': {'type': 'number'},
+          'width': {'type': 'number'},
+          'height': {'type': 'number'},
+          'props': {'type': 'object'},
+        },
+        'required': ['typeId'],
+      },
       run: (args) async {
         final id = kitApi.addObject(
           typeId: requiredString(args, 'typeId'),
@@ -61,6 +112,11 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'remove_object',
       description: 'Remove a scene object by id.',
+      parameters: {
+        'type': 'object',
+        'properties': {'id': objectId},
+        'required': ['id'],
+      },
       run: (args) async {
         kitApi.removeObject(requiredString(args, 'id'));
         return {'ok': true};
@@ -69,6 +125,18 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'update_frame',
       description: 'Patch a scene object frame.',
+      parameters: {
+        'type': 'object',
+        'properties': {
+          'id': objectId,
+          'x': {'type': 'number'},
+          'y': {'type': 'number'},
+          'width': {'type': 'number'},
+          'height': {'type': 'number'},
+          'rotation': {'type': 'number'},
+        },
+        'required': ['id'],
+      },
       run: (args) async {
         kitApi.updateFrame(
           id: requiredString(args, 'id'),
@@ -84,6 +152,14 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'update_props',
       description: 'Shallow-merge props. Null values remove keys.',
+      parameters: {
+        'type': 'object',
+        'properties': {
+          'id': objectId,
+          'patch': {'type': 'object'},
+        },
+        'required': ['id', 'patch'],
+      },
       run: (args) async {
         kitApi.updateProps(
           requiredString(args, 'id'),
@@ -95,6 +171,14 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'set_locked',
       description: 'Set SceneObject.locked.',
+      parameters: {
+        'type': 'object',
+        'properties': {
+          'id': objectId,
+          'locked': {'type': 'boolean'},
+        },
+        'required': ['id', 'locked'],
+      },
       run: (args) async {
         kitApi.setLocked(
           requiredString(args, 'id'),
@@ -106,6 +190,7 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'save_kit',
       description: 'Write a kit package to disk and register it.',
+      parameters: kitRecipe,
       run: (args) async {
         final recipe = recipeFromArgs(args);
         await kitApi.saveKit(recipe);
@@ -115,6 +200,7 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'reload_packages',
       description: 'Reload kit packages from disk.',
+      parameters: const {'type': 'object', 'properties': <String, Object?>{}},
       run: (_) async {
         await kitApi.reloadPackages();
         return {'ok': true, 'count': kitApi.listKits().length};
@@ -123,6 +209,7 @@ List<AgentTool> createKitAgentTools(KitApi kitApi) {
     AgentTool(
       name: 'register_kit',
       description: 'Register an ephemeral in-memory kit.',
+      parameters: kitRecipe,
       run: (args) async {
         final recipe = recipeFromArgs(args);
         kitApi.registerKit(recipe);

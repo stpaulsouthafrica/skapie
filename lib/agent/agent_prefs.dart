@@ -10,12 +10,14 @@ class AgentPrefs {
     this.model,
     this.thinkingLevel,
     this.baseUrl,
+    this.apiKey,
   });
 
   final String providerId;
   final String? model;
   final String? thinkingLevel;
   final String? baseUrl;
+  final String? apiKey;
 
   Map<String, Object?> toJson() {
     return {
@@ -26,6 +28,7 @@ class AgentPrefs {
           thinkingLevel!.trim().isNotEmpty &&
           thinkingLevel != 'off')
         'thinkingLevel': thinkingLevel,
+      if (apiKey != null && apiKey!.trim().isNotEmpty) 'apiKey': apiKey,
     };
   }
 
@@ -40,6 +43,7 @@ class AgentPrefs {
       model: trim(json['model']),
       thinkingLevel: trim(json['thinkingLevel']),
       baseUrl: trim(json['baseUrl']),
+      apiKey: trim(json['apiKey']),
     );
   }
 }

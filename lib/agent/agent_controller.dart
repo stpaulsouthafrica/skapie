@@ -38,16 +38,18 @@ class AgentController extends ChangeNotifier {
     if (pasted != null && pasted.isNotEmpty) {
       memoryApiKey = pasted;
     }
+    final keyForRuntime = memoryApiKey ?? pasted;
     final nextPrefs = AgentPrefs(
       providerId: providerId.trim().isEmpty ? 'fake' : providerId.trim(),
       model: model,
       thinkingLevel: thinkingLevel,
+      apiKey: keyForRuntime,
     );
     prefs = nextPrefs;
     await prefsStore?.save(nextPrefs);
     final resolved = mergeAgentRuntime(
       prefs: nextPrefs,
-      memoryApiKey: memoryApiKey,
+      memoryApiKey: keyForRuntime,
       sources: sources,
     );
     session = buildAgentSession(kitApi: kitApi, runtime: resolved);

@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models).
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only.
 
 ## Phase 1 gate — done
 
@@ -93,17 +93,24 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 ## Phase 10 gate — done
 
 - Agent settings (gear on chat): provider, model, API key. Apply rebuilds `AgentSession` on the same `KitApi` (system prompt kept; prior turns cleared). Use Fake one-click.
-- Non-secret prefs at Application Support `skapie/agent_prefs.json`. API key is memory-only (or env/dart-define). Never in `scene.json`.
+- Prefs at Application Support `skapie/agent_prefs.json` restore provider, model, and key. Never in `scene.json`.
 - Chat chip Fake vs `{preset} · {model}`; empty-state suggested prompts. Overlay still does not reflow the canvas.
 
 The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, visible sub-agent kits, personal coding-agent kit) stay out of scope.
 
-## Phase 10.1 gate (current)
+## Phase 10.1 gate — done
 
 - Settings UX: provider → paste key → **Connect** → `GET /models` → Model dropdown. No typed model id. No Base URL field. `custom` not in the panel.
 - Thinking row only when the catalog lists efforts. OpenRouter `reasoning.effort` on chat completions; OpenCode Go / OpenAI thinking is UI-reserved / hidden when the catalog has none.
 - Prefs schema 2: `provider`, `model`, optional `thinkingLevel`. No API key. No base URL written from the UI.
 - `flutter analyze` clean; `flutter test` covers catalog parse, Connect mock HTTP, prefs, session swap, and Fake Echo chat.
+
+## Phase 10.2 gate (current)
+
+- Cosmetic only. `lib/paint/` holds tokens, chrome widgets, and a theme bridge. App imports paint. Paint does not own scene, kits, or the agent loop.
+- Fixed dark + champagne gold. No appearance prefs. No glass window or transparency slider. The macOS window is opaque.
+- Chat is a thin bar over the bottom third. Settings open from `/settings` and Cmd+, as a transient sheet. Inspector stays an overlay.
+- Engine seams (Kit API, scene schema, registry, tool loop) unchanged.
 
 ## Dream goal (not scheduled)
 

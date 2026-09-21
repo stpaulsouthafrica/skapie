@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_models_catalog.dart';
 import 'package:skapie/agent/agent_provider.dart';
+import 'package:skapie/paint/paint.dart';
 
 const List<String> agentProviderChoices = [
   'fake',
@@ -49,8 +50,14 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
     if (!agentProviderChoices.contains(_provider)) {
       _provider = 'fake';
     }
-    _apiKey = TextEditingController();
+    final remembered = widget.controller.memoryApiKey?.trim() ?? '';
+    _apiKey = TextEditingController(text: remembered);
     _thinking = prefs?.thinkingLevel ?? _thinkingOff;
+    final lastModel = prefs?.model ?? runtime.model;
+    if (lastModel != null && lastModel.trim().isNotEmpty) {
+      _selectedModel = lastModel;
+      _models = [AgentModelInfo(id: lastModel, displayName: lastModel)];
+    }
   }
 
   @override
@@ -69,6 +76,12 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
   }
 
   bool get _modelEnabled => _models.isNotEmpty && !_busy && _provider != 'fake';
+
+  bool get _canApplyLive =>
+      _selectedModel != null &&
+      _models.isNotEmpty &&
+      (_apiKey.text.trim().isNotEmpty ||
+          (widget.controller.memoryApiKey?.trim().isNotEmpty ?? false));
 
   Future<void> _connect() async {
     if (_busy || _provider == 'fake') {
@@ -146,7 +159,7 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
     if (_busy) {
       return;
     }
-    if (!fake && (_selectedModel == null || _models.isEmpty)) {
+    if (!fake && !_canApplyLive) {
       setState(() => _error = 'Connect and pick a model first');
       return;
     }
@@ -247,25 +260,22 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
             Row(
               children: [
                 Expanded(
-                  child: TextField(
+                  child: PaintTextField(
                     key: const Key('agent-settings-api-key'),
                     controller: _apiKey,
                     enabled: !_busy,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      labelText: 'API key',
-                      hintText: 'Not saved to disk',
-                      border: OutlineInputBorder(),
-                    ),
+                    obscure: true,
+                    label: 'API key',
+                    hint: 'Saved locally, not in the scene',
                     onSubmitted: (_) => _connect(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
+                PaintButton(
                   key: const Key('agent-settings-connect'),
+                  label: 'Connect',
+                  filled: true,
                   onPressed: _busy ? null : _connect,
-                  child: const Text('Connect'),
                 ),
               ],
             ),
@@ -335,23 +345,22 @@ class _AgentSettingsPanelState extends State<AgentSettingsPanel> {
                 style: textTheme.bodySmall?.copyWith(color: colors.error),
               ),
             ),
-          const Spacer(),
-          Wrap(
-            spacing: 8,
-            runSpacing: 4,
-            alignment: WrapAlignment.spaceBetween,
+          const SizedBox(height: 12),
+          Row(
             children: [
-              TextButton(
+              PaintButton(
                 key: const Key('agent-settings-fake'),
+                label: 'Use Fake',
                 onPressed: _busy ? null : () => _apply(fake: true),
-                child: const Text('Use Fake'),
               ),
-              FilledButton(
+              const Spacer(),
+              PaintButton(
                 key: const Key('agent-settings-apply'),
-                onPressed: _busy || !live || !_modelEnabled
+                label: 'Apply',
+                filled: true,
+                onPressed: _busy || !live || !_canApplyLive
                     ? null
                     : () => _apply(fake: false),
-                child: const Text('Apply'),
               ),
             ],
           ),

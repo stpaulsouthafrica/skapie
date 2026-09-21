@@ -8,6 +8,7 @@
 - [Kit API](kit_api.md) — Kit API reference, cookbook, agent tools (Phase 9.1)
 - [Kit packages](kit_packages.md) — `kit.json` schema (single source), repo vs App Support vs `SKAPIE_KITS_ROOT`
 - [Agent harness](agent.md) — session, tool loop, provider presets, overlay chat, Connect → models
+- [Paint](paint.md) — cosmetic tokens, dark chrome, transient settings
 - **Dream goal / later arcs (not scheduled):** visible sub-agent kits, sandbox, personal coding-agent kit — the 10-phase core is not that
 
 See also the product overview and run instructions in the [root README](../README.md).

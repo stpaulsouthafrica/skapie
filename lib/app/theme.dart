@@ -1,9 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:skapie/paint/paint.dart';
 
-ThemeData buildAppTheme() {
-  return ThemeData(
-    useMaterial3: true,
-    brightness: Brightness.light,
-    colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F5D50)),
-  );
-}
+export 'package:skapie/paint/paint_theme.dart';
+
+/// Default dark paint.
+final defaultPaintTheme = paintTheme(PaintTokens.dark());

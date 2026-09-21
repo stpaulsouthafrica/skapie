@@ -7,18 +7,30 @@ import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/scene/scene.dart';
 
 void main() {
-  testWidgets('home screen shows the app name', (tester) async {
+  testWidgets('home screen shows the canvas and chat bar', (tester) async {
     await tester.pumpWidget(SkapieApp(store: SceneStore()));
 
-    expect(find.text('Skapie'), findsOneWidget);
+    expect(find.byType(CanvasViewport), findsOneWidget);
+    expect(find.byKey(const Key('agent-chat-input')), findsOneWidget);
+    expect(find.text('Skapie'), findsNothing);
   });
+
+  Future<void> openAddMenu(WidgetTester tester) async {
+    await tester.enterText(
+      find.byKey(const Key('agent-chat-input')),
+      '/settings',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+  }
 
   testWidgets('Add menu inserts a debug.rect scene object', (tester) async {
     final store = SceneStore();
     await tester.pumpWidget(SkapieApp(store: store));
 
-    await tester.tap(find.text('Add'));
-    await tester.pumpAndSettle();
+    await openAddMenu(tester);
     await tester.tap(find.text('Debug rect'));
     await tester.pump();
 
@@ -31,8 +43,7 @@ void main() {
     await tester.pumpWidget(SkapieApp(store: store));
 
     Future<void> add(String label) async {
-      await tester.tap(find.text('Add'));
-      await tester.pumpAndSettle();
+      await openAddMenu(tester);
       await tester.tap(find.text(label).last);
       await tester.pump();
     }
@@ -54,8 +65,7 @@ void main() {
     final store = SceneStore();
     await tester.pumpWidget(SkapieApp(store: store));
 
-    await tester.tap(find.text('Add'));
-    await tester.pumpAndSettle();
+    await openAddMenu(tester);
     await tester.tap(find.text('Demo kit: note card'));
     await tester.pump();
 
@@ -70,6 +80,14 @@ void main() {
         '/Users/me/Library/Containers/com.skapie.skapie/Data/Library/Application Support/com.skapie.skapie/skapie/scene.json';
     final store = SceneStore(persistence: SceneFilePersistence(File(absolute)));
     await tester.pumpWidget(SkapieApp(store: store));
+    expect(find.text('Scene: App Support'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const Key('agent-chat-input')),
+      '/settings',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
 
     expect(find.text('Scene: App Support'), findsOneWidget);
     expect(find.textContaining(absolute), findsNothing);

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/builtin_types.dart';
+import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
 
 /// Thin inspector. Edits go through [KitApi] → [SceneStore.apply] only.
@@ -172,11 +173,10 @@ class _InspectorPanelState extends State<InspectorPanel> {
     if (object == null) {
       return const SizedBox.shrink();
     }
-    final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Material(
-      color: colors.surfaceContainerHighest,
+      type: MaterialType.transparency,
       child: SizedBox(
         width: 260,
         child: ListView(
@@ -217,7 +217,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
             ),
             ..._typeFields(object),
             const SizedBox(height: 8),
-            FilledButton.tonal(onPressed: _delete, child: const Text('Delete')),
+            PaintButton(label: 'Delete', onPressed: _delete),
           ],
         ),
       ),
@@ -342,15 +342,10 @@ class _InspectorPanelState extends State<InspectorPanel> {
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: TextField(
+      child: PaintTextField(
         key: key,
         controller: controller,
-        style: Theme.of(context).textTheme.bodySmall,
-        decoration: InputDecoration(
-          labelText: label,
-          isDense: true,
-          border: const OutlineInputBorder(),
-        ),
+        label: label,
         onChanged: onChanged,
         onSubmitted: onSubmitted,
       ),

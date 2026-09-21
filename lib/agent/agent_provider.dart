@@ -234,7 +234,12 @@ ResolvedAgentRuntime mergeAgentRuntime({
       dartDefineProvider: provider,
       dartDefineBaseUrl: baseOverride,
       dartDefineApiKey:
-          _firstNonEmpty([memoryApiKey, merged.dartDefineApiKey]) ?? '',
+          _firstNonEmpty([
+            memoryApiKey,
+            prefs.apiKey,
+            merged.dartDefineApiKey,
+          ]) ??
+          '',
       dartDefineModel: prefs.model ?? '',
       envApiKey: merged.envApiKey,
       environment: merged.environment,

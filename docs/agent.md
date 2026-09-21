@@ -10,7 +10,7 @@ The message log is session state. The **scene document** remains the source of t
 |---|---|
 | Settings: provider → paste key → Connect → model picker | Streaming tokens |
 | Thinking dropdown when the catalog lists efforts | Pi port, MCP, OAuth, Anthropic Messages path |
-| Prefs: provider + model + thinkingLevel (no key, no base URL) | Chat history persistence, markdown chrome |
+| Prefs: provider + model + thinkingLevel + local key (never scene.json) | Chat history persistence, markdown chrome |
 | Overlay chat + Fake/live chip + empty-state prompts | Sandbox kits, visible sub-agent kits, workers |
 
 Dream goal (visible sub-agent kits on the canvas) is **not** this harness.
@@ -87,25 +87,21 @@ Suggested model examples only (not hardcoded as runtime defaults): OpenCode Go `
 
 ### Prefs vs API key
 
-Non-secret prefs persist at **`<Application Support>/skapie/agent_prefs.json`** (same family as `scene.json`): `provider`, `model`, optional `thinkingLevel`. Schema version 2. **The API key is never written to that file, never written into `scene.json`, and never committed.** Base URL is not written from the UI (old `baseUrl` keys are ignored for known presets). The key stays in process memory until quit. Next launch: prefs restore provider + last model id; the key field is blank unless env/dart-define supplies it. Without a key, Fake again until Connect + Apply.
+Prefs persist at **`<Application Support>/skapie/agent_prefs.json`** (same family as `scene.json`): `provider`, `model`, optional `thinkingLevel`, optional `apiKey`. Schema version 2. **The API key is never written into `scene.json` and never committed.** Base URL is not written from the UI (old `baseUrl` keys are ignored for known presets). Reopening settings restores the last provider, model, and key so Apply still works. Next launch uses that file unless env/dart-define supplies a key.
 
 ### Request mapping
 
-Session messages map to OpenAI `messages` with roles `system` / `user` / `assistant` / `tool`. Assistant steps that called tools include `tool_calls`; tool results include `tool_call_id`. Kit `AgentTool`s become OpenAI `tools` function entries. The model returns the same `AgentModelReply` shape Fake/Scripted already use — there is no second tool loop.
+Session messages map to OpenAI `messages` with roles `system` / `user` / `assistant` / `tool`. Assistant steps that called tools include `tool_calls`; tool results include `tool_call_id`. Kit `AgentTool`s become OpenAI `tools` function entries with JSON Schema `parameters` (OpenCode Go rejects empty schemas). The model returns the same `AgentModelReply` shape Fake/Scripted already use — there is no second tool loop.
 
 Timeouts (60s) and non-2xx responses throw `AgentHttpException`. Chat shows the error; the user message stays.
 
 ## Chat panel
 
-Overlay on the **left** of the canvas stack (inspector stays on the right). Opening chat or settings does **not** shrink the viewport. Toggle with the header Chat button.
+Overlay at the **bottom center** of the canvas (inspector stays on the right). The strip is about one third of the window width, capsule-shaped, field only. Opening settings does **not** shrink the viewport.
 
-Header chip: **Fake** or `{preset} · {model}`. Gear opens **Agent settings** in the same overlay (close without Apply leaves the running session unchanged).
+`/settings`, `/settings/`, or Cmd+, opens **Agent settings** as a transient sheet (close without Apply leaves the running session unchanged). Add lives in that sheet.
 
-Empty state (no user messages yet): one line that you are Fake or live, plus suggested prompts — *Add a box near the center*, *Instantiate the demo note kit*, *List kits*. Tapping a suggestion fills the input.
-
-The panel lists user / assistant / tool lines (plain text), a field, and Send. Send is disabled while a turn is in flight. It calls `session.sendUser` only — never `KitApi`. Failures and resolve warnings show as an error line.
-
-One shared `AgentController` is created at bootstrap with the live `KitApi`. Tests may pass `SkapieApp(agentSession: …)` (wrapped as Fake) or `agentController:`.
+The strip calls `session.sendUser` on Return, never `KitApi`. One shared `AgentController` is created at bootstrap with the live `KitApi`. Tests may pass `SkapieApp(agentSession: …)` (wrapped as Fake) or `agentController:`.
 
 ### Settings (Connect → pick)
 
@@ -113,7 +109,7 @@ Provider dropdown: `fake`, `opencode-go`, `openrouter`, `openai` (no `custom` in
 
 **Thinking:** shown only when the selected catalog entry has `supported_efforts` or `reasoning.efforts` (OpenRouter). Includes an **off** choice. OpenRouter Apply sends `reasoning: { effort }` on chat completions when a non-off level is selected. OpenCode Go / OpenAI catalogs are id-only today — Thinking is hidden; no fake header.
 
-- **Apply** — requires a successful Connect and a selected model. Saves prefs (no key), rebuilds `AgentSession`. Clears prior turns; keeps the default system prompt.
+- **Apply** — requires a selected model and a key (from the field, last Apply, or env). Saves prefs, rebuilds `AgentSession`. Clears prior turns; keeps the default system prompt.
 - **Use Fake** — one-click `FakeAgentModel` (also persisted as provider `fake`).
 - Changing provider clears the fetched catalog and disables Model.
 
@@ -146,7 +142,7 @@ If `complete` throws:
 
 ## Run with a real model
 
-Never commit API keys. Startup env/dart-define still works. You can also paste a key in **Agent settings** (memory only).
+Never commit API keys. Startup env/dart-define still works. You can also paste a key in **Agent settings**; it is stored in Application Support prefs, not the scene.
 
 ```bash
 # OpenCode Go

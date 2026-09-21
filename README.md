@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 10.1** — post-core settings UX (Connect → fetch models). The 10-phase core (canvas, scene, kits, Kit API, agent tools, OpenAI-compatible chat, settings) is complete. Streaming, Pi/MCP, sandbox kits, and visible sub-agent kits are later arcs.
+This repository is **Phase 10.2** — cosmetic paint on the finished core (dark luxury chrome, bottom chat bar, transient settings). Streaming, Pi/MCP, sandbox kits, and visible sub-agent kits are later arcs.
 
 ## Run on macOS
 
@@ -41,7 +41,7 @@ flutter run -d macos \
 # or: --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
-**Agent:** Chat is a left overlay (canvas does not reflow). The header chip shows **Fake** or `{preset} · {model}`. Gear → pick provider → paste key → **Connect** (loads `/models`) → pick a model → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking persist in Application Support `skapie/agent_prefs.json` (not the key, not a base URL).
+**Agent:** A capsule chat strip at the bottom (about one third of the window). Canvas does not reflow. `/settings` or Cmd+, opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`.
 
 ```bash
 # OpenCode Go (preferred for local testing)
@@ -102,4 +102,5 @@ Skapie is built phase by phase. **The 10-phase core is complete.** Phase 10.1 is
 - [`docs/kit_api.md`](docs/kit_api.md) — Kit API reference, cookbook, agent tools
 - [`docs/kit_packages.md`](docs/kit_packages.md) — folder contract, `kit.json`, kits root
 - [`docs/agent.md`](docs/agent.md) — session, tool loop, provider presets, overlay chat, Connect → models
+- [`docs/paint.md`](docs/paint.md) — cosmetic identity: tokens, transient settings
 - **Dream goal / later arcs (not scheduled):** visible sub-agent kits, sandbox, personal coding-agent kit — the 10-phase core is not that
