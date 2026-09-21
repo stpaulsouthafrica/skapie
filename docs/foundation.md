@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces. **10.4** is the command palette and selection-scoped LLM typing.
 
 ## Phase 1 gate — done
 
@@ -121,12 +121,21 @@ The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, 
 - `AgentSession` tool loop is kept but is not the default first Enter.
 - `flutter analyze` clean; `flutter test` green. No animations.
 
-## Phase 10.3.1 gate (current)
+## Phase 10.3.1 gate — done
 
 - Curated providers catalog in `lib/providers/`. OpenCode Go seating chart: [`lib/providers/opencode_go/opencode_go_catalog.json`](../lib/providers/opencode_go/opencode_go_catalog.json). How-to: [providers](providers.md).
 - Connect joins live `GET /models` with the chart. Unknown live ids are unverified (not silently completions). Chart-only ids missing from live are omitted.
 - Vanilla first Enter routes `switch (surface)`: completions `/chat/completions`, responses `/responses`, messages `/messages`. User text only on all three.
 - LLM kit diagnostics include provider, model, surface, URL, status, body. Never the API key.
+- `flutter analyze` clean; `flutter test` green.
+
+## Phase 10.4 gate (current)
+
+- No persistent bottom chat bar. The world is full-bleed. Quiet empty hint: `Space to add`.
+- Space / F3 opens a paint-styled command palette (Esc, click-away, or an action closes it). Palette adds kits/primitives via KitApi and opens Settings. It does not send chat.
+- LLM kit stays a **compound** (`harness.llm` with prompt/reply on one kit). Selecting it shows a prompt field. Typing updates `prompt` through KitApi. Enter runs vanilla onto **that** kit body.
+- With nothing selected as an LLM kit, keystrokes do not talk to a hidden global agent.
+- Cmd+, still opens settings. No Input/Output kit split. No cables.
 - `flutter analyze` clean; `flutter test` green.
 
 ## Dream goal (not scheduled)

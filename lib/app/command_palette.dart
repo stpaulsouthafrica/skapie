@@ -29,7 +29,10 @@ List<CommandAction> filterCommandActions(
   if (q.isEmpty) {
     return actions;
   }
-  return [for (final action in actions) if (_matches(action, q)) action];
+  return [
+    for (final action in actions)
+      if (_matches(action, q)) action,
+  ];
 }
 
 bool _matches(CommandAction action, String query) {
@@ -37,17 +40,9 @@ bool _matches(CommandAction action, String query) {
   if (hay.contains(query)) {
     return true;
   }
-  var index = 0;
-  for (final unit in hay.codeUnits) {
-    if (unit != query.codeUnitAt(index)) {
-      continue;
-    }
-    index += 1;
-    if (index == query.length) {
-      return true;
-    }
-  }
-  return false;
+  final compactHay = hay.replaceAll(RegExp(r'[\s\-]+'), '');
+  final compactQuery = query.replaceAll(RegExp(r'[\s\-]+'), '');
+  return compactHay.contains(compactQuery);
 }
 
 class CommandPalette extends StatefulWidget {

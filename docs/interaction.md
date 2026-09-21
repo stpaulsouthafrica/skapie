@@ -9,7 +9,8 @@ Selection, move, and inspector edits are UI. The scene document stays the source
 - **Middle mouse (button 2) down + drag:** pan the camera. Does not select or move objects, even over a hit.
 - **Trackpad pan / scroll / pinch zoom:** unchanged. Zoom still aims at the cursor.
 - While move-dragging, the camera does not pan.
-- **Escape:** cancel an in-progress move preview, otherwise clear selection.
+- **Escape:** cancel an in-progress move preview, otherwise clear selection. If the command palette is open, Escape closes it instead.
+- **Space / F3:** open the command palette when the canvas has focus and the user is not typing in a text field.
 - **Delete / Backspace:** `RemoveObject` when the canvas has focus (inspector text fields keep those keys).
 
 Hit-test is world-space AABB from `x,y,width,height`. **Rotation is ignored** (same as camera content bounds). Invisible objects are skipped. Highest `zIndex` wins; later list order breaks ties.

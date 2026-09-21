@@ -111,7 +111,11 @@ void main() {
       );
       await controller.sendUser('hello');
       expect(controller.session.messages, hasLength(1));
-      expect(controller.session.messages.single.role, AgentRole.system);
+      expect(kitApi.store.document.objects, isEmpty);
+
+      final ids = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+      await controller.sendUser('hello', targetBodyId: ids.last);
+      expect(controller.session.messages, hasLength(1));
       final bodies = kitApi.store.document.objects.where(
         (object) => object.props['skapieRole'] == 'body',
       );
@@ -125,7 +129,7 @@ void main() {
         isNot(contains('apiKey')),
       );
 
-      await controller.sendUser('again');
+      await controller.sendUser('again', targetBodyId: ids.last);
       expect(
         kitApi.store.document.objects.where(
           (object) => object.props['skapieKit'] == harnessLlmKitId,
@@ -175,8 +179,9 @@ void main() {
         origin: const Offset(400, 24),
       );
       kitApi.instantiate(harnessToolsKitId, origin: const Offset(400, 240));
+      final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
       await expectLater(
-        controller.sendUser('hello'),
+        controller.sendUser('hello', targetBodyId: llmIds.last),
         throwsA(isA<AgentHttpException>()),
       );
       expect(sent!['messages'], [

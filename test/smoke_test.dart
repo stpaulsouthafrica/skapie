@@ -1,26 +1,26 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/scene/scene.dart';
 
 void main() {
-  testWidgets('home screen shows the canvas and chat bar', (tester) async {
+  testWidgets('home screen shows the canvas and no chat bar', (tester) async {
     await tester.pumpWidget(SkapieApp(store: SceneStore()));
 
     expect(find.byType(CanvasViewport), findsOneWidget);
-    expect(find.byKey(const Key('agent-chat-input')), findsOneWidget);
+    expect(find.byKey(const Key('agent-chat-input')), findsNothing);
     expect(find.text('Skapie'), findsNothing);
+    expect(find.text('Space to add'), findsOneWidget);
   });
 
   Future<void> openAddMenu(WidgetTester tester) async {
-    await tester.enterText(
-      find.byKey(const Key('agent-chat-input')),
-      '/settings',
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
     await tester.pump();
     await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
@@ -82,11 +82,9 @@ void main() {
     await tester.pumpWidget(SkapieApp(store: store));
     expect(find.text('Scene: App Support'), findsNothing);
 
-    await tester.enterText(
-      find.byKey(const Key('agent-chat-input')),
-      '/settings',
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
     await tester.pump();
 
     expect(find.text('Scene: App Support'), findsOneWidget);

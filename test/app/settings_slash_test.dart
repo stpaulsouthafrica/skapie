@@ -5,8 +5,15 @@ import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/scene/scene.dart';
 
+Future<void> openSettings(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+  await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+  await tester.pump();
+}
+
 void main() {
-  testWidgets('/settings opens a transient sheet and does not resize canvas', (
+  testWidgets('Cmd+, opens a transient sheet and does not resize canvas', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(800, 600));
@@ -16,21 +23,11 @@ void main() {
     await tester.pumpWidget(SkapieApp(store: store));
     final before = tester.getSize(find.byType(CanvasViewport));
 
-    await tester.enterText(
-      find.byKey(const Key('agent-chat-input')),
-      '/settings',
-    );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
+    await openSettings(tester);
 
     expect(find.text('Agent settings'), findsOneWidget);
     expect(find.text('Look'), findsNothing);
     expect(tester.getSize(find.byType(CanvasViewport)), before);
-
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
-    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
-    await tester.pump();
-    expect(find.text('Agent settings'), findsWidgets);
+    expect(find.byKey(const Key('agent-chat-input')), findsNothing);
   });
 }

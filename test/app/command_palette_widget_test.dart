@@ -130,4 +130,38 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsNothing);
     expect(find.text('Agent settings'), findsOneWidget);
   });
+
+  testWidgets('settings Use Fake swaps session and does not resize canvas', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    await pumpHome(
+      tester,
+      store: store,
+      kitApi: kitApi,
+      controller: controller,
+    );
+    final before = tester.getSize(find.byType(CanvasViewport));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.meta);
+    await tester.sendKeyEvent(LogicalKeyboardKey.comma);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
+    await tester.pump();
+
+    final sessionBefore = controller.session;
+    await tester.tap(find.byKey(const Key('agent-settings-fake')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(controller.session, isNot(same(sessionBefore)));
+    expect(controller.runtime.useFake, isTrue);
+    expect(store.document.objects, isEmpty);
+    expect(tester.getSize(find.byType(CanvasViewport)), before);
+  });
 }

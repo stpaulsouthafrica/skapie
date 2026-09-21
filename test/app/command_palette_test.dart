@@ -14,20 +14,17 @@ void main() {
   });
 
   test('substring filter is case insensitive on the label', () {
-    expect(
-      filterCommandActions(actions, 'llm').map((action) => action.id),
-      ['add-llm'],
-    );
-    expect(
-      filterCommandActions(actions, 'SET').map((action) => action.id),
-      ['settings'],
-    );
+    expect(filterCommandActions(actions, 'llm').map((action) => action.id), [
+      'add-llm',
+    ]);
+    expect(filterCommandActions(actions, 'SET').map((action) => action.id), [
+      'settings',
+    ]);
   });
 
-  test('fuzzy subsequence still matches a label', () {
-    expect(
-      filterCommandActions(actions, 'asp').map((action) => action.id),
-      ['add-system-prompt'],
-    );
+  test('compact substring still matches a label', () {
+    expect(filterCommandActions(actions, 'addsys').map((action) => action.id), [
+      'add-system-prompt',
+    ]);
   });
 }

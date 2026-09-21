@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 10.3.1** — vanilla first Enter on OpenCode Go completions / responses / messages, with a curated providers catalog. Streaming, Pi/MCP, sandbox kits, and living sub-agent kits are later arcs.
+This repository is **Phase 10.4** — command palette (Space / F3) and selection-scoped typing on compound LLM kits. No persistent chat bar. Streaming, Pi/MCP, sandbox kits, and living sub-agent kits are later arcs.
 
 ## Run on macOS
 
@@ -41,7 +41,7 @@ flutter run -d macos \
 # or: --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
-**Agent:** A capsule chat strip at the bottom (about one third of the window) is an on-ramp. Enter sends vanilla user text only. OpenCode Go models are routed from the curated catalog (`lib/providers/opencode_go/`) to `/chat/completions`, `/responses`, or `/messages`. The latest turn shows on the `harness.llm` kit. System prompt and tools are separate stub kits you can add to the board; they do not silently attach to first Enter. `/settings` or Cmd+, opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`. See [`docs/providers.md`](docs/providers.md).
+**Agent:** No persistent chat bar. **Space** or **F3** opens a command palette to add kits and primitives or open Settings. Select a compound LLM kit, type a prompt, Enter to run vanilla onto that kit. OpenCode Go models are routed from the curated catalog (`lib/providers/opencode_go/`) to `/chat/completions`, `/responses`, or `/messages`. System prompt and tools are separate stub kits; they do not silently attach. Cmd+, (or palette **Settings**) opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`. See [`docs/providers.md`](docs/providers.md) and [`docs/agent.md`](docs/agent.md).
 
 ```bash
 # OpenCode Go (preferred for local testing)
@@ -96,6 +96,8 @@ Skapie is built phase by phase. **The 10-phase core is complete.** Phase 10.1 is
 
 **Phase 10.3.1 gate:** OpenCode Go seating chart in `lib/providers/`; completions / responses / messages vanilla routing.
 
+**Phase 10.4 gate:** command palette (Space / F3); no persistent chat bar; selection typing on compound LLM kits.
+
 ## Docs
 
 - [`docs/glossary.md`](docs/glossary.md) — canvas, world origin, scene object, kit, kit recipe, kit package, graph node
@@ -105,7 +107,7 @@ Skapie is built phase by phase. **The 10-phase core is complete.** Phase 10.1 is
 - [`docs/interaction.md`](docs/interaction.md) — select, move, inspector
 - [`docs/kit_api.md`](docs/kit_api.md) — Kit API reference, cookbook, agent tools
 - [`docs/kit_packages.md`](docs/kit_packages.md) — folder contract, `kit.json`, kits root
-- [`docs/agent.md`](docs/agent.md) — session, vanilla first Enter, harness kits, Connect → models
+- [`docs/agent.md`](docs/agent.md) — command palette, selection typing, compound LLM kit, Connect → models
 - [`docs/providers.md`](docs/providers.md) — OpenCode Go seating chart and surfaces
 - [`docs/paint.md`](docs/paint.md) — cosmetic identity: tokens, transient settings
 - **Dream goal / later arcs (not scheduled):** visible sub-agent kits, sandbox, personal coding-agent kit — the 10-phase core is not that

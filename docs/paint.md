@@ -19,7 +19,7 @@ The look is fixed: dark + champagne gold. There is no appearance prefs file and 
 
 ## Transient chrome
 
-The canvas is full-bleed. There is no top app bar. The chat strip is a capsule about one third of the window width, field only, Return to send. Settings open as a dismissible sheet from `/settings`, `/settings/`, or Cmd+,. Add and the scene path live in that sheet. The inspector is an overlay while something is selected. Nothing non-kit stays parked in the world.
+The canvas is full-bleed. There is no top app bar and no persistent chat strip. Space / F3 opens a command palette. An empty world may show a muted `Space to add` hint. Settings open as a dismissible sheet from Cmd+, or the palette. Add and the scene path live in that sheet. Selecting a compound LLM kit shows a prompt field; Enter runs vanilla onto that kit. The inspector is an overlay while something is selected. Nothing non-kit stays parked in the world.
 
 ## Not this folder
 

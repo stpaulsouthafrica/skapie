@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -61,17 +59,11 @@ void main() {
       prompt: 'targeted',
       reply: 'ok',
     );
-    expect(
-      kitApi.store.document.objectById(first.last)!.props['prompt'],
-      '',
-    );
+    expect(kitApi.store.document.objectById(first.last)!.props['prompt'], '');
     expect(
       kitApi.store.document.objectById(second.last)!.props['prompt'],
       'targeted',
     );
-    expect(
-      kitApi.store.document.objectById(second.last)!.props['reply'],
-      'ok',
-    );
+    expect(kitApi.store.document.objectById(second.last)!.props['reply'], 'ok');
   });
 }
