@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -32,6 +34,72 @@ void main() {
 
     expect(find.text('hello'), findsWidgets);
     expect(find.text('Echo: hello'), findsOneWidget);
+    expect(store.document.objects, isEmpty);
+    expect(tester.getSize(find.byType(CanvasViewport)), before);
+  });
+
+  testWidgets('chat shows Fake chip and empty-state suggestions', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    await tester.pumpWidget(
+      SkapieApp(
+        store: store,
+        kitApi: kitApi,
+        agentController: AgentController(
+          kitApi: kitApi,
+          session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+          runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Chat'));
+    await tester.pump();
+
+    expect(find.text('Fake'), findsOneWidget);
+    expect(find.text('Add a box near the center'), findsOneWidget);
+    expect(find.text('Instantiate the demo note kit'), findsOneWidget);
+    expect(find.text('List kits'), findsOneWidget);
+  });
+
+  testWidgets('settings Use Fake swaps session and does not resize canvas', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    await tester.pumpWidget(
+      SkapieApp(store: store, kitApi: kitApi, agentController: controller),
+    );
+
+    await tester.tap(find.byTooltip('Chat'));
+    await tester.pump();
+    final before = tester.getSize(find.byType(CanvasViewport));
+
+    await tester.tap(find.byTooltip('Agent settings'));
+    await tester.pump();
+    expect(tester.getSize(find.byType(CanvasViewport)), before);
+
+    final sessionBefore = controller.session;
+    await tester.tap(find.byKey(const Key('agent-settings-fake')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(controller.session, isNot(same(sessionBefore)));
+    expect(controller.runtime.useFake, isTrue);
+    expect(find.text('Fake'), findsWidgets);
     expect(store.document.objects, isEmpty);
     expect(tester.getSize(find.byType(CanvasViewport)), before);
   });

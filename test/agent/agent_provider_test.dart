@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 
 void main() {
@@ -70,5 +71,66 @@ void main() {
       dartDefineModel: 'm',
     );
     expect(resolved.useFake, isTrue);
+  });
+
+  test('prefs Apply wins over env provider inference', () {
+    final resolved = mergeAgentRuntime(
+      prefs: const AgentPrefs(
+        providerId: 'openrouter',
+        model: 'anthropic/claude-sonnet-4',
+      ),
+      memoryApiKey: 'or-from-ui',
+      environment: {'OPENCODE_API_KEY': 'oc-secret'},
+    );
+    expect(resolved.useFake, isFalse);
+    expect(resolved.presetId, 'openrouter');
+    expect(resolved.apiKey, 'or-from-ui');
+    expect(resolved.model, 'anthropic/claude-sonnet-4');
+  });
+
+  test('prefs Fake Apply stays Fake even when env has a key', () {
+    final resolved = mergeAgentRuntime(
+      prefs: const AgentPrefs(providerId: 'fake'),
+      environment: {'OPENCODE_API_KEY': 'oc-secret'},
+    );
+    expect(resolved.useFake, isTrue);
+    expect(resolved.presetId, 'fake');
+  });
+
+  test('prefs without memory key still uses native env key', () {
+    final resolved = mergeAgentRuntime(
+      prefs: const AgentPrefs(providerId: 'opencode-go', model: 'kimi-k2.6'),
+      environment: {'OPENCODE_API_KEY': 'oc-secret'},
+    );
+    expect(resolved.useFake, isFalse);
+    expect(resolved.apiKey, 'oc-secret');
+  });
+
+  test('no prefs falls through to env resolve', () {
+    final resolved = mergeAgentRuntime(
+      dartDefineModel: 'kimi-k2.6',
+      environment: {'OPENCODE_API_KEY': 'oc-secret'},
+    );
+    expect(resolved.presetId, 'opencode-go');
+    expect(resolved.useFake, isFalse);
+  });
+
+  test('status chip is Fake or preset · model', () {
+    expect(
+      agentStatusChip(
+        const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      ),
+      'Fake',
+    );
+    expect(
+      agentStatusChip(
+        const ResolvedAgentRuntime(
+          presetId: 'opencode-go',
+          useFake: false,
+          model: 'kimi-k2.6',
+        ),
+      ),
+      'opencode-go · kimi-k2.6',
+    );
   });
 }

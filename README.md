@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 9.2 of 10** — canvas, scene, kits, Kit API, kit tools, an OpenAI-compatible agent provider, and an overlay chat panel. Streaming, Pi/MCP, and product polish are not this slice.
+This repository is **Phase 10 of 10** — the scheduled core (canvas, scene, kits, Kit API, agent tools, OpenAI-compatible chat, settings). Streaming, Pi/MCP, sandbox kits, and visible sub-agent kits are later arcs, not this core.
 
 ## Run on macOS
 
@@ -41,7 +41,7 @@ flutter run -d macos \
 # or: --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
-**Agent:** Chat is a left overlay (canvas does not reflow). No API key → `FakeAgentModel` (Echo). Keys are dart-define / env only — never committed, never written into the scene file.
+**Agent:** Chat is a left overlay (canvas does not reflow). The header chip shows **Fake** or `{preset} · {model}`. Gear → Agent settings: pick a provider, paste a key (memory only; not saved to disk), Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/base URL persist in Application Support `skapie/agent_prefs.json`.
 
 ```bash
 # OpenCode Go (preferred for local testing)
@@ -57,13 +57,14 @@ flutter run -d macos \
   --dart-define=SKAPIE_AGENT_MODEL=anthropic/claude-sonnet-4
 
 # Or export OPENCODE_API_KEY / OPENROUTER_API_KEY and only pass provider + model.
+# Or run with no key and paste it in Chat → Agent settings.
 ```
 
 Suggested model ids are examples (`kimi-k2.6`, `anthropic/claude-sonnet-4`, `gpt-4o-mini`). See [`docs/agent.md`](docs/agent.md).
 
 ## Foundation gates
 
-Skapie is built phase by phase. **Phase 10 is blocked until the current phase gate is green.** Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Interaction is in [`docs/interaction.md`](docs/interaction.md). Kit API reference is in [`docs/kit_api.md`](docs/kit_api.md). Kit packages are in [`docs/kit_packages.md`](docs/kit_packages.md). Agent harness is in [`docs/agent.md`](docs/agent.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
+Skapie is built phase by phase. **Phase 10 is the last scheduled core gate.** After it is green, the 10-phase core is complete; later arcs stay out of scope. Doctrine lives in [`docs/foundation.md`](docs/foundation.md). Scene details are in [`docs/scene.md`](docs/scene.md). Registry details are in [`docs/registry.md`](docs/registry.md). Interaction is in [`docs/interaction.md`](docs/interaction.md). Kit API reference is in [`docs/kit_api.md`](docs/kit_api.md). Kit packages are in [`docs/kit_packages.md`](docs/kit_packages.md). Agent harness is in [`docs/agent.md`](docs/agent.md). Vocabulary is in [`docs/glossary.md`](docs/glossary.md).
 
 **Phase 1 gate:** macOS shell + folder stubs — done.
 
@@ -85,7 +86,9 @@ Skapie is built phase by phase. **Phase 10 is blocked until the current phase ga
 
 **Phase 9.1 gate:** kit tools → `KitApi`; scripted tool loop — done.
 
-**Phase 9.2 gate:** OpenAI-compatible provider + presets + overlay chat; Fake fallback; `flutter analyze` clean; `flutter test` green. **Phase 10** polish stays next.
+**Phase 9.2 gate:** OpenAI-compatible provider + presets + overlay chat; Fake fallback — done.
+
+**Phase 10 gate:** agent settings, session rebuild, prefs (no key on disk), Fake/live chip, empty state. When green, the **10-phase core is complete**.
 
 ## Docs
 
@@ -96,5 +99,5 @@ Skapie is built phase by phase. **Phase 10 is blocked until the current phase ga
 - [`docs/interaction.md`](docs/interaction.md) — select, move, inspector
 - [`docs/kit_api.md`](docs/kit_api.md) — Kit API reference, cookbook, agent tools
 - [`docs/kit_packages.md`](docs/kit_packages.md) — folder contract, `kit.json`, kits root
-- [`docs/agent.md`](docs/agent.md) — session, tool loop, provider presets, overlay chat
-- **Dream goal (not scheduled):** visible sub-agent kits — see [`docs/kit_packages.md`](docs/kit_packages.md); the harness core is not that
+- [`docs/agent.md`](docs/agent.md) — session, tool loop, provider presets, overlay chat, settings
+- **Dream goal / later arcs (not scheduled):** visible sub-agent kits, sandbox, personal coding-agent kit — the 10-phase core is not that

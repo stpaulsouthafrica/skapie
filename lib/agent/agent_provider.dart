@@ -1,3 +1,8 @@
+import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/agent_prefs.dart';
+import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/kit_api/kit_api.dart';
+
 class AgentHttpPreset {
   const AgentHttpPreset({
     required this.id,
@@ -154,4 +159,125 @@ Map<String, String> agentProviderHeaders({
     },
     _ => const {},
   };
+}
+
+class AgentRuntimeSources {
+  const AgentRuntimeSources({
+    this.dartDefineProvider = '',
+    this.envProvider = '',
+    this.dartDefineBaseUrl = '',
+    this.envBaseUrl = '',
+    this.dartDefineApiKey = '',
+    this.envApiKey = '',
+    this.dartDefineModel = '',
+    this.envModel = '',
+    this.environment = const {},
+  });
+
+  final String dartDefineProvider;
+  final String envProvider;
+  final String dartDefineBaseUrl;
+  final String envBaseUrl;
+  final String dartDefineApiKey;
+  final String envApiKey;
+  final String dartDefineModel;
+  final String envModel;
+  final Map<String, String> environment;
+}
+
+/// Last Apply prefs win over dart-define / env. Missing key/model still Fake.
+ResolvedAgentRuntime mergeAgentRuntime({
+  AgentPrefs? prefs,
+  String? memoryApiKey,
+  AgentRuntimeSources sources = const AgentRuntimeSources(),
+  String dartDefineProvider = '',
+  String envProvider = '',
+  String dartDefineBaseUrl = '',
+  String envBaseUrl = '',
+  String dartDefineApiKey = '',
+  String envApiKey = '',
+  String dartDefineModel = '',
+  String envModel = '',
+  Map<String, String> environment = const {},
+}) {
+  final merged = AgentRuntimeSources(
+    dartDefineProvider: dartDefineProvider.isNotEmpty
+        ? dartDefineProvider
+        : sources.dartDefineProvider,
+    envProvider: envProvider.isNotEmpty ? envProvider : sources.envProvider,
+    dartDefineBaseUrl: dartDefineBaseUrl.isNotEmpty
+        ? dartDefineBaseUrl
+        : sources.dartDefineBaseUrl,
+    envBaseUrl: envBaseUrl.isNotEmpty ? envBaseUrl : sources.envBaseUrl,
+    dartDefineApiKey: dartDefineApiKey.isNotEmpty
+        ? dartDefineApiKey
+        : sources.dartDefineApiKey,
+    envApiKey: envApiKey.isNotEmpty ? envApiKey : sources.envApiKey,
+    dartDefineModel: dartDefineModel.isNotEmpty
+        ? dartDefineModel
+        : sources.dartDefineModel,
+    envModel: envModel.isNotEmpty ? envModel : sources.envModel,
+    environment: environment.isNotEmpty ? environment : sources.environment,
+  );
+  if (prefs != null) {
+    final provider = prefs.providerId.trim();
+    if (provider.isEmpty || provider == 'fake') {
+      return const ResolvedAgentRuntime(presetId: 'fake', useFake: true);
+    }
+    return resolveAgentRuntime(
+      dartDefineProvider: provider,
+      dartDefineBaseUrl: prefs.baseUrl ?? '',
+      dartDefineApiKey:
+          _firstNonEmpty([memoryApiKey, merged.dartDefineApiKey]) ?? '',
+      dartDefineModel: prefs.model ?? '',
+      envApiKey: merged.envApiKey,
+      environment: merged.environment,
+    );
+  }
+  return resolveAgentRuntime(
+    dartDefineProvider: merged.dartDefineProvider,
+    envProvider: merged.envProvider,
+    dartDefineBaseUrl: merged.dartDefineBaseUrl,
+    envBaseUrl: merged.envBaseUrl,
+    dartDefineApiKey:
+        _firstNonEmpty([memoryApiKey, merged.dartDefineApiKey]) ?? '',
+    envApiKey: merged.envApiKey,
+    dartDefineModel: merged.dartDefineModel,
+    envModel: merged.envModel,
+    environment: merged.environment,
+  );
+}
+
+String agentStatusChip(ResolvedAgentRuntime runtime) {
+  if (runtime.useFake) {
+    return 'Fake';
+  }
+  final model = runtime.model?.trim() ?? '';
+  if (model.isEmpty) {
+    return runtime.presetId;
+  }
+  return '${runtime.presetId} · $model';
+}
+
+AgentSession buildAgentSession({
+  required KitApi kitApi,
+  required ResolvedAgentRuntime runtime,
+}) {
+  if (runtime.useFake) {
+    return AgentSession(model: const FakeAgentModel(), kitApi: kitApi);
+  }
+  final sessionId = 'agent_${DateTime.now().microsecondsSinceEpoch}';
+  return AgentSession(
+    model: OpenAiCompatibleAgentModel(
+      baseUrl: runtime.baseUrl!,
+      apiKey: runtime.apiKey!,
+      model: runtime.model!,
+      headers: agentProviderHeaders(
+        presetId: runtime.presetId,
+        sessionId: sessionId,
+      ),
+    ),
+    kitApi: kitApi,
+    id: sessionId,
+  );
 }

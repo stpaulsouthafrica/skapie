@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. Phase 10 is blocked until the current phase gate is green.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. After Phase 10 is green, the 10-phase core is complete; later arcs are not numbered phases.
 
 ## Phase 1 gate — done
 
@@ -84,15 +84,21 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - `ScriptedAgentModel` for tests. Unknown tool / unknown `typeId` → tool error JSON, scene unchanged.
 - No chat UI, no HTTP in 9.1.
 
-## Phase 9.2 gate (current)
+## Phase 9.2 gate — done
 
 - `OpenAiCompatibleAgentModel` POST `{baseUrl}/chat/completions`; inject `http.Client` in tests.
 - Named presets `opencode-go`, `openrouter`, `openai`, `custom` (one HTTP client). Missing key/model → `FakeAgentModel`.
 - Overlay chat panel calls `AgentSession.sendUser` only; canvas does not reflow. Failures visible in chat.
-- `flutter analyze` clean; `flutter test` covers mapping, presets, mock HTTP, and Fake Echo chat.
 
-**Phase 10** stays blocked until this gate is green. See [agent.md](agent.md).
+## Phase 10 gate (current)
+
+- Agent settings (gear on chat): provider, model, API key, optional base URL. Apply rebuilds `AgentSession` on the same `KitApi` (system prompt kept; prior turns cleared). Use Fake one-click.
+- Non-secret prefs at Application Support `skapie/agent_prefs.json` (provider / model / base URL). API key is memory-only (or env/dart-define). Never in `scene.json`.
+- Chat chip Fake vs `{preset} · {model}`; empty-state suggested prompts. Overlay still does not reflow the canvas.
+- `flutter analyze` clean; `flutter test` covers prefs round-trip, merge (UI override wins), session swap, and Fake Echo chat.
+
+When this gate is green, the **10-phase core is complete**. See [agent.md](agent.md). Later arcs (streaming, Pi/MCP, sandbox kits, visible sub-agent kits, personal coding-agent kit) stay out of scope.
 
 ## Dream goal (not scheduled)
 
-Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The agent harness (session + kit tools + overlay chat) is **not** that. Planted seam: `capabilities: []` in `kit.json`.
+Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The 10-phase core (session + kit tools + overlay chat + settings) is **not** that. Planted seam: `capabilities: []` in `kit.json`.

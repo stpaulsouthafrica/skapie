@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
-import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_package_store.dart';
@@ -25,8 +25,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final store = await bootstrapSceneStore();
   final kitApi = await bootstrapKitApi(store: store);
-  final agentSession = bootstrapAgentSession(kitApi: kitApi);
-  runApp(SkapieApp(store: store, kitApi: kitApi, agentSession: agentSession));
+  final agentController = await bootstrapAgentController(kitApi: kitApi);
+  runApp(
+    SkapieApp(store: store, kitApi: kitApi, agentController: agentController),
+  );
 }
 
 Future<SceneStore> bootstrapSceneStore({
@@ -98,8 +100,15 @@ Future<KitApi> bootstrapKitApi({
   return api;
 }
 
-AgentSession bootstrapAgentSession({required KitApi kitApi}) {
-  final runtime = resolveAgentRuntime(
+Future<AgentController> bootstrapAgentController({
+  required KitApi kitApi,
+  Directory? appSupportDirectory,
+}) async {
+  final appSupport =
+      appSupportDirectory ?? await getApplicationSupportDirectory();
+  final prefsStore = AgentPrefsStore(agentPrefsFile(appSupport));
+  final prefs = await prefsStore.load();
+  final sources = AgentRuntimeSources(
     dartDefineProvider: _agentProviderDefine,
     envProvider: Platform.environment['SKAPIE_AGENT_PROVIDER'] ?? '',
     dartDefineBaseUrl: _agentBaseUrlDefine,
@@ -108,25 +117,23 @@ AgentSession bootstrapAgentSession({required KitApi kitApi}) {
     envApiKey: Platform.environment['SKAPIE_AGENT_API_KEY'] ?? '',
     dartDefineModel: _agentModelDefine,
     envModel: Platform.environment['SKAPIE_AGENT_MODEL'] ?? '',
-    environment: Platform.environment,
+    environment: Map<String, String>.from(Platform.environment),
   );
+  final runtime = mergeAgentRuntime(prefs: prefs, sources: sources);
   if (runtime.warning != null) {
     debugPrint('Skapie: ${runtime.warning}');
   }
-  if (runtime.useFake) {
-    debugPrint('Skapie agent: FakeAgentModel');
-    return AgentSession(model: const FakeAgentModel(), kitApi: kitApi);
-  }
-  final sessionId = 'agent_${DateTime.now().microsecondsSinceEpoch}';
-  final model = OpenAiCompatibleAgentModel(
-    baseUrl: runtime.baseUrl!,
-    apiKey: runtime.apiKey!,
-    model: runtime.model!,
-    headers: agentProviderHeaders(
-      presetId: runtime.presetId,
-      sessionId: sessionId,
-    ),
+  debugPrint(
+    runtime.useFake
+        ? 'Skapie agent: FakeAgentModel'
+        : 'Skapie agent: ${runtime.presetId} model=${runtime.model}',
   );
-  debugPrint('Skapie agent: ${runtime.presetId} model=${runtime.model}');
-  return AgentSession(model: model, kitApi: kitApi, id: sessionId);
+  return AgentController(
+    kitApi: kitApi,
+    session: buildAgentSession(kitApi: kitApi, runtime: runtime),
+    runtime: runtime,
+    prefsStore: prefsStore,
+    sources: sources,
+    prefs: prefs,
+  );
 }

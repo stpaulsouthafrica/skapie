@@ -7,7 +7,7 @@
 - [Interaction](interaction.md) — select, move, inspector; selection is not scene state
 - [Kit API](kit_api.md) — Kit API reference, cookbook, agent tools (Phase 9.1)
 - [Kit packages](kit_packages.md) — `kit.json` schema (single source), repo vs App Support vs `SKAPIE_KITS_ROOT`
-- [Agent harness](agent.md) — session, tool loop, provider presets, overlay chat
-- **Dream goal (not scheduled):** visible sub-agent kits — doctrine only; harness core is not that
+- [Agent harness](agent.md) — session, tool loop, provider presets, overlay chat, settings
+- **Dream goal / later arcs (not scheduled):** visible sub-agent kits, sandbox, personal coding-agent kit — the 10-phase core is not that
 
 See also the product overview and run instructions in the [root README](../README.md).

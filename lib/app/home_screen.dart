@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/app/agent_chat_panel.dart';
 import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
@@ -16,13 +16,13 @@ class HomeScreen extends StatefulWidget {
     required this.store,
     required this.registry,
     required this.kitApi,
-    required this.agentSession,
+    required this.agentController,
   });
 
   final SceneStore store;
   final ObjectRegistry registry;
   final KitApi kitApi;
-  final AgentSession agentSession;
+  final AgentController agentController;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -206,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     top: 0,
                     left: 0,
                     bottom: 0,
-                    child: AgentChatPanel(session: widget.agentSession),
+                    child: AgentChatPanel(controller: widget.agentController),
                   ),
                 if (_selection.selectedId != null)
                   Positioned(
