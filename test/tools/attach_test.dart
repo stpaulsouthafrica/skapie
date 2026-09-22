@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
@@ -28,18 +29,19 @@ void main() {
       llmBodyId: llm.last,
     );
     expect(
-      kitApi.store.document.objectById(grant.id)!.props[attachedToProp],
-      llm.last,
+      kitHasLink(
+        kitApi.store.document.objectById(grant.id)!,
+        to: llm.last,
+        port: llmToolsPort,
+      ),
+      isTrue,
     );
     expect(attachedToolNames(kitApi: kitApi, llmBodyId: llm.last), [
       'list_kits',
     ]);
 
     detachToolKit(kitApi: kitApi, toolObjectId: grant.id);
-    expect(
-      kitApi.store.document.objectById(grant.id)!.props[attachedToProp],
-      '',
-    );
+    expect(kitLinksOf(kitApi.store.document.objectById(grant.id)!), isEmpty);
     expect(attachedToolNames(kitApi: kitApi, llmBodyId: llm.last), isEmpty);
   });
 

@@ -4,6 +4,7 @@ import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
+import 'package:skapie/paint/cables/cable_motion.dart';
 import 'package:skapie/paint/kit_icon.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
@@ -20,6 +21,7 @@ class SceneObjectLayer extends StatelessWidget {
     this.selectedId,
     this.previewDelta = Offset.zero,
     this.previewIds = const {},
+    this.motion,
   });
 
   final CanvasCamera camera;
@@ -29,9 +31,21 @@ class SceneObjectLayer extends StatelessWidget {
   final String? selectedId;
   final Offset previewDelta;
   final Set<String> previewIds;
+  final CableMotion? motion;
 
   @override
   Widget build(BuildContext context) {
+    final motion = this.motion;
+    if (motion == null) {
+      return _layout(context);
+    }
+    return ListenableBuilder(
+      listenable: motion,
+      builder: (context, _) => _layout(context),
+    );
+  }
+
+  Widget _layout(BuildContext context) {
     if (viewportSize.isEmpty) {
       return const SizedBox.expand();
     }
@@ -108,19 +122,11 @@ class SceneObjectLayer extends StatelessWidget {
     final tokens = PaintScope.of(context);
     final zoom = camera.zoom;
     final body = _bodyForFrame(frame);
-    final typed = body?.props['prompt']?.toString().trim() ?? '';
-    final linked = body == null
-        ? ''
-        : llmCableInput(
-            SceneDocument(id: 'preview', schemaVersion: 1, objects: objects),
-            body.id,
-          ).trim();
-    final prompt = linked.isNotEmpty ? linked : typed;
     final reply = body?.props['reply']?.toString().trim() ?? '';
     final error = body?.props['error']?.toString().trim() ?? '';
     final model = body?.props['model']?.toString().trim() ?? '';
-    final tools = _toolsFor(body?.id);
-    final contextNames = _contextFor(body?.id);
+    final tools = _toolLines(body?.id);
+    final contextNames = _contextLines(body?.id);
     final output = error.isNotEmpty ? error : reply;
     final barH = 32.0 * zoom;
     final labelSize = 11.0 * zoom;
@@ -151,7 +157,8 @@ class SceneObjectLayer extends StatelessWidget {
                 key: const Key('llm-kit-input-region'),
                 tokens: tokens,
                 label: 'Input',
-                body: prompt,
+                lines: _inputLines(body),
+                glow: accent,
                 zoom: zoom,
                 labelSize: labelSize,
               ),
@@ -160,7 +167,8 @@ class SceneObjectLayer extends StatelessWidget {
                 key: const Key('llm-kit-context-region'),
                 tokens: tokens,
                 label: 'Context',
-                body: contextNames,
+                lines: contextNames,
+                glow: accent,
                 zoom: zoom,
                 labelSize: labelSize,
               ),
@@ -169,7 +177,8 @@ class SceneObjectLayer extends StatelessWidget {
                 key: const Key('llm-kit-tools-region'),
                 tokens: tokens,
                 label: 'Tools',
-                body: tools.join('\n'),
+                lines: tools,
+                glow: accent,
                 zoom: zoom,
                 labelSize: labelSize,
               ),
@@ -177,14 +186,16 @@ class SceneObjectLayer extends StatelessWidget {
               _region(
                 key: const Key('llm-kit-output-region'),
                 tokens: tokens,
-                label: 'Output',
-                body: output,
+                label: '',
+                lines: [if (output.isNotEmpty) _KitLine(output)],
+                glow: accent,
                 zoom: zoom,
                 labelSize: labelSize,
               ),
             ],
           ),
         ),
+        _outputCaption(tokens, zoom, frame),
       ],
     );
   }
@@ -236,20 +247,7 @@ class SceneObjectLayer extends StatelessWidget {
           zoom: zoom,
         ),
         if (kitIdOf(frame) == boardTextKitId)
-          Positioned(
-            right: 16 * zoom,
-            top:
-                (frame.height - textOutputInset) * zoom -
-                kitLabelSize * zoom / 2,
-            child: Text(
-              'Output',
-              style: TextStyle(
-                color: tokens.muted,
-                fontSize: kitLabelSize * zoom,
-                letterSpacing: 0.4 * zoom,
-              ),
-            ),
-          ),
+          _outputCaption(tokens, zoom, frame),
       ],
     );
   }
@@ -376,41 +374,159 @@ class SceneObjectLayer extends StatelessWidget {
     );
   }
 
+  Widget _outputCaption(PaintTokens tokens, double zoom, SceneObject frame) {
+    return Positioned(
+      right: 16 * zoom,
+      top: (frame.height - textOutputInset) * zoom - kitLabelSize * zoom / 2,
+      child: Text(
+        'Output',
+        style: TextStyle(
+          color: tokens.muted,
+          fontSize: kitLabelSize * zoom,
+          letterSpacing: 0.4 * zoom,
+        ),
+      ),
+    );
+  }
+
   Widget _region({
     required Key key,
     required PaintTokens tokens,
     required String label,
-    required String body,
+    required List<_KitLine> lines,
+    required Color glow,
     required double zoom,
     required double labelSize,
   }) {
+    final style = TextStyle(color: tokens.ink, fontSize: 12.0 * zoom);
+    final spans = <InlineSpan>[
+      for (final line in lines)
+        if (_visible(line))
+          TextSpan(
+            text: '${line.text}\n',
+            style: arrivalTextStyle(
+              base: style,
+              glowColor: glow,
+              shown: _shown(line.cableId),
+              glow: motion?.glow(line.cableId) ?? 0,
+            ),
+          ),
+    ];
     return Expanded(
       child: KeyedSubtree(
         key: key,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: tokens.muted,
-                fontSize: labelSize,
-                letterSpacing: 0.4 * zoom,
+            if (label.isNotEmpty) ...[
+              Text(
+                label,
+                style: TextStyle(
+                  color: tokens.muted,
+                  fontSize: labelSize,
+                  letterSpacing: 0.4 * zoom,
+                ),
               ),
-            ),
-            SizedBox(height: 4 * zoom),
+              SizedBox(height: 4 * zoom),
+            ],
             Expanded(
-              child: Text(
-                body,
+              child: Text.rich(
+                TextSpan(children: spans),
                 maxLines: 6,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: tokens.ink, fontSize: 12.0 * zoom),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  bool _visible(_KitLine line) {
+    return line.text.isNotEmpty && _shown(line.cableId) > 0;
+  }
+
+  double _shown(String? cableId) => motion?.shown(cableId) ?? 1;
+
+  SceneDocument get _preview =>
+      SceneDocument(id: 'preview', schemaVersion: 1, objects: objects);
+
+  List<_KitLine> _inputLines(SceneObject? body) {
+    if (body == null) {
+      return const [];
+    }
+    final document = _preview;
+    final linked = <_KitLine>[];
+    for (final frame in textFrames(document)) {
+      if (!kitHasLink(frame, to: body.id, port: llmInputPort)) {
+        continue;
+      }
+      final content = textKitContent(document, frame).trim();
+      if (content.isEmpty) {
+        continue;
+      }
+      linked.add(
+        _KitLine(content, cableId: '${frame.id}|${body.id}|$llmInputPort'),
+      );
+    }
+    if (linked.isEmpty) {
+      for (final other in llmBodies(document)) {
+        if (!kitHasLink(other, to: body.id, port: llmInputPort)) {
+          continue;
+        }
+        final reply = other.props['reply']?.toString().trim() ?? '';
+        if (reply.isEmpty) {
+          continue;
+        }
+        linked.add(
+          _KitLine(reply, cableId: '${other.id}|${body.id}|$llmInputPort'),
+        );
+      }
+    }
+    if (linked.isNotEmpty && linked.any((line) => _shown(line.cableId) > 0)) {
+      return linked;
+    }
+    final typed = body.props['prompt']?.toString().trim() ?? '';
+    if (typed.isNotEmpty) {
+      return [_KitLine(typed)];
+    }
+    return linked;
+  }
+
+  List<_KitLine> _contextLines(String? bodyId) {
+    if (bodyId == null) {
+      return const [];
+    }
+    final document = _preview;
+    return [
+      for (final frame in textFrames(document))
+        if (kitHasLink(frame, to: bodyId, port: llmContextPort))
+          _KitLine(
+            kitDisplayName(document, frame),
+            cableId: '${frame.id}|$bodyId|$llmContextPort',
+          ),
+    ];
+  }
+
+  List<_KitLine> _toolLines(String? bodyId) {
+    if (bodyId == null) {
+      return const [];
+    }
+    final lines = <_KitLine>[];
+    for (final object in objects) {
+      if (object.props[skapieRoleProp] != 'frame') {
+        continue;
+      }
+      if (!kitHasLink(object, to: bodyId, port: llmToolsPort)) {
+        continue;
+      }
+      final name = _toolName(object);
+      if (name.isEmpty) {
+        continue;
+      }
+      lines.add(_KitLine(name, cableId: '${object.id}|$bodyId|$llmToolsPort'));
+    }
+    return lines;
   }
 
   Widget _withPort(BuildContext context, SceneObject frame, Widget child) {
@@ -466,34 +582,6 @@ class SceneObjectLayer extends StatelessWidget {
     );
   }
 
-  String _contextFor(String? bodyId) {
-    if (bodyId == null) {
-      return '';
-    }
-    final names = <String>[];
-    for (final object in objects) {
-      if (object.props[skapieRoleProp] != 'frame') {
-        continue;
-      }
-      if (kitIdOf(object) != boardTextKitId) {
-        continue;
-      }
-      if (textConnectedLlmId(object) != bodyId) {
-        continue;
-      }
-      if (textConnectedPort(object) != llmContextPort) {
-        continue;
-      }
-      names.add(
-        kitDisplayName(
-          SceneDocument(id: 'preview', schemaVersion: 1, objects: objects),
-          object,
-        ),
-      );
-    }
-    return names.join('\n');
-  }
-
   SceneObject? _bodyForFrame(SceneObject frame) {
     for (final object in objects) {
       if (isLlmKitObject(object) &&
@@ -504,14 +592,11 @@ class SceneObjectLayer extends StatelessWidget {
     }
     return null;
   }
+}
 
-  List<String> _toolsFor(String? bodyId) {
-    if (bodyId == null) {
-      return const [];
-    }
-    return llmAttachedToolNames(
-      SceneDocument(id: 'preview', schemaVersion: 1, objects: objects),
-      bodyId,
-    );
-  }
+class _KitLine {
+  const _KitLine(this.text, {this.cableId});
+
+  final String text;
+  final String? cableId;
 }

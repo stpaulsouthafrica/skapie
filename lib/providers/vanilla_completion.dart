@@ -5,6 +5,18 @@ import 'package:http/http.dart' as http;
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 
+Map<String, Object?> vanillaCompletionBody({
+  required String model,
+  required String userText,
+}) {
+  return {
+    'model': model,
+    'messages': [
+      {'role': 'user', 'content': userText},
+    ],
+  };
+}
+
 /// Minimal legal chat completion: one user message, no tools, no system prompt.
 class VanillaCompletionClient implements VanillaSurfaceClient {
   VanillaCompletionClient({
@@ -43,12 +55,7 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
 
   @override
   Future<String> complete({required String userText}) async {
-    final body = <String, Object?>{
-      'model': model,
-      'messages': [
-        {'role': 'user', 'content': userText},
-      ],
-    };
+    final body = vanillaCompletionBody(model: model, userText: userText);
     _record();
     final http.Response response;
     try {

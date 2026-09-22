@@ -329,6 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 registry: widget.registry,
                 selection: _selection,
                 kitApi: widget.kitApi,
+                agentController: widget.agentController,
               ),
               if (_selection.selectedId != null)
                 Positioned(

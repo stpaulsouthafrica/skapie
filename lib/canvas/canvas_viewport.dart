@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/canvas/cable_layer.dart';
 import 'package:skapie/canvas/canvas_bounds.dart';
@@ -15,6 +16,7 @@ import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
+import 'package:skapie/paint/cables/cable_motion.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
@@ -28,6 +30,7 @@ class CanvasViewport extends StatefulWidget {
     SelectionController? selection,
     ObjectRegistry? registry,
     KitApi? kitApi,
+    this.agentController,
   }) : selection = selection ?? SelectionController(),
        kitApi =
            kitApi ??
@@ -36,6 +39,7 @@ class CanvasViewport extends StatefulWidget {
   final SceneStore store;
   final SelectionController selection;
   final KitApi kitApi;
+  final AgentController? agentController;
   ObjectRegistry get registry => kitApi.registry;
 
   @override
@@ -53,6 +57,7 @@ class CanvasViewportState extends State<CanvasViewport> {
   final _inlineController = TextEditingController();
   final _inlineFocus = FocusNode();
   String? _inlineEditId;
+  final _cableMotion = CableMotion();
   String? _cableFrameId;
   KitPortKind? _cableKind;
   Offset? _cableCursor;
@@ -96,6 +101,7 @@ class CanvasViewportState extends State<CanvasViewport> {
     super.initState();
     widget.store.addListener(_onStore);
     widget.selection.addListener(_onSelection);
+    widget.agentController?.addListener(_onAgent);
     widget.store.noteCamera(_snapshot(_camera));
   }
 
@@ -110,19 +116,27 @@ class CanvasViewportState extends State<CanvasViewport> {
       oldWidget.selection.removeListener(_onSelection);
       widget.selection.addListener(_onSelection);
     }
+    if (oldWidget.agentController != widget.agentController) {
+      oldWidget.agentController?.removeListener(_onAgent);
+      widget.agentController?.addListener(_onAgent);
+    }
   }
 
   @override
   void dispose() {
     widget.store.removeListener(_onStore);
     widget.selection.removeListener(_onSelection);
+    widget.agentController?.removeListener(_onAgent);
     _inlineFocus.dispose();
     _inlineController.dispose();
     _focus.dispose();
+    _cableMotion.dispose();
     super.dispose();
   }
 
   void _onSelection() => setState(() {});
+
+  void _onAgent() => setState(() {});
 
   void _onStore() {
     widget.selection.syncToDocument(widget.store.document);
@@ -650,6 +664,12 @@ class CanvasViewportState extends State<CanvasViewport> {
                       document: widget.store.document,
                       previewDelta: widget.selection.previewDelta,
                       previewIds: _previewIds,
+                      dragFrameId: _cableFrameId,
+                      dragKind: _cableKind,
+                      dragCursor: _cableCursor,
+                      paintDrag: false,
+                      runningBodyId: widget.agentController?.runningBodyId,
+                      motion: _cableMotion,
                     ),
                     SceneObjectLayer(
                       camera: _camera,
@@ -659,6 +679,7 @@ class CanvasViewportState extends State<CanvasViewport> {
                       selectedId: widget.selection.selectedId,
                       previewDelta: widget.selection.previewDelta,
                       previewIds: _previewIds,
+                      motion: _cableMotion,
                     ),
                     if (_cableFrameId != null && _cableCursor != null)
                       CableLayer(

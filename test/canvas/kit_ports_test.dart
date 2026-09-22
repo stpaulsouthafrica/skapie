@@ -40,8 +40,12 @@ void main() {
       llmFrame.x,
     );
     expect(
-      ports.firstWhere((port) => port.kind == KitPortKind.llmOutput).center.dx,
-      llmFrame.x + llmFrame.width,
+      ports.firstWhere((port) => port.kind == KitPortKind.llmOutput).center,
+      llmOutputCenter(llmFrame),
+    );
+    expect(
+      ports.firstWhere((port) => port.kind == KitPortKind.llmOutput).center.dy,
+      llmFrame.y + llmFrame.height - textOutputInset,
     );
     expect(
       ports.firstWhere((port) => port.frameId == toolFrame.id).center.dx,
@@ -80,14 +84,23 @@ void main() {
       llmBodyId: llm.last,
       port: llmContextPort,
     );
-    expect(llmCableInput(kitApi.store.document, llm.last), isEmpty);
     final frame = kitApi.store.document.objectById(text.first)!;
-    expect(textConnectedPort(frame), llmContextPort);
-
-    disconnectText(kitApi: kitApi, textObjectId: text.first);
+    expect(kitHasLink(frame, to: llm.last, port: llmInputPort), isTrue);
+    expect(kitHasLink(frame, to: llm.last, port: llmContextPort), isTrue);
     expect(
-      textConnectedLlmId(kitApi.store.document.objectById(text.first)!),
-      isEmpty,
+      llmCableInput(kitApi.store.document, llm.last),
+      'hello from the card',
     );
+
+    disconnectText(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: llm.last,
+      port: llmInputPort,
+    );
+    final after = kitApi.store.document.objectById(text.first)!;
+    expect(kitHasLink(after, to: llm.last, port: llmInputPort), isFalse);
+    expect(kitHasLink(after, to: llm.last, port: llmContextPort), isTrue);
+    expect(llmCableInput(kitApi.store.document, llm.last), isEmpty);
   });
 }

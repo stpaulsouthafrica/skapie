@@ -109,6 +109,22 @@ List<Map<String, Object?>> openaiToolsFromAgent(List<AgentTool> tools) {
   ];
 }
 
+Map<String, Object?> openAiChatCompletionBody({
+  required String model,
+  required List<Map<String, Object?>> messages,
+  List<Map<String, Object?>> tools = const [],
+  String? reasoningEffort,
+}) {
+  final effort = reasoningEffort?.trim();
+  final reasoning = effort != null && effort.isNotEmpty && effort != 'off';
+  return {
+    'model': model,
+    'messages': messages,
+    if (tools.isNotEmpty) 'tools': tools,
+    if (reasoning) 'reasoning': {'effort': effort},
+  };
+}
+
 AgentModelReply openaiReplyFromMessage(Map<String, Object?> message) {
   final rawCalls = message['tool_calls'];
   final content = message['content'];
@@ -189,12 +205,12 @@ class OpenAiCompatibleAgentModel implements AgentModel {
     required List<AgentMessage> messages,
     List<AgentTool> tools = const [],
   }) async {
-    final body = <String, Object?>{
-      'model': model,
-      'messages': openaiMessagesFromSession(messages),
-      if (tools.isNotEmpty) 'tools': openaiToolsFromAgent(tools),
-      if (_reasoningAttached) 'reasoning': {'effort': reasoningEffort!.trim()},
-    };
+    final body = openAiChatCompletionBody(
+      model: model,
+      messages: openaiMessagesFromSession(messages),
+      tools: tools.isEmpty ? const [] : openaiToolsFromAgent(tools),
+      reasoningEffort: _reasoningAttached ? reasoningEffort : null,
+    );
     _recordDiagnostic(tools: tools);
     final http.Response response;
     try {

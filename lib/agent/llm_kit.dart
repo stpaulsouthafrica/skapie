@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -179,7 +180,8 @@ String formatLlmKitContent({
 List<String> llmAttachedToolNames(SceneDocument document, String llmBodyId) {
   final names = <String>[];
   for (final object in document.objects) {
-    if (object.props[attachedToProp]?.toString() != llmBodyId) {
+    if (!kitLinksOf(object)
+        .any((link) => link.to == llmBodyId && link.port == llmToolsPort)) {
       continue;
     }
     final name = object.props['toolName']?.toString().trim() ?? '';

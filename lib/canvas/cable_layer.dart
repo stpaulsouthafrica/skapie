@@ -1,13 +1,19 @@
-import 'dart:ui' as ui;
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/kit_ports.dart';
-import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
+import 'package:skapie/paint/cables/cable_motion.dart';
+import 'package:skapie/paint/cables/cable_painter.dart';
 import 'package:skapie/scene/scene.dart';
 
-class CableLayer extends StatelessWidget {
+const double _travelSeconds = 0.32;
+const double _settleSeconds = 0.52;
+const double _flowSeconds = 1.45;
+
+class CableLayer extends StatefulWidget {
   const CableLayer({
     super.key,
     required this.camera,
@@ -19,6 +25,9 @@ class CableLayer extends StatelessWidget {
     this.dragKind,
     this.dragCursor,
     this.previewOnly = false,
+    this.paintDrag = true,
+    this.runningBodyId,
+    this.motion,
   });
 
   final CanvasCamera camera;
@@ -30,108 +39,219 @@ class CableLayer extends StatelessWidget {
   final KitPortKind? dragKind;
   final Offset? dragCursor;
   final bool previewOnly;
+  final bool paintDrag;
+  final String? runningBodyId;
+  final CableMotion? motion;
+
+  @override
+  State<CableLayer> createState() => _CableLayerState();
+}
+
+class _CableLayerState extends State<CableLayer>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker;
+  final _watch = Stopwatch();
+  var _primed = false;
+  var _known = <String>{};
+  final _arrivals = <String, _Arrival>{};
+  var _sawDrag = false;
+  String? _dragSource;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = createTicker((_) {
+      if (!mounted) {
+        return;
+      }
+      _pushMotion(sceneCables(widget.document));
+      setState(() {});
+    });
+    _watch.start();
+  }
+
+  double get _clock => _watch.elapsedMicroseconds / 1000000;
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    _watch.stop();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final scene = widget.previewOnly
+        ? const <SceneCable>[]
+        : sceneCables(widget.document);
+    if (!widget.previewOnly) {
+      _note(scene);
+    }
+    final painted = <PaintedCable>[
+      for (final cable in scene) _paintOf(cable),
+      ..._drag(),
+    ];
     return IgnorePointer(
       child: CustomPaint(
-        painter: _CablePainter(
-          camera: camera,
-          viewportSize: viewportSize,
-          cables: _cables(),
-        ),
+        painter: _CablePainter(cables: painted, zoom: widget.camera.zoom),
         child: const SizedBox.expand(),
       ),
     );
   }
 
-  List<_Cable> _cables() {
-    final cables = <_Cable>[];
-    if (!previewOnly) {
-      for (final frame in textFrames(document)) {
-        final llmId = textConnectedLlmId(frame);
-        final llm = llmId.isEmpty ? null : _llmFrameForBody(llmId);
-        if (llm == null) {
-          continue;
-        }
-        final to = textConnectedPort(frame) == llmContextPort
-            ? llmContextCenter(llm)
-            : llmInputCenter(llm);
-        cables.add(
-          _Cable(
-            from: _shown(textOutputCenter(frame), frame.id),
-            to: _shown(to, llm.id),
-            color: kitAccentColor(llm),
-          ),
-        );
-      }
-      for (final frame in toolFrames(document)) {
-        final llmId = frame.props[attachedToProp]?.toString().trim() ?? '';
-        final llm = llmId.isEmpty ? null : _llmFrameForBody(llmId);
-        if (llm == null) {
-          continue;
-        }
-        cables.add(
-          _Cable(
-            from: _shown(toolOutputCenter(frame), frame.id),
-            to: _shown(llmToolsCenter(llm), llm.id),
-            color: kitAccentColor(llm),
-          ),
-        );
-      }
-      for (final body in llmBodies(document)) {
-        final targetId = body.props[outputToProp]?.toString().trim() ?? '';
-        final source = _llmFrameForBody(body.id);
-        final target = targetId.isEmpty ? null : _llmFrameForBody(targetId);
-        if (source == null || target == null) {
-          continue;
-        }
-        final to =
-            (body.props[outputPortProp]?.toString().trim() ?? '') ==
-                llmContextPort
-            ? llmContextCenter(target)
-            : llmInputCenter(target);
-        cables.add(
-          _Cable(
-            from: _shown(llmOutputCenter(source), source.id),
-            to: _shown(to, target.id),
-            color: kitAccentColor(target),
-          ),
-        );
-      }
+  void _note(List<SceneCable> cables) {
+    final ids = {for (final cable in cables) cable.id};
+    if (!_primed) {
+      _known = ids;
+      _primed = true;
+      _sawDrag = widget.dragFrameId != null;
+      _dragSource = widget.dragFrameId;
+      return;
     }
-    final dragId = dragFrameId;
-    final cursor = dragCursor;
-    final kind = dragKind;
-    if (dragId != null && cursor != null && kind != null) {
-      final frame = document.objectById(dragId);
-      if (frame != null) {
-        final snapped = _snap(kind, cursor, frame);
-        final target = snapped == null
-            ? null
-            : document.objectById(snapped.frameId);
-        cables.add(
-          _Cable(
-            from: _shown(_center(frame, kind), frame.id),
-            to: snapped?.center ?? cursor,
-            color: target == null
-                ? kitAccentColor(frame)
-                : kitAccentColor(target),
-            preview: true,
-          ),
-        );
+    final fromDrag = _sawDrag;
+    final dragSource = _dragSource;
+    for (final cable in cables) {
+      if (_known.contains(cable.id) || _arrivals.containsKey(cable.id)) {
+        continue;
       }
+      final grewFromDrag = fromDrag && cable.sourceId == dragSource;
+      _arrivals[cable.id] = _Arrival(_clock, grow: !grewFromDrag);
+      widget.motion?.hold(cable.id);
     }
-    return cables;
+    _known = ids;
+    _sawDrag = widget.dragFrameId != null;
+    _dragSource = widget.dragFrameId;
+    _syncTicker();
+  }
+
+  void _pushMotion(List<SceneCable> cables) {
+    final motion = widget.motion;
+    if (motion == null) {
+      return;
+    }
+    final live = {for (final cable in cables) cable.id};
+    for (final id in _arrivals.keys.toList()) {
+      if (!live.contains(id)) {
+        _arrivals.remove(id);
+        motion.release(id);
+        continue;
+      }
+      final arrival = _arrivals[id]!;
+      final elapsed = _clock - arrival.start;
+      if (elapsed >= _travelSeconds + _settleSeconds) {
+        _arrivals.remove(id);
+        motion.release(id);
+        continue;
+      }
+      final pose = _pose(arrival, elapsed);
+      motion.present(id, pose.shown, pose.glow);
+    }
+  }
+
+  _Pose _pose(_Arrival arrival, double elapsed) {
+    final travel = (elapsed / _travelSeconds).clamp(0.0, 1.0);
+    final eased = 1 - math.pow(1 - travel, 3).toDouble();
+    final draw = arrival.grow ? eased : 1.0;
+    final intoSettle = elapsed <= _travelSeconds
+        ? 0.0
+        : ((elapsed - _travelSeconds) / _settleSeconds).clamp(0.0, 1.0);
+    final flashAlpha = elapsed < _travelSeconds
+        ? (travel < 0.07 ? travel / 0.07 : 1.0)
+        : (1 - intoSettle / 0.42).clamp(0.0, 1.0);
+    final bloom = elapsed < _travelSeconds * 0.9
+        ? 0.0
+        : _linger(
+            ((elapsed - _travelSeconds * 0.9) / _settleSeconds).clamp(0.0, 1.0),
+          );
+    final shown = elapsed < _travelSeconds
+        ? 0.0
+        : (intoSettle / 0.5).clamp(0.0, 1.0);
+    return _Pose(
+      draw: draw,
+      flash: flashAlpha > 0.01 ? eased : null,
+      flashAlpha: flashAlpha,
+      arrival: bloom,
+      shown: shown,
+      glow: bloom * shown,
+    );
+  }
+
+  double _linger(double t) {
+    if (t < 0.14) {
+      return t / 0.14;
+    }
+    return (1 - (t - 0.14) / 0.86).clamp(0.0, 1.0);
+  }
+
+  PaintedCable _paintOf(SceneCable cable) {
+    final arrival = _arrivals[cable.id];
+    final pose = arrival == null
+        ? null
+        : _pose(arrival, _clock - arrival.start);
+    return PaintedCable(
+      from: _screen(_shown(cable.from, cable.sourceId)),
+      to: _screen(_shown(cable.to, cable.targetFrameId)),
+      color: cable.color,
+      draw: pose?.draw ?? 1,
+      flash: pose?.flash,
+      flashAlpha: pose?.flashAlpha ?? 1,
+      arrival: pose?.arrival ?? 0,
+      flow: _flow(cable),
+    );
+  }
+
+  void _syncTicker() {
+    final live = _arrivals.isNotEmpty || widget.runningBodyId != null;
+    if (live && !_ticker.isActive) {
+      _ticker.start();
+    } else if (!live && _ticker.isActive) {
+      _ticker.stop();
+    }
+  }
+
+  double? _flow(SceneCable cable) {
+    final running = widget.runningBodyId;
+    if (running == null || !cable.affectsRun || cable.targetBodyId != running) {
+      return null;
+    }
+    return (_clock / _flowSeconds) % 1;
+  }
+
+  List<PaintedCable> _drag() {
+    if (!widget.paintDrag) {
+      return const [];
+    }
+    final dragId = widget.dragFrameId;
+    final cursor = widget.dragCursor;
+    final kind = widget.dragKind;
+    if (dragId == null || cursor == null || kind == null) {
+      return const [];
+    }
+    final frame = widget.document.objectById(dragId);
+    if (frame == null) {
+      return const [];
+    }
+    final snapped = _snap(kind, cursor, frame);
+    final target = snapped == null
+        ? null
+        : widget.document.objectById(snapped.frameId);
+    return [
+      PaintedCable(
+        from: _screen(_shown(_center(frame, kind), frame.id)),
+        to: _screen(snapped?.center ?? cursor),
+        color: target == null ? kitAccentColor(frame) : kitAccentColor(target),
+        preview: true,
+      ),
+    ];
   }
 
   KitPort? _snap(KitPortKind sourceKind, Offset cursor, SceneObject source) {
-    final hit = hitKitPort(kitPorts(document), cursor);
+    final hit = hitKitPort(kitPorts(widget.document), cursor);
     if (hit == null || !kitPortAccepts(sourceKind, hit.kind)) {
       return null;
     }
     if (sourceKind == KitPortKind.llmOutput) {
-      final sourcePort = kitPorts(document)
+      final sourcePort = kitPorts(widget.document)
           .where(
             (port) =>
                 port.frameId == source.id && port.kind == KitPortKind.llmOutput,
@@ -156,83 +276,31 @@ class CableLayer extends StatelessWidget {
   }
 
   Offset _shown(Offset center, String id) {
-    if (previewIds.contains(id)) {
-      return center + previewDelta;
+    if (widget.previewIds.contains(id)) {
+      return center + widget.previewDelta;
     }
     return center;
   }
 
-  SceneObject? _llmFrameForBody(String bodyId) {
-    return kitFrameForSelection(document: document, selectedId: bodyId);
+  Offset _screen(Offset world) {
+    return worldToScreen(world, widget.viewportSize, widget.camera);
   }
-}
-
-class _Cable {
-  const _Cable({
-    required this.from,
-    required this.to,
-    required this.color,
-    this.preview = false,
-  });
-
-  final Offset from;
-  final Offset to;
-  final Color color;
-  final bool preview;
 }
 
 class _CablePainter extends CustomPainter {
-  const _CablePainter({
-    required this.camera,
-    required this.viewportSize,
-    required this.cables,
-  });
+  const _CablePainter({required this.cables, required this.zoom});
 
-  final CanvasCamera camera;
-  final Size viewportSize;
-  final List<_Cable> cables;
+  final List<PaintedCable> cables;
+  final double zoom;
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (final cable in cables) {
-      final start = worldToScreen(cable.from, viewportSize, camera);
-      final end = worldToScreen(cable.to, viewportSize, camera);
-      final path = _curve(start, end, camera.zoom);
-      final glow = Paint()
-        ..color = cable.color.withValues(alpha: cable.preview ? 0.22 : 0.34)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6.5 * camera.zoom
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 4 * camera.zoom);
-      canvas.drawPath(path, glow);
-      final core = Paint()
-        ..color = cable.color.withValues(alpha: cable.preview ? 0.9 : 1)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.35 * camera.zoom
-        ..strokeCap = StrokeCap.round;
-      canvas.drawPath(path, core);
-    }
-  }
-
-  Path _curve(Offset start, Offset end, double zoom) {
-    final span = (end.dx - start.dx).abs();
-    final bend = (span * 0.45).clamp(28.0 * zoom, 160.0 * zoom);
-    return Path()
-      ..moveTo(start.dx, start.dy)
-      ..cubicTo(
-        start.dx + bend,
-        start.dy,
-        end.dx - bend,
-        end.dy,
-        end.dx,
-        end.dy,
-      );
+    paintCables(canvas, cables, zoom);
   }
 
   @override
   bool shouldRepaint(covariant _CablePainter oldDelegate) {
-    if (oldDelegate.camera != camera ||
-        oldDelegate.viewportSize != viewportSize ||
+    if (oldDelegate.zoom != zoom ||
         oldDelegate.cables.length != cables.length) {
       return true;
     }
@@ -242,10 +310,40 @@ class _CablePainter extends CustomPainter {
       if (previous.from != next.from ||
           previous.to != next.to ||
           previous.color != next.color ||
-          previous.preview != next.preview) {
+          previous.preview != next.preview ||
+          previous.draw != next.draw ||
+          previous.flash != next.flash ||
+          previous.flashAlpha != next.flashAlpha ||
+          previous.arrival != next.arrival ||
+          previous.flow != next.flow) {
         return true;
       }
     }
     return false;
   }
+}
+
+class _Arrival {
+  const _Arrival(this.start, {required this.grow});
+
+  final double start;
+  final bool grow;
+}
+
+class _Pose {
+  const _Pose({
+    required this.draw,
+    required this.flash,
+    required this.flashAlpha,
+    required this.arrival,
+    required this.shown,
+    required this.glow,
+  });
+
+  final double draw;
+  final double? flash;
+  final double flashAlpha;
+  final double arrival;
+  final double shown;
+  final double glow;
 }

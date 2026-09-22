@@ -6,6 +6,13 @@ import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 import 'package:skapie/providers/vanilla_extract.dart';
 
+Map<String, Object?> vanillaResponsesBody({
+  required String model,
+  required String userText,
+}) {
+  return {'model': model, 'input': userText};
+}
+
 class VanillaResponsesClient implements VanillaSurfaceClient {
   VanillaResponsesClient({
     required this.baseUrl,
@@ -43,7 +50,7 @@ class VanillaResponsesClient implements VanillaSurfaceClient {
 
   @override
   Future<String> complete({required String userText}) async {
-    final body = <String, Object?>{'model': model, 'input': userText};
+    final body = vanillaResponsesBody(model: model, userText: userText);
     _record();
     final http.Response response;
     try {

@@ -6,6 +6,19 @@ import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 import 'package:skapie/providers/vanilla_extract.dart';
 
+Map<String, Object?> vanillaMessagesBody({
+  required String model,
+  required String userText,
+}) {
+  return {
+    'model': model,
+    'max_tokens': 1024,
+    'messages': [
+      {'role': 'user', 'content': userText},
+    ],
+  };
+}
+
 class VanillaMessagesClient implements VanillaSurfaceClient {
   VanillaMessagesClient({
     required this.baseUrl,
@@ -43,13 +56,7 @@ class VanillaMessagesClient implements VanillaSurfaceClient {
 
   @override
   Future<String> complete({required String userText}) async {
-    final body = <String, Object?>{
-      'model': model,
-      'max_tokens': 1024,
-      'messages': [
-        {'role': 'user', 'content': userText},
-      ],
-    };
+    final body = vanillaMessagesBody(model: model, userText: userText);
     _record();
     final http.Response response;
     try {

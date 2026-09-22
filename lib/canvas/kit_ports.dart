@@ -1,11 +1,14 @@
 import 'dart:ui';
 
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/registry/builtin_types.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
+
+export 'package:skapie/canvas/kit_links.dart';
 
 enum KitPortKind { textOut, toolOut, llmInput, llmContext, llmTools, llmOutput }
 
@@ -77,7 +80,12 @@ Offset llmContextCenter(SceneObject frame) => _llmPort(frame, 1, right: false);
 
 Offset llmToolsCenter(SceneObject frame) => _llmPort(frame, 2, right: false);
 
-Offset llmOutputCenter(SceneObject frame) => _llmPort(frame, 3, right: true);
+Offset llmOutputCenter(SceneObject frame) {
+  return Offset(
+    frame.x + frame.width,
+    frame.y + frame.height - textOutputInset,
+  );
+}
 
 Offset _llmPort(SceneObject frame, int index, {required bool right}) {
   return Offset(
@@ -161,63 +169,126 @@ KitPort? hitKitPort(List<KitPort> ports, Offset world) {
   return best;
 }
 
-String textConnectedLlmId(SceneObject frame) {
-  return frame.props[connectedToProp]?.toString().trim() ?? '';
+class SceneCable {
+  const SceneCable({
+    required this.id,
+    required this.sourceId,
+    required this.targetFrameId,
+    required this.from,
+    required this.to,
+    required this.color,
+    required this.targetBodyId,
+    required this.affectsRun,
+  });
+
+  final String id;
+  final String sourceId;
+  final String targetFrameId;
+  final Offset from;
+  final Offset to;
+  final Color color;
+  final String targetBodyId;
+
+  /// Input text, tools, and an upstream reply change the run. Context does not.
+  final bool affectsRun;
 }
 
-String textConnectedPort(SceneObject frame) {
-  final port = frame.props[connectedPortProp]?.toString().trim() ?? '';
-  if (port == llmContextPort) {
-    return llmContextPort;
+List<SceneCable> sceneCables(SceneDocument document) {
+  final cables = <SceneCable>[];
+  for (final frame in textFrames(document)) {
+    for (final link in kitLinksOf(frame)) {
+      if (link.port != llmInputPort && link.port != llmContextPort) {
+        continue;
+      }
+      final target = kitFrameForSelection(
+        document: document,
+        selectedId: link.to,
+      );
+      if (target == null) {
+        continue;
+      }
+      cables.add(
+        SceneCable(
+          id: '${frame.id}|${link.id}',
+          sourceId: frame.id,
+          targetFrameId: target.id,
+          from: textOutputCenter(frame),
+          to: _llmPortFor(target, link.port),
+          color: kitAccentColor(target),
+          targetBodyId: link.to,
+          affectsRun: link.port == llmInputPort,
+        ),
+      );
+    }
   }
-  return llmInputPort;
-}
-
-void connectTextToLlm({
-  required KitApi kitApi,
-  required String textObjectId,
-  required String llmBodyId,
-  String port = llmInputPort,
-}) {
-  final members =
-      kitMembers(document: kitApi.store.document, selectedId: textObjectId) ??
-      [];
-  for (final member in members) {
-    if (kitIdOf(member) != boardTextKitId) {
+  for (final frame in toolFrames(document)) {
+    for (final link in kitLinksOf(frame)) {
+      if (link.port != llmToolsPort) {
+        continue;
+      }
+      final target = kitFrameForSelection(
+        document: document,
+        selectedId: link.to,
+      );
+      if (target == null) {
+        continue;
+      }
+      cables.add(
+        SceneCable(
+          id: '${frame.id}|${link.id}',
+          sourceId: frame.id,
+          targetFrameId: target.id,
+          from: toolOutputCenter(frame),
+          to: llmToolsCenter(target),
+          color: kitAccentColor(target),
+          targetBodyId: link.to,
+          affectsRun: true,
+        ),
+      );
+    }
+  }
+  for (final body in llmBodies(document)) {
+    final source = kitFrameForSelection(
+      document: document,
+      selectedId: body.id,
+    );
+    if (source == null) {
       continue;
     }
-    kitApi.updateProps(member.id, {
-      connectedToProp: llmBodyId,
-      connectedPortProp: llmBodyId.isEmpty ? '' : port,
-    });
+    for (final link in kitLinksOf(body)) {
+      if (link.port != llmInputPort && link.port != llmContextPort) {
+        continue;
+      }
+      final target = kitFrameForSelection(
+        document: document,
+        selectedId: link.to,
+      );
+      if (target == null) {
+        continue;
+      }
+      cables.add(
+        SceneCable(
+          id: '${body.id}|${link.id}',
+          sourceId: source.id,
+          targetFrameId: target.id,
+          from: llmOutputCenter(source),
+          to: _llmPortFor(target, link.port),
+          color: kitAccentColor(target),
+          targetBodyId: link.to,
+          affectsRun: link.port == llmInputPort,
+        ),
+      );
+    }
   }
+  return cables;
 }
 
-void disconnectText({required KitApi kitApi, required String textObjectId}) {
-  connectTextToLlm(kitApi: kitApi, textObjectId: textObjectId, llmBodyId: '');
-}
-
-void connectLlmOutput({
-  required KitApi kitApi,
-  required String sourceBodyId,
-  required String targetBodyId,
-  String port = llmInputPort,
-}) {
-  kitApi.updateProps(sourceBodyId, {
-    outputToProp: targetBodyId,
-    outputPortProp: targetBodyId.isEmpty ? '' : port,
-  });
-}
-
-void disconnectLlmOutput({
-  required KitApi kitApi,
-  required String sourceBodyId,
-}) {
-  connectLlmOutput(
-    kitApi: kitApi,
-    sourceBodyId: sourceBodyId,
-    targetBodyId: '',
-  );
+Offset _llmPortFor(SceneObject frame, String port) {
+  return switch (port) {
+    llmContextPort => llmContextCenter(frame),
+    llmToolsPort => llmToolsCenter(frame),
+    _ => llmInputCenter(frame),
+  };
 }
 
 List<SceneObject> llmBodies(SceneDocument document) {
@@ -252,10 +323,7 @@ String llmCableInput(SceneDocument document, String llmBodyId) {
   }
   final texts = <String>[];
   for (final frame in textFrames(document)) {
-    if (textConnectedLlmId(frame) != llmBodyId) {
-      continue;
-    }
-    if (textConnectedPort(frame) != llmInputPort) {
+    if (!kitHasLink(frame, to: llmBodyId, port: llmInputPort)) {
       continue;
     }
     final content = textKitContent(document, frame).trim();
@@ -268,11 +336,7 @@ String llmCableInput(SceneDocument document, String llmBodyId) {
   }
   final replies = <String>[];
   for (final body in llmBodies(document)) {
-    if ((body.props[outputToProp]?.toString().trim() ?? '') != llmBodyId) {
-      continue;
-    }
-    if ((body.props[outputPortProp]?.toString().trim() ?? '') ==
-        llmContextPort) {
+    if (!kitHasLink(body, to: llmBodyId, port: llmInputPort)) {
       continue;
     }
     final reply = body.props['reply']?.toString().trim() ?? '';

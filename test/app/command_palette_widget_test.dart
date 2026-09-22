@@ -9,6 +9,7 @@ import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
+import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -92,10 +93,7 @@ void main() {
     expect(
       tester
           .widget<EditableText>(
-            find.descendant(
-              of: field,
-              matching: find.byType(EditableText),
-            ),
+            find.descendant(of: field, matching: find.byType(EditableText)),
           )
           .controller
           .text,
@@ -286,7 +284,7 @@ void main() {
     );
   });
 
-  testWidgets('palette Attach to LLM writes attachedTo and Tools chrome', (
+  testWidgets('palette Attach to LLM links the tool and writes Tools chrome', (
     tester,
   ) async {
     final store = SceneStore();
@@ -328,7 +326,10 @@ void main() {
     final grant = store.document.objects.firstWhere(
       (object) => object.props['toolName'] == 'list_kits',
     );
-    expect(grant.props[attachedToProp], llmBody.id);
+    expect(
+      kitHasLink(grant, to: llmBody.id, port: llmToolsPort),
+      isTrue,
+    );
     expect(llmBody.props['content'], contains('Tools: list_kits'));
   });
 

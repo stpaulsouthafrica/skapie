@@ -1,6 +1,8 @@
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
 
 bool isWorldToolKit(SceneObject object) {
@@ -18,39 +20,53 @@ void attachToolKit({
   required String toolObjectId,
   required String llmBodyId,
 }) {
-  final selected = kitApi.store.document.objectById(toolObjectId);
-  if (selected == null) {
-    return;
-  }
-  final kitId = worldToolKitIdOf(selected);
-  if (kitId == null) {
-    return;
-  }
-  for (final object in kitApi.store.document.objects.toList()) {
-    if (object.props[skapieKitProp] == kitId) {
-      kitApi.updateProps(object.id, {attachedToProp: llmBodyId});
-    }
-  }
+  addKitLink(
+    kitApi: kitApi,
+    objectId: toolObjectId,
+    to: llmBodyId,
+    port: llmToolsPort,
+  );
   refreshLlmToolsChrome(kitApi: kitApi, llmBodyId: llmBodyId);
 }
 
-void detachToolKit({required KitApi kitApi, required String toolObjectId}) {
-  final selected = kitApi.store.document.objectById(toolObjectId);
-  if (selected == null) {
-    return;
-  }
-  final kitId = worldToolKitIdOf(selected);
-  if (kitId == null) {
-    return;
-  }
-  final previous = selected.props[attachedToProp]?.toString() ?? '';
-  for (final object in kitApi.store.document.objects.toList()) {
-    if (object.props[skapieKitProp] == kitId) {
-      kitApi.updateProps(object.id, {attachedToProp: ''});
+void detachToolKit({
+  required KitApi kitApi,
+  required String toolObjectId,
+  String? llmBodyId,
+}) {
+  final members =
+      kitMembers(document: kitApi.store.document, selectedId: toolObjectId) ??
+      [];
+  final targets = <String>{
+    for (final member in members)
+      for (final link in kitLinksOf(member))
+        if (link.port == llmToolsPort &&
+            (llmBodyId == null || link.to == llmBodyId))
+          link.to,
+  };
+  final before = <KitLink>[];
+  for (final member in members) {
+    for (final link in kitLinksOf(member)) {
+      if (before.any((item) => item.to == link.to && item.port == link.port)) {
+        continue;
+      }
+      before.add(link);
     }
   }
-  if (previous.isNotEmpty) {
-    refreshLlmToolsChrome(kitApi: kitApi, llmBodyId: previous);
+  replaceKitLinks(
+    kitApi: kitApi,
+    objectId: toolObjectId,
+    links: [
+      for (final link in before)
+        if (!(link.port == llmToolsPort &&
+            (llmBodyId == null || link.to == llmBodyId)))
+          link,
+    ],
+  );
+  for (final target in targets) {
+    if (kitApi.store.document.objectById(target) != null) {
+      refreshLlmToolsChrome(kitApi: kitApi, llmBodyId: target);
+    }
   }
 }
 
@@ -71,7 +87,8 @@ List<AgentTool> worldToolsForLlm({
     if (!isWorldToolKit(object)) {
       continue;
     }
-    if (object.props[attachedToProp]?.toString() != llmBodyId) {
+    if (!kitLinksOf(object)
+        .any((link) => link.to == llmBodyId && link.port == llmToolsPort)) {
       continue;
     }
     final name = object.props['toolName']?.toString().trim() ?? '';

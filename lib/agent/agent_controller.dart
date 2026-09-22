@@ -35,6 +35,9 @@ class AgentController extends ChangeNotifier {
   AgentHttpDiagnostic? lastDiagnostic;
   List<AgentModelInfo> catalogModels = const [];
 
+  /// Body receiving the in-flight Run. Cables that feed it can pulse.
+  String? runningBodyId;
+
   String get statusChip => agentStatusChip(runtime);
 
   List<AgentModelInfo> get kitModelChoices {
@@ -107,6 +110,24 @@ class AgentController extends ChangeNotifier {
     if (prompt.isEmpty || bodyId.isEmpty) {
       return;
     }
+    final target = kitApi.store.document.objectById(bodyId);
+    if (target == null) {
+      return;
+    }
+    runningBodyId = bodyId;
+    notifyListeners();
+    try {
+      await _completeSend(prompt: prompt, bodyId: bodyId);
+    } finally {
+      runningBodyId = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _completeSend({
+    required String prompt,
+    required String bodyId,
+  }) async {
     final target = kitApi.store.document.objectById(bodyId);
     if (target == null) {
       return;

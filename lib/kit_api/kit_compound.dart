@@ -142,19 +142,32 @@ void removeKitSelection({required KitApi kitApi, required String selectedId}) {
   final members =
       kitMembers(document: kitApi.store.document, selectedId: selectedId) ??
       [selected];
-  String? attachedLlm;
+  final targets = <String>{};
   for (final member in members) {
+    final raw = member.props[linksProp];
+    if (raw is List) {
+      for (final item in raw) {
+        if (item is Map && '${item['port']}' == llmToolsPort) {
+          final to = item['to']?.toString().trim() ?? '';
+          if (to.isNotEmpty) {
+            targets.add(to);
+          }
+        }
+      }
+      continue;
+    }
     final attached = member.props[attachedToProp]?.toString().trim() ?? '';
     if (attached.isNotEmpty) {
-      attachedLlm = attached;
+      targets.add(attached);
     }
   }
   for (final member in members.reversed) {
     kitApi.removeObject(member.id);
   }
-  if (attachedLlm != null &&
-      kitApi.store.document.objectById(attachedLlm) != null) {
-    refreshLlmToolsChrome(kitApi: kitApi, llmBodyId: attachedLlm);
+  for (final target in targets) {
+    if (kitApi.store.document.objectById(target) != null) {
+      refreshLlmToolsChrome(kitApi: kitApi, llmBodyId: target);
+    }
   }
 }
 

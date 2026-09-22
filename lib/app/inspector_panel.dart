@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/app/llm_kit_input.dart';
+import 'package:skapie/app/llm_request_information.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -403,6 +404,12 @@ class _InspectorPanelState extends State<InspectorPanel> {
                           controller: controller,
                         ),
                       ]),
+                    if (llmBody != null && controller != null)
+                      LlmRequestInformation(
+                        body: llmBody,
+                        kitApi: widget.kitApi,
+                        controller: controller,
+                      ),
                     if (llmBody == null &&
                         object.type != boxTypeId &&
                         !isWorldToolKit(object))
@@ -496,15 +503,18 @@ class _InspectorPanelState extends State<InspectorPanel> {
       return [_readOnly('', 'None on the board', hideLabel: true)];
     }
     if (isWorldToolKit(object)) {
-      final current = object.props[attachedToProp]?.toString().trim() ?? '';
       return [
         for (final body in bodies)
           _connectionRow(
             kit: body,
-            connected: current.isNotEmpty && current == body.id,
+            connected: kitHasLink(object, to: body.id, port: llmToolsPort),
             onTap: () {
-              if (current == body.id) {
-                detachToolKit(kitApi: widget.kitApi, toolObjectId: object.id);
+              if (kitHasLink(object, to: body.id, port: llmToolsPort)) {
+                detachToolKit(
+                  kitApi: widget.kitApi,
+                  toolObjectId: object.id,
+                  llmBodyId: body.id,
+                );
               } else {
                 attachToolKit(
                   kitApi: widget.kitApi,
@@ -517,34 +527,30 @@ class _InspectorPanelState extends State<InspectorPanel> {
       ];
     }
     final frame = _frame ?? object;
-    final current = textConnectedLlmId(frame);
-    final port = textConnectedPort(frame);
     return [
       for (final body in bodies) ...[
         _connectionRow(
           kit: body,
           detail: 'Input',
           keyId: 'input-${body.id}',
-          connected: current == body.id && port == llmInputPort,
+          connected: kitHasLink(frame, to: body.id, port: llmInputPort),
           onTap: () => _toggleText(
             objectId: object.id,
             bodyId: body.id,
             port: llmInputPort,
-            current: current,
-            currentPort: port,
+            connected: kitHasLink(frame, to: body.id, port: llmInputPort),
           ),
         ),
         _connectionRow(
           kit: body,
           detail: 'Context',
           keyId: 'context-${body.id}',
-          connected: current == body.id && port == llmContextPort,
+          connected: kitHasLink(frame, to: body.id, port: llmContextPort),
           onTap: () => _toggleText(
             objectId: object.id,
             bodyId: body.id,
             port: llmContextPort,
-            current: current,
-            currentPort: port,
+            connected: kitHasLink(frame, to: body.id, port: llmContextPort),
           ),
         ),
       ],
@@ -555,11 +561,15 @@ class _InspectorPanelState extends State<InspectorPanel> {
     required String objectId,
     required String bodyId,
     required String port,
-    required String current,
-    required String currentPort,
+    required bool connected,
   }) {
-    if (current == bodyId && currentPort == port) {
-      disconnectText(kitApi: widget.kitApi, textObjectId: objectId);
+    if (connected) {
+      disconnectText(
+        kitApi: widget.kitApi,
+        textObjectId: objectId,
+        llmBodyId: bodyId,
+        port: port,
+      );
       return;
     }
     connectTextToLlm(
@@ -578,11 +588,6 @@ class _InspectorPanelState extends State<InspectorPanel> {
       for (final other in llmBodies(document))
         if (other.id != body.id) other,
     ];
-    final outputTarget = body.props[outputToProp]?.toString().trim() ?? '';
-    final outputPort =
-        (body.props[outputPortProp]?.toString().trim() ?? '') == llmContextPort
-        ? llmContextPort
-        : llmInputPort;
     return [
       _portHeading('Input'),
       ..._textPortRows(body, texts, llmInputPort),
@@ -596,14 +601,14 @@ class _InspectorPanelState extends State<InspectorPanel> {
           _connectionRow(
             kit: tool,
             keyId: 'tools-${tool.id}',
-            connected:
-                (tool.props[attachedToProp]?.toString().trim() ?? '') ==
-                body.id,
+            connected: kitHasLink(tool, to: body.id, port: llmToolsPort),
             onTap: () {
-              final attached =
-                  tool.props[attachedToProp]?.toString().trim() ?? '';
-              if (attached == body.id) {
-                detachToolKit(kitApi: widget.kitApi, toolObjectId: tool.id);
+              if (kitHasLink(tool, to: body.id, port: llmToolsPort)) {
+                detachToolKit(
+                  kitApi: widget.kitApi,
+                  toolObjectId: tool.id,
+                  llmBodyId: body.id,
+                );
               } else {
                 attachToolKit(
                   kitApi: widget.kitApi,
@@ -622,26 +627,24 @@ class _InspectorPanelState extends State<InspectorPanel> {
             kit: other,
             detail: 'Input',
             keyId: 'output-input-${other.id}',
-            connected: outputTarget == other.id && outputPort == llmInputPort,
+            connected: kitHasLink(body, to: other.id, port: llmInputPort),
             onTap: () => _toggleOutput(
               sourceId: body.id,
               targetId: other.id,
               port: llmInputPort,
-              current: outputTarget,
-              currentPort: outputPort,
+              connected: kitHasLink(body, to: other.id, port: llmInputPort),
             ),
           ),
           _connectionRow(
             kit: other,
             detail: 'Context',
             keyId: 'output-context-${other.id}',
-            connected: outputTarget == other.id && outputPort == llmContextPort,
+            connected: kitHasLink(body, to: other.id, port: llmContextPort),
             onTap: () => _toggleOutput(
               sourceId: body.id,
               targetId: other.id,
               port: llmContextPort,
-              current: outputTarget,
-              currentPort: outputPort,
+              connected: kitHasLink(body, to: other.id, port: llmContextPort),
             ),
           ),
         ],
@@ -661,15 +664,12 @@ class _InspectorPanelState extends State<InspectorPanel> {
         _connectionRow(
           kit: text,
           keyId: '$port-${text.id}',
-          connected:
-              textConnectedLlmId(text) == body.id &&
-              textConnectedPort(text) == port,
+          connected: kitHasLink(text, to: body.id, port: port),
           onTap: () => _toggleText(
             objectId: text.id,
             bodyId: body.id,
             port: port,
-            current: textConnectedLlmId(text),
-            currentPort: textConnectedPort(text),
+            connected: kitHasLink(text, to: body.id, port: port),
           ),
         ),
     ];
@@ -679,11 +679,15 @@ class _InspectorPanelState extends State<InspectorPanel> {
     required String sourceId,
     required String targetId,
     required String port,
-    required String current,
-    required String currentPort,
+    required bool connected,
   }) {
-    if (current == targetId && currentPort == port) {
-      disconnectLlmOutput(kitApi: widget.kitApi, sourceBodyId: sourceId);
+    if (connected) {
+      disconnectLlmOutput(
+        kitApi: widget.kitApi,
+        sourceBodyId: sourceId,
+        targetBodyId: targetId,
+        port: port,
+      );
       return;
     }
     connectLlmOutput(
