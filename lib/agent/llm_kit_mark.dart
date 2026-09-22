@@ -34,7 +34,7 @@ class LlmKitMarkPainter extends CustomPainter {
       Paint()
         ..color = color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.4
+        ..strokeWidth = size.shortestSide * 0.12
         ..strokeJoin = StrokeJoin.miter,
     );
     canvas.drawLine(
@@ -42,7 +42,7 @@ class LlmKitMarkPainter extends CustomPainter {
       Offset(size.width / 2, size.height * 0.68),
       Paint()
         ..color = color
-        ..strokeWidth = 1.2,
+        ..strokeWidth = size.shortestSide * 0.1,
     );
   }
 

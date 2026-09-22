@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
+import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 
 void main() {
@@ -26,19 +27,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Add menu inserts a debug.rect scene object', (tester) async {
-    final store = SceneStore();
-    await tester.pumpWidget(SkapieApp(store: store));
-
-    await openAddMenu(tester);
-    await tester.tap(find.text('Debug rect'));
-    await tester.pump();
-
-    expect(store.document.objects, hasLength(1));
-    expect(store.document.objects.single.type, 'debug.rect');
-  });
-
-  testWidgets('Add box, text, and button insert typed objects', (tester) async {
+  testWidgets('Add menu places box, text, and button kits', (tester) async {
     final store = SceneStore();
     await tester.pumpWidget(SkapieApp(store: store));
 
@@ -48,29 +37,33 @@ void main() {
       await tester.pump();
     }
 
-    await add('Box');
+    await openAddMenu(tester);
+    expect(find.text('Debug rect'), findsNothing);
+    expect(find.text('Demo kit: note card'), findsNothing);
+    expect(find.text('System prompt'), findsNothing);
+    await tester.tap(find.text('Box').last);
+    await tester.pump();
     await add('Text');
     await add('Button');
 
-    expect(store.document.objects.map((o) => o.type), [
-      'box',
-      'text',
-      'button',
-    ]);
-  });
-
-  testWidgets('Add Demo kit: note card instantiates box and text', (
-    tester,
-  ) async {
-    final store = SceneStore();
-    await tester.pumpWidget(SkapieApp(store: store));
-
-    await openAddMenu(tester);
-    await tester.tap(find.text('Demo kit: note card'));
-    await tester.pump();
-
-    expect(store.document.objects.map((o) => o.type), ['box', 'text']);
-    expect(store.document.objects.last.props['content'], 'Note');
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == boardBoxKitId,
+      ),
+      isNotEmpty,
+    );
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == boardTextKitId,
+      ),
+      isNotEmpty,
+    );
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == boardButtonKitId,
+      ),
+      isNotEmpty,
+    );
   });
 
   testWidgets('header shows a short scene label, not the absolute path', (

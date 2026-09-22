@@ -69,6 +69,40 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsOneWidget);
   });
 
+  testWidgets('space in the inspector types a space', (tester) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    kitApi.instantiate(boardTextKitId, origin: const Offset(-140, -75));
+    await pumpHome(tester, store: store, kitApi: kitApi);
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.tapAt(center);
+    await tester.pump();
+    final field = find.byKey(const Key('inspector-content'));
+    await tester.ensureVisible(field);
+    await tester.pump();
+    await tester.tap(field);
+    await tester.pump();
+    await tester.enterText(field, 'say hello');
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+
+    expect(find.byKey(const Key('command-palette')), findsNothing);
+    expect(
+      tester
+          .widget<EditableText>(
+            find.descendant(
+              of: field,
+              matching: find.byType(EditableText),
+            ),
+          )
+          .controller
+          .text,
+      'say hello',
+    );
+  });
+
   testWidgets('hover then Enter runs the hovered palette action', (
     tester,
   ) async {
@@ -86,9 +120,7 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsOneWidget);
 
     await gesture.moveTo(
-      tester.getCenter(
-        find.byKey(const Key('command-action-add-system-prompt')),
-      ),
+      tester.getCenter(find.byKey(const Key('command-action-add-text'))),
     );
     await tester.pump();
     await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -97,7 +129,7 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsNothing);
     expect(
       store.document.objects.where(
-        (object) => object.props[skapieKitProp] == harnessSystemPromptKitId,
+        (object) => object.props[skapieKitProp] == boardTextKitId,
       ),
       isNotEmpty,
     );
@@ -128,7 +160,7 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsNothing);
     expect(
       store.document.objects.where(
-        (object) => object.props[skapieKitProp] == harnessSystemPromptKitId,
+        (object) => object.props[skapieKitProp] == boardTextKitId,
       ),
       isNotEmpty,
     );
@@ -171,6 +203,13 @@ void main() {
       find.descendant(
         of: find.byType(InspectorPanel),
         matching: find.byKey(const Key('llm-kit-model')),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byType(InspectorPanel),
+        matching: find.byKey(const Key('kit-swatches')),
       ),
       findsOneWidget,
     );
@@ -344,6 +383,8 @@ void main() {
     expect(find.byKey(const Key('llm-kit-model')), findsOneWidget);
     expect(find.text('Needs input'), findsWidgets);
 
+    await tester.ensureVisible(find.byKey(const Key('llm-kit-model')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('llm-kit-model')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('GLM-5.3-Flash').last);

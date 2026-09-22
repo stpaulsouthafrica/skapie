@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_models_catalog.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
@@ -129,7 +130,7 @@ class _LlmKitInputState extends State<LlmKitInput> {
     if (reply.isNotEmpty) {
       return reply;
     }
-    return '—';
+    return '-';
   }
 
   void _onModel(String? id) {
@@ -171,8 +172,12 @@ class _LlmKitInputState extends State<LlmKitInput> {
     });
   }
 
+  String get _cableInput =>
+      llmCableInput(widget.kitApi.store.document, widget.body.id).trim();
+
   Future<void> _submit(String text) async {
-    final prompt = text.trim();
+    final linked = _cableInput;
+    final prompt = linked.isNotEmpty ? linked : text.trim();
     if (prompt.isEmpty || _busy) {
       return;
     }
@@ -194,7 +199,7 @@ class _LlmKitInputState extends State<LlmKitInput> {
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
     final textTheme = Theme.of(context).textTheme;
-    final needsInput = _input.text.trim().isEmpty;
+    final needsInput = _cableInput.isEmpty && _input.text.trim().isEmpty;
     final choices = _choices;
     final selected = _selectedModel;
     return Column(
@@ -238,7 +243,15 @@ class _LlmKitInputState extends State<LlmKitInput> {
           onChanged: _onChanged,
           onSubmitted: _submit,
         ),
-        if (needsInput)
+        if (_cableInput.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Using connected text',
+              style: TextStyle(color: tokens.muted, fontSize: 11),
+            ),
+          )
+        else if (needsInput)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: Text(

@@ -116,8 +116,7 @@ bool llmBodyBelongsToFrame(SceneObject body, SceneObject frame) {
       body.y + body.height <= frame.y + frame.height + 0.5;
 }
 
-const String llmKitEmptyContent =
-    'Needs input\n\nInput\n\nOutput\n\nTools: none';
+const String llmKitEmptyContent = 'Input\n\nOutput\n\nTools: none';
 
 void setLlmKitPrompt({
   required KitApi kitApi,
@@ -152,9 +151,6 @@ String formatLlmKitContent({
 }) {
   final buffer = StringBuffer();
   final input = _shorten(prompt.trim(), 120);
-  if (input.isEmpty) {
-    buffer.write('Needs input\n\n');
-  }
   buffer.write('Input');
   if (input.isNotEmpty) {
     buffer.write('\n$input');

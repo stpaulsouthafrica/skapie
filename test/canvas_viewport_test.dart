@@ -148,6 +148,119 @@ void main() {
     expect(movedBody.y, closeTo(body.y, 0.001));
   });
 
+  testWidgets('drag tools.list_kits moves frame and grant together', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    kitApi.instantiate('tools.list_kits', origin: Offset.zero);
+    final frame = store.document.objects.firstWhere(
+      (object) => object.props[skapieRoleProp] == 'frame',
+    );
+    final grant = store.document.objects.firstWhere(
+      (object) => object.props[skapieRoleProp] == 'grant',
+    );
+    final offset = grant.x - frame.x;
+    final selection = SelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PaintScope(
+          tokens: PaintTokens.dark(),
+          child: Scaffold(
+            body: CanvasViewport(
+              store: store,
+              selection: selection,
+              kitApi: kitApi,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.dragFrom(center, const Offset(50, 0));
+    await tester.pump();
+
+    final movedFrame = store.document.objectById(frame.id)!;
+    final movedGrant = store.document.objectById(grant.id)!;
+    expect(movedFrame.x, closeTo(frame.x + 50, 0.001));
+    expect(movedGrant.x, closeTo(grant.x + 50, 0.001));
+    expect(movedGrant.x - movedFrame.x, closeTo(offset, 0.001));
+  });
+
+  testWidgets('Delete on LLM body removes the whole compound', (tester) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final body = store.document.objects.firstWhere(
+      (object) => object.props[skapieRoleProp] == 'body',
+    );
+    final selection = SelectionController()..select(body.id);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PaintScope(
+          tokens: PaintTokens.dark(),
+          child: Scaffold(
+            body: CanvasViewport(
+              store: store,
+              selection: selection,
+              kitApi: kitApi,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(CanvasViewport));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pump();
+
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == harnessLlmKitId,
+      ),
+      isEmpty,
+    );
+    expect(selection.selectedId, isNull);
+  });
+
+  testWidgets('Delete on tools.list_kits grant removes the whole compound', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    kitApi.instantiate('tools.list_kits', origin: Offset.zero);
+    final grant = store.document.objects.firstWhere(
+      (object) => object.props[skapieRoleProp] == 'grant',
+    );
+    final selection = SelectionController()..select(grant.id);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PaintScope(
+          tokens: PaintTokens.dark(),
+          child: Scaffold(
+            body: CanvasViewport(
+              store: store,
+              selection: selection,
+              kitApi: kitApi,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pump();
+
+    expect(
+      store.document.objects.where(
+        (object) => object.props[skapieKitProp] == 'tools.list_kits',
+      ),
+      isEmpty,
+    );
+  });
+
   testWidgets('locked object selects but does not move', (tester) async {
     final store = SceneStore();
     store.apply(
@@ -298,5 +411,46 @@ void main() {
 
     expect(store.document.objects.single.props['content'], 'hello');
     expect(find.byKey(const Key('inline-text-edit')), findsNothing);
+  });
+
+  testWidgets('double-click a text kit edits its text in place', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    kitApi.instantiate(boardTextKitId, origin: const Offset(-140, -75));
+    final selection = SelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(
+            store: store,
+            kitApi: kitApi,
+            selection: selection,
+          ),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.tapAt(center);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(center);
+    await tester.pump();
+
+    expect(find.byKey(const Key('inline-text-edit')), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const Key('inline-text-edit')),
+      'hello there',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(
+      store.document.objects
+          .firstWhere((object) => object.type == 'text')
+          .props['content'],
+      'hello there',
+    );
   });
 }

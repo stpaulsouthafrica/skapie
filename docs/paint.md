@@ -19,7 +19,7 @@ The look is fixed: dark + champagne gold. There is no appearance prefs file and 
 
 ## Transient chrome
 
-The canvas is full-bleed. There is no top app bar and no persistent chat strip. Space / F3 opens a command palette. An empty world may show a muted `Space to add` hint. Settings open as a dismissible sheet from Cmd+, or the palette. Add and the scene path live in that sheet. Selecting a compound LLM kit hosts model and Input in the inspector; Enter runs vanilla onto that kit. The inspector is an overlay while something is selected. Nothing non-kit stays parked in the world.
+The canvas is full-bleed. There is no top app bar and no persistent chat strip. Space / F3 opens a command palette. An empty world may show a muted `Space to add` hint. Settings open as a dismissible sheet from Cmd+, or the palette. Add and the scene path live in that sheet. Kit cards default to panel gray with an accent hairline. Selecting a compound LLM kit hosts model and Input in the inspector; Enter runs vanilla onto that kit. The inspector is an overlay while something is selected. Nothing non-kit stays parked in the world.
 
 ## Not this folder
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
+import 'package:skapie/kit_api/kit_compound.dart';
+import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene_object.dart';
 
 /// Screen-space selection stroke. Rotation is ignored for v1.
@@ -19,11 +21,13 @@ class SceneSelectionOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = PaintScope.of(context);
     final topLeft = worldToScreen(
       Offset(object.x + previewDelta.dx, object.y + previewDelta.dy),
       viewportSize,
       camera,
     );
+    final radius = kitCornerRadius(object) * camera.zoom;
     return Positioned(
       left: topLeft.dx,
       top: topLeft.dy,
@@ -33,9 +37,11 @@ class SceneSelectionOverlay extends StatelessWidget {
           height: object.height * camera.zoom,
           child: DecoratedBox(
             decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(
-                color: Theme.of(context).colorScheme.primary,
-                width: 1.5,
+                color: tokens.accent,
+                width: camera.zoom,
+                strokeAlign: BorderSide.strokeAlignInside,
               ),
             ),
           ),

@@ -356,7 +356,7 @@ Ordinary kits. They are the visible first principles of the agent harness. See [
 
 | Id | Package | This phase |
 |---|---|---|
-| `harness.llm` | [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json) | Specialized compound: title-bar chrome, per-kit model, Needs input, Input + Output regions via `publishLlmKit` |
+| `harness.llm` | [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json) | Specialized compound: panel card, accent hairline, title-bar chrome, per-kit model, Needs input, Input + Output regions via `publishLlmKit` |
 | `harness.system-prompt` | [`kits/harness.system-prompt/kit.json`](../kits/harness.system-prompt/kit.json) | Stub. Editable text. `attachedTo` reserved. |
 | `harness.tools` | [`kits/harness.tools/kit.json`](../kits/harness.tools/kit.json) | Stub. Tool names as text. `attachedTo` reserved. |
 

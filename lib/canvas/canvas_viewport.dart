@@ -4,17 +4,21 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/cable_layer.dart';
 import 'package:skapie/canvas/canvas_bounds.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_grid_painter.dart';
 import 'package:skapie/canvas/hit_test.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/scene_object_layer.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/attach.dart';
 
 /// Infinite canvas viewport: pan, zoom-toward-cursor, grid, origin, zoom HUD.
 class CanvasViewport extends StatefulWidget {
@@ -49,6 +53,9 @@ class CanvasViewportState extends State<CanvasViewport> {
   final _inlineController = TextEditingController();
   final _inlineFocus = FocusNode();
   String? _inlineEditId;
+  String? _cableFrameId;
+  KitPortKind? _cableKind;
+  Offset? _cableCursor;
   Duration? _lastTapStamp;
   String? _lastTapId;
 
@@ -184,6 +191,17 @@ class CanvasViewportState extends State<CanvasViewport> {
       return;
     }
     final world = screenToWorld(event.localPosition, _viewportSize, _camera);
+    final port = hitKitPort(kitPorts(widget.store.document), world);
+    if (port != null && kitPortIsOutput(port.kind)) {
+      _focus.requestFocus();
+      widget.selection.select(port.frameId);
+      _dragKind = _DragKind.cable;
+      _cableFrameId = port.frameId;
+      _cableKind = port.kind;
+      _cableCursor = world;
+      setState(() {});
+      return;
+    }
     final hit = hitTestObjects(widget.store.document.objects, world);
     if (_inlineEditId != null) {
       if (hit?.id == _inlineEditId) {
@@ -205,11 +223,14 @@ class CanvasViewportState extends State<CanvasViewport> {
         event.timeStamp - _lastTapStamp! <= kDoubleTapTimeout;
     _lastTapId = hit.id;
     _lastTapStamp = event.timeStamp;
-    if (isDouble && _canInlineEdit(hit)) {
-      widget.selection.cancelMove();
-      _dragKind = _DragKind.none;
-      _beginInlineEdit(hit);
-      return;
+    if (isDouble) {
+      final edit = _inlineEditTarget(hit);
+      if (edit != null) {
+        widget.selection.cancelMove();
+        _dragKind = _DragKind.none;
+        _beginInlineEdit(edit);
+        return;
+      }
     }
     final movers = _moveMembers(hit);
     if (movers.every(objectAllowsMove)) {
@@ -234,6 +255,16 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (_dragKind == _DragKind.move && _moveWorldStart != null) {
       final world = screenToWorld(event.localPosition, _viewportSize, _camera);
       widget.selection.updatePreview(world - _moveWorldStart!);
+      return;
+    }
+    if (_dragKind == _DragKind.cable) {
+      setState(() {
+        _cableCursor = screenToWorld(
+          event.localPosition,
+          _viewportSize,
+          _camera,
+        );
+      });
     }
   }
 
@@ -241,7 +272,8 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (event.pointer != _dragPointer) {
       return;
     }
-    _finishPointer(commitMove: true);
+    final up = event is PointerUpEvent ? event.localPosition : _lastDrag;
+    _finishPointer(commitMove: true, upLocal: up);
   }
 
   void _onPointerCancel(PointerEvent event) {
@@ -251,12 +283,27 @@ class CanvasViewportState extends State<CanvasViewport> {
     _finishPointer(commitMove: false);
   }
 
-  void _finishPointer({required bool commitMove}) {
+  void _finishPointer({required bool commitMove, Offset? upLocal}) {
+    final kind = _dragKind;
+    final cableFrame = _cableFrameId;
+    final cableKind = _cableKind;
     _dragPointer = null;
     _lastDrag = null;
     _moveWorldStart = null;
-    final kind = _dragKind;
     _dragKind = _DragKind.none;
+    _cableFrameId = null;
+    _cableKind = null;
+    _cableCursor = null;
+    if (kind == _DragKind.cable) {
+      if (commitMove &&
+          upLocal != null &&
+          cableFrame != null &&
+          cableKind != null) {
+        _completeCable(cableFrame, cableKind, upLocal);
+      }
+      setState(() {});
+      return;
+    }
     if (kind != _DragKind.move) {
       return;
     }
@@ -284,8 +331,54 @@ class CanvasViewportState extends State<CanvasViewport> {
     }
   }
 
+  void _completeCable(String frameId, KitPortKind sourceKind, Offset upLocal) {
+    final world = screenToWorld(upLocal, _viewportSize, _camera);
+    final port = hitKitPort(kitPorts(widget.store.document), world);
+    if (port == null || !kitPortAccepts(sourceKind, port.kind)) {
+      return;
+    }
+    final source = widget.store.document.objectById(frameId);
+    if (source == null) {
+      return;
+    }
+    if (sourceKind == KitPortKind.llmOutput) {
+      final sourcePort = kitPorts(widget.store.document)
+          .where(
+            (item) =>
+                item.frameId == frameId && item.kind == KitPortKind.llmOutput,
+          )
+          .firstOrNull;
+      if (sourcePort == null || sourcePort.peerId == port.peerId) {
+        return;
+      }
+      connectLlmOutput(
+        kitApi: widget.kitApi,
+        sourceBodyId: sourcePort.peerId,
+        targetBodyId: port.peerId,
+        port: port.kind == KitPortKind.llmContext
+            ? llmContextPort
+            : llmInputPort,
+      );
+      return;
+    }
+    if (sourceKind == KitPortKind.toolOut) {
+      attachToolKit(
+        kitApi: widget.kitApi,
+        toolObjectId: frameId,
+        llmBodyId: port.peerId,
+      );
+      return;
+    }
+    connectTextToLlm(
+      kitApi: widget.kitApi,
+      textObjectId: frameId,
+      llmBodyId: port.peerId,
+      port: port.kind == KitPortKind.llmContext ? llmContextPort : llmInputPort,
+    );
+  }
+
   List<SceneObject> _moveMembers(SceneObject hit) {
-    return llmKitMembers(document: widget.store.document, selectedId: hit.id) ??
+    return kitMembers(document: widget.store.document, selectedId: hit.id) ??
         [hit];
   }
 
@@ -325,12 +418,36 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (id == null) {
       return;
     }
-    widget.kitApi.removeObject(id);
+    removeKitSelection(kitApi: widget.kitApi, selectedId: id);
     widget.selection.syncToDocument(widget.store.document);
   }
 
   bool _canInlineEdit(SceneObject object) {
-    return object.type == textTypeId && !isLlmKitObject(object);
+    if (object.type != textTypeId) {
+      return false;
+    }
+    if (isLlmKitObject(object)) {
+      return false;
+    }
+    return object.props[skapieRoleProp] != 'grant';
+  }
+
+  SceneObject? _inlineEditTarget(SceneObject hit) {
+    if (_canInlineEdit(hit)) {
+      return hit;
+    }
+    if (hit.props[skapieRoleProp] != 'frame' ||
+        kitIdOf(hit) != boardTextKitId) {
+      return null;
+    }
+    for (final object in widget.store.document.objects) {
+      if (object.type == textTypeId &&
+          kitIdOf(object) == boardTextKitId &&
+          kitChildBelongsToFrame(object, hit)) {
+        return object;
+      }
+    }
+    return null;
   }
 
   void _beginInlineEdit(SceneObject object) {
@@ -527,6 +644,13 @@ class CanvasViewportState extends State<CanvasViewport> {
                         child: const SizedBox.expand(),
                       ),
                     ),
+                    CableLayer(
+                      camera: _camera,
+                      viewportSize: size,
+                      document: widget.store.document,
+                      previewDelta: widget.selection.previewDelta,
+                      previewIds: _previewIds,
+                    ),
                     SceneObjectLayer(
                       camera: _camera,
                       viewportSize: size,
@@ -536,16 +660,22 @@ class CanvasViewportState extends State<CanvasViewport> {
                       previewDelta: widget.selection.previewDelta,
                       previewIds: _previewIds,
                     ),
-                    if (_selectedObject != null)
+                    if (_cableFrameId != null && _cableCursor != null)
+                      CableLayer(
+                        camera: _camera,
+                        viewportSize: size,
+                        document: widget.store.document,
+                        dragFrameId: _cableFrameId,
+                        dragKind: _cableKind,
+                        dragCursor: _cableCursor,
+                        previewOnly: true,
+                      ),
+                    if (_selectedObject != null &&
+                        !isKitObject(_selectedObject!))
                       SceneSelectionOverlay(
                         camera: _camera,
                         viewportSize: size,
-                        object:
-                            llmKitFrameForSelection(
-                              document: widget.store.document,
-                              selectedId: widget.selection.selectedId,
-                            ) ??
-                            _selectedObject!,
+                        object: _selectedObject!,
                         previewDelta: widget.selection.previewDelta,
                       ),
                     ?_inlineEditor(size),
@@ -569,4 +699,4 @@ class CanvasViewportState extends State<CanvasViewport> {
   }
 }
 
-enum _DragKind { none, pan, move }
+enum _DragKind { none, pan, move, cable }

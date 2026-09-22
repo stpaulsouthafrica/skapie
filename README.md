@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 10.5.1** — cleanup after 10.6: palette hover, solid LLM compound, inspector-hosted model and input. World tools architecture is unchanged. Vanilla HTTP kernel under `lib/providers/`. No persistent chat bar. Streaming, Pi/MCP, sandbox kits, and living sub-agent kits are later arcs.
+This repository is **Phase 10.7**: luxury kit chrome, irreducible compounds, inspector polish. World tools architecture from 10.6 is unchanged. Vanilla HTTP kernel under `lib/providers/`. No persistent chat bar. Streaming, Pi/MCP, sandbox kits, and living sub-agent kits are later arcs.
 
 ## Run on macOS
 
@@ -105,6 +105,8 @@ Skapie is built phase by phase. **The 10-phase core is complete.** Phase 10.1 is
 **Phase 10.6 gate:** `lib/tools/world/` one file per tool; `kits/tools.*/` grants; attach to LLM; unattached stays vanilla.
 
 **Phase 10.5.1 gate:** cleanup only. Palette hover shares the keyboard highlight. LLM frame and body move as one compound. Model, input, output, and run live in the inspector. No bottom LLM bar. Tools architecture from 10.6 is unchanged.
+
+**Phase 10.7 gate:** kit cards default to panel gray plus accent hairline; specialized kits select, drag, and delete as one; inspector fill, hover, separators, and pretty ids.
 
 ## Docs
 

@@ -10,6 +10,7 @@ import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/paint/kit_icon.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/tools/attach.dart';
 
@@ -170,9 +171,21 @@ class _HomeScreenState extends State<HomeScreen> {
       ...defaultCommandActions,
       for (final kit in widget.kitApi.listKits())
         if (kit.id.startsWith('tools.'))
-          CommandAction(id: 'add-${kit.id}', label: 'Tool: ${kit.displayName}'),
-      const CommandAction(id: 'attach-to-llm', label: 'Attach to LLM'),
-      const CommandAction(id: 'detach-tool', label: 'Detach tool'),
+          CommandAction(
+            id: 'add-${kit.id}',
+            label: 'Tool: ${kit.displayName}',
+            icon: KitIconKind.tool,
+          ),
+      const CommandAction(
+        id: 'attach-to-llm',
+        label: 'Attach to LLM',
+        icon: KitIconKind.link,
+      ),
+      const CommandAction(
+        id: 'detach-tool',
+        label: 'Detach tool',
+        icon: KitIconKind.unlink,
+      ),
     ];
   }
 
@@ -183,20 +196,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _openSettings();
       case 'add-llm':
         _add(harnessLlmKitId);
-      case 'add-system-prompt':
-        _add(harnessSystemPromptKitId);
-      case 'add-tools':
-        _add(harnessToolsKitId);
       case 'add-box':
-        _add(boxTypeId);
+        _add(boardBoxKitId);
       case 'add-text':
-        _add(textTypeId);
+        _add(boardTextKitId);
       case 'add-button':
-        _add(buttonTypeId);
-      case 'add-debug-rect':
-        _add(debugRectType);
-      case 'add-note-card':
-        _add(demoNoteCardKitId);
+        _add(boardButtonKitId);
       case 'attach-to-llm':
         _attachToLlm();
       case 'detach-tool':
@@ -210,23 +215,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<PopupMenuEntry<String>> _addMenuItems(BuildContext context) {
     return [
-      const PopupMenuItem(value: boxTypeId, child: Text('Box')),
-      const PopupMenuItem(value: textTypeId, child: Text('Text')),
-      const PopupMenuItem(value: buttonTypeId, child: Text('Button')),
-      const PopupMenuItem(value: debugRectType, child: Text('Debug rect')),
+      const PopupMenuItem(value: boardBoxKitId, child: Text('Box')),
+      const PopupMenuItem(value: boardTextKitId, child: Text('Text')),
+      const PopupMenuItem(value: boardButtonKitId, child: Text('Button')),
       for (final kit in widget.kitApi.listKits())
-        PopupMenuItem(
-          value: kit.id,
-          child: Text(
-            kit.id == demoNoteCardKitId
-                ? 'Demo kit: note card'
-                : kit.id.startsWith('harness.')
-                ? 'Harness: ${kit.displayName}'
-                : kit.id.startsWith('tools.')
-                ? 'Tool: ${kit.displayName}'
-                : 'Kit: ${kit.displayName}',
+        if (kit.id == harnessLlmKitId || kit.id.startsWith('tools.'))
+          PopupMenuItem(
+            value: kit.id,
+            child: Text(
+              kit.id == harnessLlmKitId ? 'LLM' : 'Tool: ${kit.displayName}',
+            ),
           ),
-        ),
     ];
   }
 
@@ -300,120 +299,158 @@ class _HomeScreenState extends State<HomeScreen> {
     final emptyWorld = widget.store.document.objects.isEmpty;
     final tokens = PaintScope.of(context);
 
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.comma, meta: true):
-            _openSettings,
-        const SingleActivator(LogicalKeyboardKey.space): _openPaletteIfIdle,
-        const SingleActivator(LogicalKeyboardKey.f3): _openPaletteIfIdle,
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.comma, meta: true):
+            _SettingsIntent(),
+        SingleActivator(LogicalKeyboardKey.space): _PaletteIntent(),
+        SingleActivator(LogicalKeyboardKey.f3): _PaletteIntent(),
       },
-      child: Scaffold(
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            CanvasViewport(
-              key: _viewportKey,
-              store: widget.store,
-              registry: widget.registry,
-              selection: _selection,
-              kitApi: widget.kitApi,
-            ),
-            if (_selection.selectedId != null)
-              Positioned(
-                top: 16,
-                right: 16,
-                bottom: 16,
-                child: PaintPanel(
-                  padding: EdgeInsets.zero,
-                  child: InspectorPanel(
-                    store: widget.store,
-                    selection: _selection,
-                    kitApi: widget.kitApi,
-                    lastLlmBodyId: _lastLlmBodyId,
-                    controller: widget.agentController,
-                  ),
-                ),
+      child: Actions(
+        actions: {
+          _SettingsIntent: CallbackAction<_SettingsIntent>(
+            onInvoke: (_) {
+              _openSettings();
+              return null;
+            },
+          ),
+          _PaletteIntent: _PaletteAction(
+            isEditing: _isEditingText,
+            open: _openPaletteIfIdle,
+          ),
+        },
+        child: Scaffold(
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              CanvasViewport(
+                key: _viewportKey,
+                store: widget.store,
+                registry: widget.registry,
+                selection: _selection,
+                kitApi: widget.kitApi,
               ),
-            if (emptyWorld && !_paletteOpen && !_settingsOpen)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 24,
-                child: IgnorePointer(
-                  child: Text(
-                    'Space to add',
-                    key: const Key('empty-world-hint'),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: tokens.muted),
-                  ),
-                ),
-              ),
-            if (_paletteOpen)
-              Positioned.fill(
-                child: Stack(
-                  children: [
-                    ModalBarrier(
-                      dismissible: true,
-                      color: Colors.black.withValues(alpha: 0.28),
-                      onDismiss: _closePalette,
+              if (_selection.selectedId != null)
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  bottom: 16,
+                  child: PaintPanel(
+                    padding: EdgeInsets.zero,
+                    child: InspectorPanel(
+                      store: widget.store,
+                      selection: _selection,
+                      kitApi: widget.kitApi,
+                      lastLlmBodyId: _lastLlmBodyId,
+                      controller: widget.agentController,
                     ),
-                    Align(
-                      alignment: const Alignment(0, -0.45),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 360,
-                          maxHeight: 420,
-                        ),
-                        child: Material(
-                          type: MaterialType.transparency,
-                          child: CommandPalette(
-                            key: const Key('command-palette'),
-                            actions: _paletteActions(),
-                            onClose: _closePalette,
-                            onRun: _runCommand,
+                  ),
+                ),
+              if (emptyWorld && !_paletteOpen && !_settingsOpen)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 24,
+                  child: IgnorePointer(
+                    child: Text(
+                      'Space to add',
+                      key: const Key('empty-world-hint'),
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: tokens.muted),
+                    ),
+                  ),
+                ),
+              if (_paletteOpen)
+                Positioned.fill(
+                  child: Stack(
+                    children: [
+                      ModalBarrier(
+                        dismissible: true,
+                        color: Colors.black.withValues(alpha: 0.28),
+                        onDismiss: _closePalette,
+                      ),
+                      Align(
+                        alignment: const Alignment(0, -0.45),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: 360,
+                            maxHeight: 420,
+                          ),
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: CommandPalette(
+                              key: const Key('command-palette'),
+                              actions: _paletteActions(),
+                              onClose: _closePalette,
+                              onRun: _runCommand,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            if (_settingsOpen)
-              Positioned.fill(
-                child: Stack(
-                  children: [
-                    ModalBarrier(
-                      dismissible: true,
-                      color: Colors.black.withValues(alpha: 0.28),
-                      onDismiss: _closeSettings,
-                    ),
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: 360,
-                          maxHeight: 520,
-                        ),
-                        child: PaintPanel(
-                          child: ListView(
-                            shrinkWrap: true,
-                            children: [
-                              _settingsChrome(label),
-                              AgentSettingsPanel(
-                                controller: widget.agentController,
-                                onClose: _closeSettings,
-                              ),
-                            ],
+              if (_settingsOpen)
+                Positioned.fill(
+                  child: Stack(
+                    children: [
+                      ModalBarrier(
+                        dismissible: true,
+                        color: Colors.black.withValues(alpha: 0.28),
+                        onDismiss: _closeSettings,
+                      ),
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(
+                            maxWidth: 360,
+                            maxHeight: 520,
+                          ),
+                          child: PaintPanel(
+                            child: ListView(
+                              shrinkWrap: true,
+                              children: [
+                                _settingsChrome(label),
+                                AgentSettingsPanel(
+                                  controller: widget.agentController,
+                                  onClose: _closeSettings,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
+  }
+}
+
+class _SettingsIntent extends Intent {
+  const _SettingsIntent();
+}
+
+class _PaletteIntent extends Intent {
+  const _PaletteIntent();
+}
+
+class _PaletteAction extends Action<_PaletteIntent> {
+  _PaletteAction({required this.isEditing, required this.open});
+
+  final bool Function() isEditing;
+  final VoidCallback open;
+
+  @override
+  bool isEnabled(_PaletteIntent intent) => !isEditing();
+
+  @override
+  Object? invoke(_PaletteIntent intent) {
+    open();
+    return null;
   }
 }

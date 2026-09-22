@@ -133,7 +133,7 @@ Timeouts (60s) and non-2xx throw `AgentHttpException`. `lastDiagnostic` records 
 
 Space or F3 (canvas focused, not typing in a field) opens a transient paint panel in the upper third. Esc, click-away, or running an action closes it. Filter is case-insensitive substring (spaces/hyphens ignored). **Hover** and **Up/Down** (optional **Ctrl-N/P**) share one highlight index; **Enter** runs the highlight (same as click). Focus stays in Search; arrows do not move the caret between actions. Highlight clamps at the list ends and scrolls into view. The palette does **not** send chat.
 
-Actions: Add LLM, Add System Prompt, Add Tools, Add Box/Text/Button/Debug rect/Note card, Settings.
+Actions: Add LLM, Add Text, Add Box, Add Button, Tool entries, Attach to LLM, Detach tool, Settings. Each row has a fixed icon. System prompt, debug rect, and note card are not offered.
 
 Empty world shows a muted `Space to add` hint. First LLM comes from **Add LLM**, then select and type.
 
@@ -141,7 +141,7 @@ Cmd+, still opens Agent settings (also listed in the palette). Add remains in th
 
 ## Selection typing (compound LLM)
 
-`harness.llm` is a **specialized** compound kit: title-bar chrome (diamond + LLM + model if set) on the frame, stacked **Input** and **Output** regions, per-kit `provider` / `model` / `surface` props. Frame and body move together; the body is not a free-floating note. Labels live in visible `content`; props stay `prompt` vs `reply`/`error`. Not separate scene kits.
+`harness.llm` is a **specialized** compound kit: panel card, accent hairline, title-bar chrome (diamond + LLM + model chip), stacked **Input** and **Output** regions, per-kit `provider` / `model` / `surface` props. Frame and body move and delete together. Labels live in visible `content`; props stay `prompt` vs `reply`/`error`. Not separate scene kits.
 
 When selection is an LLM kit frame or body, the inspector hosts the model picker, Input, read-only Output, Run, and attached Tools. Input binds to `prompt` via `KitApi.updateProps`. Enter or Run calls `sendUser` with that body’s id and the kit’s model/surface. Empty prompt shows **Needs input** and is a no-op. There is no bottom LLM bar. Other selection: Space is palette only; there is no global agent capture.
 

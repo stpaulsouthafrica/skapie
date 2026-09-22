@@ -116,10 +116,11 @@ void main() {
 
   test('empty prompt shows Needs input on the compound kit', () {
     final empty = formatLlmKitContent(prompt: '');
-    expect(empty, contains('Needs input'));
+    expect(empty, isNot(contains('Needs input')));
     expect(empty, contains('Input'));
     expect(empty, contains('Output'));
-    expect(llmKitEmptyContent, contains('Needs input'));
+    expect(llmKitEmptyContent, contains('Tools: none'));
+    expect(llmKitEmptyContent, isNot(contains('Needs input')));
 
     final filled = formatLlmKitContent(prompt: 'hello', reply: 'Echo: hello');
     expect(filled, isNot(contains('Needs input')));

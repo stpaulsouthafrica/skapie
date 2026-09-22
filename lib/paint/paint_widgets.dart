@@ -39,11 +39,13 @@ class PaintButton extends StatelessWidget {
     required this.label,
     required this.onPressed,
     this.filled = false,
+    this.richLabel,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool filled;
+  final InlineSpan? richLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -53,26 +55,37 @@ class PaintButton extends StatelessWidget {
         ? tokens.accent.withValues(alpha: enabled ? 1 : 0.4)
         : Colors.transparent;
     final fg = filled ? tokens.onAccent : tokens.ink;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPressed,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(PaintTokens.radiusField),
-          border: Border.all(
-            color: filled ? Colors.transparent : tokens.hairline,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: fg.withValues(alpha: enabled ? 1 : 0.4),
-              fontSize: 12,
-              letterSpacing: 0.3,
+    return PaintHover(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(PaintTokens.radiusField),
+            border: Border.all(
+              color: filled ? Colors.transparent : tokens.hairline,
             ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: richLabel == null
+                ? Text(
+                    label,
+                    style: TextStyle(
+                      color: fg.withValues(alpha: enabled ? 1 : 0.4),
+                      fontSize: 12,
+                      letterSpacing: 0.3,
+                    ),
+                  )
+                : Text.rich(
+                    richLabel!,
+                    style: TextStyle(
+                      color: fg.withValues(alpha: enabled ? 1 : 0.4),
+                      fontSize: 12,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
           ),
         ),
       ),
@@ -95,12 +108,14 @@ class PaintIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
-    final button = GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPressed,
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Icon(icon, size: 16, color: tokens.ink),
+    final button = PaintHover(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon, size: 16, color: tokens.ink),
+        ),
       ),
     );
     if (tooltip == null) {
@@ -137,25 +152,61 @@ class PaintTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
-    return TextField(
-      controller: controller,
-      focusNode: focusNode,
-      autofocus: autofocus,
-      enabled: enabled,
-      obscureText: obscure,
-      onSubmitted: onSubmitted,
-      onChanged: onChanged,
-      style: TextStyle(color: tokens.ink, fontSize: 13),
-      cursorColor: tokens.accent,
-      decoration: InputDecoration(
-        isDense: true,
-        filled: false,
-        labelText: label,
-        hintText: hint,
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        disabledBorder: InputBorder.none,
+    return PaintHover(
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        autofocus: autofocus,
+        enabled: enabled,
+        obscureText: obscure,
+        onSubmitted: onSubmitted,
+        onChanged: onChanged,
+        style: TextStyle(color: tokens.ink, fontSize: 13),
+        cursorColor: tokens.accent,
+        decoration: InputDecoration(
+          isDense: true,
+          filled: false,
+          labelText: label,
+          hintText: hint,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          disabledBorder: InputBorder.none,
+        ),
+      ),
+    );
+  }
+}
+
+class PaintHover extends StatefulWidget {
+  const PaintHover({super.key, required this.child, this.radius});
+
+  final Widget child;
+  final double? radius;
+
+  @override
+  State<PaintHover> createState() => _PaintHoverState();
+}
+
+class _PaintHoverState extends State<PaintHover> {
+  var _hover = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = PaintScope.of(context);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _hover
+              ? tokens.accent.withValues(alpha: 0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(
+            widget.radius ?? PaintTokens.radiusField,
+          ),
+        ),
+        child: widget.child,
       ),
     );
   }
@@ -176,20 +227,28 @@ class PaintChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onPressed,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: selected
-              ? tokens.accent.withValues(alpha: 0.22)
-              : tokens.canvas.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? tokens.accent : tokens.hairline),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Text(label, style: TextStyle(color: tokens.ink, fontSize: 11)),
+    return PaintHover(
+      radius: 999,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: selected
+                ? tokens.accent.withValues(alpha: 0.22)
+                : tokens.canvas.withValues(alpha: 0.35),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected ? tokens.accent : tokens.hairline,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Text(
+              label,
+              style: TextStyle(color: tokens.ink, fontSize: 11),
+            ),
+          ),
         ),
       ),
     );

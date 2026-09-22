@@ -1,24 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skapie/paint/kit_icon.dart';
 import 'package:skapie/paint/paint.dart';
 
 class CommandAction {
-  const CommandAction({required this.id, required this.label});
+  const CommandAction({
+    required this.id,
+    required this.label,
+    this.icon = KitIconKind.box,
+  });
 
   final String id;
   final String label;
+  final KitIconKind icon;
 }
 
 const List<CommandAction> defaultCommandActions = [
-  CommandAction(id: 'add-llm', label: 'Add LLM'),
-  CommandAction(id: 'add-system-prompt', label: 'Add System Prompt'),
-  CommandAction(id: 'add-tools', label: 'Add Tools'),
-  CommandAction(id: 'add-box', label: 'Add Box'),
-  CommandAction(id: 'add-text', label: 'Add Text'),
-  CommandAction(id: 'add-button', label: 'Add Button'),
-  CommandAction(id: 'add-debug-rect', label: 'Add Debug rect'),
-  CommandAction(id: 'add-note-card', label: 'Add Note card'),
-  CommandAction(id: 'settings', label: 'Settings'),
+  CommandAction(id: 'add-llm', label: 'Add LLM', icon: KitIconKind.llm),
+  CommandAction(id: 'add-text', label: 'Add Text', icon: KitIconKind.text),
+  CommandAction(id: 'add-box', label: 'Add Box', icon: KitIconKind.box),
+  CommandAction(
+    id: 'add-button',
+    label: 'Add Button',
+    icon: KitIconKind.button,
+  ),
+  CommandAction(id: 'settings', label: 'Settings', icon: KitIconKind.settings),
 ];
 
 List<CommandAction> filterCommandActions(
@@ -234,9 +240,24 @@ class _CommandPaletteState extends State<CommandPalette> {
                             horizontal: 8,
                             vertical: 8,
                           ),
-                          child: Text(
-                            action.label,
-                            style: TextStyle(color: tokens.ink, fontSize: 13),
+                          child: Row(
+                            children: [
+                              KitIcon(
+                                kind: action.icon,
+                                color: tokens.accent,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  action.label,
+                                  style: TextStyle(
+                                    color: tokens.ink,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),

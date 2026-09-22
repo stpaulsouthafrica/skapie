@@ -56,3 +56,7 @@ The Skapie canvas system prompt is **not** injected on this path. Empty system t
 ## Cleanup (10.5.1)
 
 Feel and chrome only. Palette hover, solid LLM compound, inspector-hosted model/input. Runner vs grant, `attachedTo`, and the vanilla vs tool-loop split are unchanged.
+
+## Chrome (10.7)
+
+Default kit fill is panel gray with a champagne/accent hairline. Specialized kits (`harness.llm` and `tools.*`) stay glued for select, drag, and delete. Inspector shows Fill on the kit frame. Tool runners and grant packages are unchanged.

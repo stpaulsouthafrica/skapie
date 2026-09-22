@@ -6,12 +6,24 @@ import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/world/kits.dart';
 
 const String demoNoteCardKitId = 'demo.note-card';
+const String boardTextKitId = 'board.text';
+const String boardBoxKitId = 'board.box';
+const String boardButtonKitId = 'board.button';
 const String harnessLlmKitId = 'harness.llm';
 const String harnessSystemPromptKitId = 'harness.system-prompt';
 const String harnessToolsKitId = 'harness.tools';
 const String skapieKitProp = 'skapieKit';
 const String skapieRoleProp = 'skapieRole';
 const String attachedToProp = 'attachedTo';
+const String connectedToProp = 'connectedTo';
+const String connectedPortProp = 'connectedPort';
+const String outputToProp = 'outputTo';
+const String outputPortProp = 'outputPort';
+const String llmInputPort = 'input';
+const String llmContextPort = 'context';
+const String kitNameProp = 'name';
+const String kitAccentProp = 'accent';
+const double kitRadius = 8;
 const String harnessToolsRoster =
     'list_kits, get_kit, instantiate_kit, add_object, remove_object, update_frame, update_props, set_locked, save_kit, reload_packages, register_kit';
 
@@ -55,6 +67,77 @@ class KitRecipe {
   final List<KitObjectSpec> objects;
 }
 
+const KitRecipe boardTextRecipe = KitRecipe(
+  id: boardTextKitId,
+  displayName: 'Text',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 280,
+      height: 150,
+      props: {skapieKitProp: boardTextKitId, skapieRoleProp: 'frame'},
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 44,
+      width: 256,
+      height: 90,
+      props: {
+        'content': 'Text',
+        'fontSize': 16,
+        skapieKitProp: boardTextKitId,
+        skapieRoleProp: 'body',
+      },
+    ),
+  ],
+);
+
+const KitRecipe boardBoxRecipe = KitRecipe(
+  id: boardBoxKitId,
+  displayName: 'Box',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 120,
+      props: {skapieKitProp: boardBoxKitId, skapieRoleProp: 'frame'},
+    ),
+  ],
+);
+
+const KitRecipe boardButtonRecipe = KitRecipe(
+  id: boardButtonKitId,
+  displayName: 'Button',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 220,
+      height: 120,
+      props: {skapieKitProp: boardButtonKitId, skapieRoleProp: 'frame'},
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 48,
+      width: 196,
+      height: 56,
+      props: {
+        'content': 'Button',
+        'fontSize': 16,
+        skapieKitProp: boardButtonKitId,
+        skapieRoleProp: 'body',
+      },
+    ),
+  ],
+);
+
 const KitRecipe demoNoteCardRecipe = KitRecipe(
   id: demoNoteCardKitId,
   displayName: 'Note card',
@@ -90,7 +173,7 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
       width: 296,
       height: 236,
       props: {
-        'content': 'Needs input\n\nInput\n\nOutput\n\nTools: none',
+        'content': 'Input\n\nOutput\n\nTools: none',
         'fontSize': 14,
         'prompt': '',
         'reply': '',
@@ -191,6 +274,20 @@ class KitApi {
     }
     final size = defaultObjectSize(typeId);
     final merged = Map<String, Object?>.of(type.defaultProps)..addAll(props);
+    final kitId = props[skapieKitProp]?.toString().trim() ?? '';
+    if (kitId.isNotEmpty) {
+      if (typeId == boxTypeId) {
+        if (!props.containsKey('fill')) {
+          merged.remove('fill');
+        }
+        if (!props.containsKey('cornerRadius')) {
+          merged['cornerRadius'] = kitRadius;
+        }
+      }
+      if (typeId == textTypeId && !props.containsKey('color')) {
+        merged.remove('color');
+      }
+    }
     final id = newSceneId('o');
     store.apply(
       AddObject(
@@ -297,6 +394,11 @@ class KitApi {
         throw ArgumentError('Unknown typeId: ${spec.typeId}');
       }
     }
+    final name = nextKitName(
+      store.document,
+      stem: recipe.id.startsWith('tools.') ? 'Tool' : recipe.displayName,
+      kitId: recipe.id,
+    );
     return [
       for (final spec in recipe.objects)
         addObject(
@@ -305,10 +407,138 @@ class KitApi {
           y: origin.dy + spec.y,
           width: spec.width,
           height: spec.height,
-          props: spec.props,
+          props: {...spec.props, kitNameProp: name},
         ),
     ];
   }
+}
+
+/// First kit of a kind is [stem]. The next free name is `stem (2)`, then `(3)`.
+String nextKitName(
+  SceneDocument document, {
+  required String stem,
+  required String kitId,
+}) {
+  final names = <String>{};
+  var unnamed = 0;
+  for (final object in document.objects) {
+    if (object.props[skapieRoleProp] != 'frame') {
+      continue;
+    }
+    if (object.props[skapieKitProp]?.toString() != kitId) {
+      continue;
+    }
+    final name = object.props[kitNameProp]?.toString().trim() ?? '';
+    if (name.isEmpty) {
+      unnamed++;
+    } else {
+      names.add(name);
+    }
+  }
+  var slot = 0;
+  while (true) {
+    final candidate = slot == 0 ? stem : '$stem (${slot + 1})';
+    final heldByUnnamed = slot < unnamed;
+    if (!heldByUnnamed && !names.contains(candidate)) {
+      return candidate;
+    }
+    slot++;
+  }
+}
+
+String kitNameStem(String kitId) {
+  if (kitId == harnessLlmKitId) {
+    return 'LLM';
+  }
+  if (kitId == harnessSystemPromptKitId) {
+    return 'System prompt';
+  }
+  if (kitId == boardTextKitId) {
+    return 'Text';
+  }
+  if (kitId == boardBoxKitId) {
+    return 'Box';
+  }
+  if (kitId == boardButtonKitId) {
+    return 'Button';
+  }
+  if (kitId.startsWith('tools.')) {
+    return 'Tool';
+  }
+  if (kitId.startsWith('harness.')) {
+    return kitId.substring('harness.'.length);
+  }
+  return kitId;
+}
+
+/// The one identity shown for a kit. Explicit [kitNameProp] wins.
+String kitDisplayName(SceneDocument document, SceneObject object) {
+  final frame = _nameFrame(document, object);
+  final explicit = frame.props[kitNameProp]?.toString().trim() ?? '';
+  if (explicit.isNotEmpty) {
+    return explicit;
+  }
+  final kitId = frame.props[skapieKitProp]?.toString().trim() ?? '';
+  if (kitId.isEmpty) {
+    return frame.id;
+  }
+  final stem = kitNameStem(kitId);
+  final frames = [
+    for (final item in document.objects)
+      if (item.props[skapieRoleProp] == 'frame' &&
+          item.props[skapieKitProp]?.toString() == kitId)
+        item,
+  ];
+  final taken = <String>{
+    for (final item in document.objects)
+      if ((item.props[kitNameProp]?.toString().trim() ?? '').isNotEmpty)
+        item.props[kitNameProp].toString().trim(),
+  };
+  var slot = 0;
+  for (final item in frames) {
+    final named = item.props[kitNameProp]?.toString().trim() ?? '';
+    if (named.isNotEmpty) {
+      continue;
+    }
+    var candidate = slot == 0 ? stem : '$stem (${slot + 1})';
+    while (taken.contains(candidate)) {
+      slot++;
+      candidate = slot == 0 ? stem : '$stem (${slot + 1})';
+    }
+    if (item.id == frame.id) {
+      return candidate;
+    }
+    taken.add(candidate);
+    slot++;
+  }
+  return stem;
+}
+
+SceneObject _nameFrame(SceneDocument document, SceneObject object) {
+  if (object.props[skapieRoleProp] == 'frame') {
+    return object;
+  }
+  final kitId = object.props[skapieKitProp]?.toString().trim() ?? '';
+  if (kitId.isEmpty) {
+    return object;
+  }
+  for (final item in document.objects) {
+    if (item.props[skapieRoleProp] != 'frame') {
+      continue;
+    }
+    if (item.props[skapieKitProp]?.toString() != kitId) {
+      continue;
+    }
+    final inside =
+        object.x >= item.x - 0.5 &&
+        object.y >= item.y - 0.5 &&
+        object.x + object.width <= item.x + item.width + 0.5 &&
+        object.y + object.height <= item.y + item.height + 0.5;
+    if (inside) {
+      return item;
+    }
+  }
+  return object;
 }
 
 KitApi createAppKitApi({
@@ -322,6 +552,9 @@ KitApi createAppKitApi({
     packages: packages,
   );
   api.registerKit(demoNoteCardRecipe);
+  api.registerKit(boardTextRecipe);
+  api.registerKit(boardBoxRecipe);
+  api.registerKit(boardButtonRecipe);
   api.registerKit(harnessLlmRecipe);
   api.registerKit(harnessSystemPromptRecipe);
   api.registerKit(harnessToolsRecipe);

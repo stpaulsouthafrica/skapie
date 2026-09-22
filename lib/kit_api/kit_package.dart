@@ -53,7 +53,7 @@ const Map<String, Object?> harnessLlmJson = {
       'width': 296,
       'height': 236,
       'props': {
-        'content': 'Needs input\n\nInput\n\nOutput\n\nTools: none',
+        'content': 'Input\n\nOutput\n\nTools: none',
         'fontSize': 14,
         'prompt': '',
         'reply': '',

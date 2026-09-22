@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces. **10.4** is the command palette and selection-scoped LLM typing. **10.5** is providers vanilla hygiene plus compound LLM Input/Output regions. **Specialized LLM kit UX** added palette arrows, inspector typing, inline text edit, and `harness.llm` as a specialized kit. **10.6** is per-file world tools plus spawnable `tools.*` kits attached to an LLM. **10.5.1** (current) is cleanup only: palette hover, solid LLM compound, inspector-hosted model/input. Tools architecture is unchanged.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces. **10.4** is the command palette and selection-scoped LLM typing. **10.5** is providers vanilla hygiene plus compound LLM Input/Output regions. **Specialized LLM kit UX** added palette arrows, inspector typing, inline text edit, and `harness.llm` as a specialized kit. **10.6** is per-file world tools plus spawnable `tools.*` kits attached to an LLM. **10.5.1** is cleanup: palette hover, solid LLM compound, inspector-hosted model/input. **10.7** (current) is luxury kit chrome, irreducible compounds, and inspector polish. Tools architecture is unchanged.
 
 ## Phase 1 gate — done
 
@@ -164,12 +164,19 @@ The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, 
 - No coding pack. No cable editor.
 - `flutter analyze` clean; `flutter test` green.
 
-## Phase 10.5.1 gate (current)
+## Phase 10.5.1 gate — done
 
 - Cleanup only after 10.6. Do not redesign tools. Attach / world tool loop stay as 10.6.
 - Command palette: hovering a row sets the same highlight index as arrow keys. Enter runs the highlight; click runs that row.
 - `harness.llm` moves as one compound: dragging frame or body keeps the relative offset. Selecting either is the LLM kit for inspector / attach. Chrome is a title bar (mark + LLM + model if set), not a tiny corner mark.
 - Inspector hosts provider/model, prompt input, read-only output/error, Needs input, Run, and attached Tools. No bottom `LlmKitInput` bar. `tools.*` attach/detach stay in the inspector.
+- `flutter analyze` clean; `flutter test` green.
+
+## Phase 10.7 gate (current)
+
+- Default kit/card chrome is panel gray (`#161618`) plus champagne/accent hairline. Custom fill only after Inspector sets it. LLM radius ~22; tool grants ~16.
+- Any `skapieKit` instance (at least `harness.llm` and `tools.*`) selects, drags, and deletes as one compound. Delete never orphans child text. Tool-grant delete refreshes LLM Tools chrome.
+- Inspector: hairline separators, hover wash on controls, one renameable kit id (`LLM`, then `LLM (2)`). Ten color swatches. The chosen swatch sets outline, rules, and shading. The card interior stays panel gray at 85% opacity. Model/Input/Output/Run stay inspector-hosted. Attach to LLM uses that kit's name and color.
 - `flutter analyze` clean; `flutter test` green.
 
 ## Dream goal (not scheduled)
