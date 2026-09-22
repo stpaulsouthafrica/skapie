@@ -129,6 +129,7 @@ class AgentSession {
     this.maxToolIterations = defaultMaxToolIterations,
     this.includeTools = true,
     List<AgentTool>? tools,
+    List<AgentMessage> history = const [],
   }) : id = id ?? 'agent_${DateTime.now().microsecondsSinceEpoch}',
        _tools = tools ?? createWorldTools(kitApi),
        _messages = [
@@ -136,6 +137,7 @@ class AgentSession {
            role: AgentRole.system,
            content: systemPrompt ?? defaultAgentSystemPrompt,
          ),
+         ...history,
        ] {
     _dispatcher = AgentToolDispatcher(_tools);
   }

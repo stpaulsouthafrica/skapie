@@ -430,6 +430,11 @@ class _InspectorPanelState extends State<InspectorPanel> {
                         'Allowed connections',
                         _allowedConnections(object),
                       ),
+                    if (kitIdOf(object) == harnessConversationKitId)
+                      _section(
+                        'Allowed connections',
+                        _conversationConnections(object),
+                      ),
                     if (llmBody != null)
                       _section(
                         'Allowed connections',
@@ -593,6 +598,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
       ..._textPortRows(body, texts, llmInputPort),
       _portHeading('Context'),
       ..._textPortRows(body, texts, llmContextPort),
+      _portHeading('Conversation'),
+      ..._conversationPortRows(body),
       _portHeading('Tools'),
       if (tools.isEmpty)
         _readOnly('', 'None on the board', hideLabel: true)
@@ -648,6 +655,58 @@ class _InspectorPanelState extends State<InspectorPanel> {
             ),
           ),
         ],
+    ];
+  }
+
+  List<Widget> _conversationConnections(SceneObject object) {
+    final bodies = llmBodies(widget.store.document);
+    if (bodies.isEmpty) {
+      return [_readOnly('', 'None on the board', hideLabel: true)];
+    }
+    final frame = _frame ?? object;
+    return [
+      for (final body in bodies)
+        _connectionRow(
+          kit: body,
+          detail: 'Conversation',
+          keyId: 'conversation-${body.id}',
+          connected: kitHasLink(frame, to: body.id, port: llmConversationPort),
+          onTap: () => _toggleText(
+            objectId: object.id,
+            bodyId: body.id,
+            port: llmConversationPort,
+            connected: kitHasLink(
+              frame,
+              to: body.id,
+              port: llmConversationPort,
+            ),
+          ),
+        ),
+    ];
+  }
+
+  List<Widget> _conversationPortRows(SceneObject body) {
+    final conversations = conversationFrames(widget.store.document);
+    if (conversations.isEmpty) {
+      return [_readOnly('', 'None on the board', hideLabel: true)];
+    }
+    return [
+      for (final frame in conversations)
+        _connectionRow(
+          kit: frame,
+          keyId: 'conversation-${frame.id}',
+          connected: kitHasLink(frame, to: body.id, port: llmConversationPort),
+          onTap: () => _toggleText(
+            objectId: frame.id,
+            bodyId: body.id,
+            port: llmConversationPort,
+            connected: kitHasLink(
+              frame,
+              to: body.id,
+              port: llmConversationPort,
+            ),
+          ),
+        ),
     ];
   }
 

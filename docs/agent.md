@@ -121,7 +121,7 @@ Headers (all surfaces):
 - Preset extras from the table above
 - messages also sends `x-api-key` with the same key
 
-No `tools`. No system message. No `reasoning`. Stub kits on the board do not change this body.
+No `tools` on this path. No `reasoning`. Context text, when a Context cable has text, is a system message. Turns from a cabled Conversation kit are earlier user and assistant messages, then the new Input is the latest user message. After a successful run those two lines are appended to that Conversation kit. The system-prompt stub kit still does not change this body.
 
 Timeouts (60s) and non-2xx throw `AgentHttpException`. `lastDiagnostic` records preset, model, surface, URL, status, truncated body, `tools=off`, `reasoning=off`. Never the API key.
 

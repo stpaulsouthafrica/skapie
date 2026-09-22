@@ -10,6 +10,7 @@ const String boardTextKitId = 'board.text';
 const String boardBoxKitId = 'board.box';
 const String boardButtonKitId = 'board.button';
 const String harnessLlmKitId = 'harness.llm';
+const String harnessConversationKitId = 'harness.conversation';
 const String harnessSystemPromptKitId = 'harness.system-prompt';
 const String harnessToolsKitId = 'harness.tools';
 const String skapieKitProp = 'skapieKit';
@@ -22,6 +23,7 @@ const String outputPortProp = 'outputPort';
 const String linksProp = 'links';
 const String llmInputPort = 'input';
 const String llmContextPort = 'context';
+const String llmConversationPort = 'conversation';
 const String llmToolsPort = 'tools';
 const String kitNameProp = 'name';
 const String kitAccentProp = 'accent';
@@ -165,7 +167,7 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
       x: 0,
       y: 0,
       width: 320,
-      height: 260,
+      height: 320,
       props: {skapieKitProp: harnessLlmKitId, skapieRoleProp: 'frame'},
     ),
     KitObjectSpec(
@@ -173,7 +175,7 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
       x: 12,
       y: 12,
       width: 296,
-      height: 236,
+      height: 296,
       props: {
         'content': 'Input\n\nOutput\n\nTools: none',
         'fontSize': 14,
@@ -184,6 +186,35 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
         'provider': '',
         'surface': '',
         skapieKitProp: harnessLlmKitId,
+        skapieRoleProp: 'body',
+      },
+    ),
+  ],
+);
+
+const KitRecipe harnessConversationRecipe = KitRecipe(
+  id: harnessConversationKitId,
+  displayName: 'Conversation',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 280,
+      height: 180,
+      props: {skapieKitProp: harnessConversationKitId, skapieRoleProp: 'frame'},
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 44,
+      width: 256,
+      height: 120,
+      props: {
+        'content': '',
+        'fontSize': 13,
+        'turns': <Object?>[],
+        skapieKitProp: harnessConversationKitId,
         skapieRoleProp: 'body',
       },
     ),
@@ -558,6 +589,7 @@ KitApi createAppKitApi({
   api.registerKit(boardBoxRecipe);
   api.registerKit(boardButtonRecipe);
   api.registerKit(harnessLlmRecipe);
+  api.registerKit(harnessConversationRecipe);
   api.registerKit(harnessSystemPromptRecipe);
   api.registerKit(harnessToolsRecipe);
   registerWorldToolKits(api);

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/agent/agent_models_catalog.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
@@ -137,8 +139,12 @@ class AgentController extends ChangeNotifier {
     final kitSurface = target.props['surface']?.toString().trim() ?? '';
     final model = kitModel.isNotEmpty ? kitModel : runtime.model;
     final provider = kitProvider.isNotEmpty ? kitProvider : runtime.presetId;
+    final document = kitApi.store.document;
+    final systemText = llmContextText(document, bodyId);
+    final history = llmConversationHistory(document, bodyId);
     final attached = worldToolsForLlm(kitApi: kitApi, llmBodyId: bodyId);
     Object? failure;
+    StackTrace? failureTrace;
     String? reply;
     try {
       if (attached.isNotEmpty) {
@@ -147,7 +153,16 @@ class AgentController extends ChangeNotifier {
           kitApi: kitApi,
           tools: attached,
           includeTools: true,
-          systemPrompt: '',
+          systemPrompt: systemText.trim().isEmpty ? '' : systemText.trim(),
+          history: [
+            for (final earlier in history)
+              AgentMessage(
+                role: earlier.role == 'assistant'
+                    ? AgentRole.assistant
+                    : AgentRole.user,
+                content: earlier.content,
+              ),
+          ],
         );
         await turn.sendUser(prompt);
         reply = turn.messages
@@ -184,11 +199,16 @@ class AgentController extends ChangeNotifier {
         if (client == null) {
           throw StateError('No vanilla client');
         }
-        reply = await client.complete(userText: prompt);
+        reply = await client.complete(
+          userText: prompt,
+          systemText: systemText,
+          history: history,
+        );
         lastDiagnostic = client.lastDiagnostic;
       }
-    } catch (error) {
+    } catch (error, stack) {
       failure = error;
+      failureTrace = stack;
       final sessionModel = session.model;
       if (sessionModel is OpenAiCompatibleAgentModel &&
           sessionModel.lastDiagnostic != null) {
@@ -211,9 +231,39 @@ class AgentController extends ChangeNotifier {
       diagnostic: lastDiagnostic,
       surface: kitSurface.isNotEmpty ? kitSurface : lastDiagnostic?.surface,
     );
+    if (failure == null) {
+      _appendConversation(
+        bodyId: bodyId,
+        userText: prompt,
+        assistantText: reply ?? '',
+      );
+    }
     notifyListeners();
     if (failure != null) {
-      throw failure;
+      Error.throwWithStackTrace(failure, failureTrace ?? StackTrace.current);
+    }
+  }
+
+  void _appendConversation({
+    required String bodyId,
+    required String userText,
+    required String assistantText,
+  }) {
+    final document = kitApi.store.document;
+    for (final frame in conversationFrames(document)) {
+      if (!kitHasLink(frame, to: bodyId, port: llmConversationPort)) {
+        continue;
+      }
+      final body = conversationBody(document, frame);
+      if (body == null) {
+        continue;
+      }
+      appendConversationExchange(
+        kitApi: kitApi,
+        bodyId: body.id,
+        userText: userText,
+        assistantText: assistantText,
+      );
     }
   }
 }

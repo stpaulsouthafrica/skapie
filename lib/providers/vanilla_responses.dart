@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 import 'package:skapie/providers/vanilla_extract.dart';
@@ -9,8 +10,21 @@ import 'package:skapie/providers/vanilla_extract.dart';
 Map<String, Object?> vanillaResponsesBody({
   required String model,
   required String userText,
+  String systemText = '',
+  List<ConversationTurn> history = const [],
 }) {
-  return {'model': model, 'input': userText};
+  final system = systemText.trim();
+  if (system.isEmpty && history.isEmpty) {
+    return {'model': model, 'input': userText};
+  }
+  return {
+    'model': model,
+    if (system.isNotEmpty) 'instructions': system,
+    'input': chatMessages(
+      userText: userText,
+      history: history,
+    ).where((message) => message['role'] != 'system').toList(),
+  };
 }
 
 class VanillaResponsesClient implements VanillaSurfaceClient {
@@ -49,8 +63,17 @@ class VanillaResponsesClient implements VanillaSurfaceClient {
   }
 
   @override
-  Future<String> complete({required String userText}) async {
-    final body = vanillaResponsesBody(model: model, userText: userText);
+  Future<String> complete({
+    required String userText,
+    String systemText = '',
+    List<ConversationTurn> history = const [],
+  }) async {
+    final body = vanillaResponsesBody(
+      model: model,
+      userText: userText,
+      systemText: systemText,
+      history: history,
+    );
     _record();
     final http.Response response;
     try {

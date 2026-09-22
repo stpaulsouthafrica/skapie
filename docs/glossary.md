@@ -13,7 +13,8 @@ Locked product vocabulary. Use these words in code, comments, docs, and UI.
 | **Kit recipe** (`KitRecipe`) | In-memory definition: `id`, `displayName`, relative `KitObjectSpec`s. This is what `registerKit`, `getKit`, `listKits`, `instantiate`, and `saveKit` use. |
 | **Kit package** | On-disk folder `kits/<id>/` with `kit.json`. Loading a package creates/updates a kit recipe in memory. Instantiating never reads the folder mid-turn; it uses the in-memory kit recipe. See [kit packages](kit_packages.md). |
 | **Harness kit** | A kit that is part of the agent harness on the world: LLM, system prompt, or tools. Still ordinary scene objects via a kit recipe. Not a second scene system. |
-| **LLM kit** | `harness.llm`. Specialized compound kit: panel card, accent hairline, title-bar chrome, per-kit model, Needs input, Input region (prompt), Output region (reply or redacted error), Tools chrome. Frame and body move and delete together. Attach `tools.*` grants via `attachedTo`. |
+| **LLM kit** | `harness.llm`. Specialized compound kit: panel card, accent hairline, title-bar chrome, per-kit model, Needs input, Input, Context, Conversation, Tools, and Output. Frame and body move and delete together. Attach `tools.*` grants via `attachedTo`. |
+| **Conversation kit** | `harness.conversation`. The earlier user and assistant turns for an LLM. Cable its output into the Conversation port. A successful run appends that turn. |
 | **Principle kit** | Dumb data/structure on the board (Note, System prompt, Tools, Input as a region). Holds text. Does not run a network. |
 | **Specialized kit** | Irreducible behavior. Today: `harness.llm`. |
 | **System-prompt kit** | `harness.system-prompt`. Stub: editable prompt text on the board. Not injected into first Enter. |

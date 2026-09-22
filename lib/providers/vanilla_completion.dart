@@ -2,18 +2,23 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 
 Map<String, Object?> vanillaCompletionBody({
   required String model,
   required String userText,
+  String systemText = '',
+  List<ConversationTurn> history = const [],
 }) {
   return {
     'model': model,
-    'messages': [
-      {'role': 'user', 'content': userText},
-    ],
+    'messages': chatMessages(
+      userText: userText,
+      systemText: systemText,
+      history: history,
+    ),
   };
 }
 
@@ -54,8 +59,17 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
   }
 
   @override
-  Future<String> complete({required String userText}) async {
-    final body = vanillaCompletionBody(model: model, userText: userText);
+  Future<String> complete({
+    required String userText,
+    String systemText = '',
+    List<ConversationTurn> history = const [],
+  }) async {
+    final body = vanillaCompletionBody(
+      model: model,
+      userText: userText,
+      systemText: systemText,
+      history: history,
+    );
     _record();
     final http.Response response;
     try {

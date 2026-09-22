@@ -127,6 +127,7 @@ class SceneObjectLayer extends StatelessWidget {
     final model = body?.props['model']?.toString().trim() ?? '';
     final tools = _toolLines(body?.id);
     final contextNames = _contextLines(body?.id);
+    final conversationNames = _conversationLines(body?.id);
     final output = error.isNotEmpty ? error : reply;
     final barH = 32.0 * zoom;
     final labelSize = 11.0 * zoom;
@@ -168,6 +169,16 @@ class SceneObjectLayer extends StatelessWidget {
                 tokens: tokens,
                 label: 'Context',
                 lines: contextNames,
+                glow: accent,
+                zoom: zoom,
+                labelSize: labelSize,
+              ),
+              _rule(hairline, zoom),
+              _region(
+                key: const Key('llm-kit-conversation-region'),
+                tokens: tokens,
+                label: 'Conversation',
+                lines: conversationNames,
                 glow: accent,
                 zoom: zoom,
                 labelSize: labelSize,
@@ -246,7 +257,8 @@ class SceneObjectLayer extends StatelessWidget {
           tokens: tokens,
           zoom: zoom,
         ),
-        if (kitIdOf(frame) == boardTextKitId)
+        if (kitIdOf(frame) == boardTextKitId ||
+            kitIdOf(frame) == harnessConversationKitId)
           _outputCaption(tokens, zoom, frame),
       ],
     );
@@ -498,12 +510,45 @@ class SceneObjectLayer extends StatelessWidget {
       return const [];
     }
     final document = _preview;
+    final lines = <_KitLine>[];
+    for (final frame in textFrames(document)) {
+      if (!kitHasLink(frame, to: bodyId, port: llmContextPort)) {
+        continue;
+      }
+      final content = textKitContent(document, frame).trim();
+      lines.add(
+        _KitLine(
+          content.isEmpty ? kitDisplayName(document, frame) : content,
+          cableId: '${frame.id}|$bodyId|$llmContextPort',
+        ),
+      );
+    }
+    for (final other in llmBodies(document)) {
+      if (!kitHasLink(other, to: bodyId, port: llmContextPort)) {
+        continue;
+      }
+      final reply = other.props['reply']?.toString().trim() ?? '';
+      if (reply.isEmpty) {
+        continue;
+      }
+      lines.add(
+        _KitLine(reply, cableId: '${other.id}|$bodyId|$llmContextPort'),
+      );
+    }
+    return lines;
+  }
+
+  List<_KitLine> _conversationLines(String? bodyId) {
+    if (bodyId == null) {
+      return const [];
+    }
+    final document = _preview;
     return [
-      for (final frame in textFrames(document))
-        if (kitHasLink(frame, to: bodyId, port: llmContextPort))
+      for (final frame in conversationFrames(document))
+        if (kitHasLink(frame, to: bodyId, port: llmConversationPort))
           _KitLine(
             kitDisplayName(document, frame),
-            cableId: '${frame.id}|$bodyId|$llmContextPort',
+            cableId: '${frame.id}|$bodyId|$llmConversationPort',
           ),
     ];
   }

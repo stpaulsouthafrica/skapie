@@ -1,3 +1,4 @@
+import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 
@@ -12,7 +13,11 @@ class UnverifiedVanillaClient implements VanillaSurfaceClient {
   AgentHttpDiagnostic? lastDiagnostic;
 
   @override
-  Future<String> complete({required String userText}) async {
+  Future<String> complete({
+    required String userText,
+    String systemText = '',
+    List<ConversationTurn> history = const [],
+  }) async {
     lastDiagnostic = AgentHttpDiagnostic(
       presetId: presetId,
       baseUrl: '',

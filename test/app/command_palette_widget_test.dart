@@ -152,6 +152,8 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 

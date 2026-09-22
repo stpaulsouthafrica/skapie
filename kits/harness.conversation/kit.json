@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "harness.conversation",
+  "displayName": "Conversation",
+  "description": "Earlier user and assistant turns. Cable the output into an LLM Conversation port.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 280,
+      "height": 180,
+      "props": {
+        "skapieKit": "harness.conversation",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 44,
+      "width": 256,
+      "height": 120,
+      "props": {
+        "content": "",
+        "fontSize": 13,
+        "turns": [],
+        "skapieKit": "harness.conversation",
+        "skapieRole": "body"
+      }
+    }
+  ]
+}

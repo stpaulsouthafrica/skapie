@@ -5,6 +5,9 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/agent/conversation_turn.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_completion.dart';
@@ -302,6 +305,95 @@ void main() {
         kitApi.store.document.objectById(llmIds.last)!.props['reply'],
         'listed',
       );
+    },
+  );
+
+  test(
+    'context and conversation ride on the request and the reply is stored',
+    () async {
+      final sent = <Map<String, Object?>>[];
+      final client = MockClient((request) async {
+        sent.add(Map<String, Object?>.from(jsonDecode(request.body) as Map));
+        final count = sent.length;
+        return http.Response(
+          jsonEncode({
+            'choices': [
+              {
+                'message': {'content': 'reply $count'},
+              },
+            ],
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final controller = AgentController(
+        kitApi: kitApi,
+        session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+        vanilla: VanillaCompletionClient(
+          baseUrl: 'https://opencode.ai/zen/go/v1',
+          apiKey: 'sk-secret-key',
+          model: 'deepseek-v4-flash',
+          presetId: 'opencode-go',
+          httpClient: client,
+        ),
+        runtime: const ResolvedAgentRuntime(
+          presetId: 'opencode-go',
+          useFake: false,
+          model: 'deepseek-v4-flash',
+          apiKey: 'sk-secret-key',
+        ),
+      );
+      final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+      final text = kitApi.instantiate(
+        boardTextKitId,
+        origin: const Offset(0, 400),
+      );
+      final conversation = kitApi.instantiate(
+        harnessConversationKitId,
+        origin: const Offset(0, 640),
+      );
+      kitApi.updateProps(text.last, {'content': 'Texting from space'});
+      connectTextToLlm(
+        kitApi: kitApi,
+        textObjectId: text.first,
+        llmBodyId: llm.last,
+        port: llmContextPort,
+      );
+      connectTextToLlm(
+        kitApi: kitApi,
+        textObjectId: conversation.first,
+        llmBodyId: llm.last,
+        port: llmConversationPort,
+      );
+
+      await controller.sendUser('hello', targetBodyId: llm.last);
+      expect(sent.single['messages'], [
+        {'role': 'system', 'content': 'Texting from space'},
+        {'role': 'user', 'content': 'hello'},
+      ]);
+      expect(
+        conversationTurnsOf(
+          kitApi.store.document.objectById(conversation.last)!,
+        ),
+        [
+          const ConversationTurn(role: 'user', content: 'hello'),
+          const ConversationTurn(role: 'assistant', content: 'reply 1'),
+        ],
+      );
+
+      kitApi.updateProps(llm.last, {
+        'model': '',
+        'provider': '',
+        'surface': '',
+      });
+      await controller.sendUser('again', targetBodyId: llm.last);
+      expect(sent.last['messages'], [
+        {'role': 'system', 'content': 'Texting from space'},
+        {'role': 'user', 'content': 'hello'},
+        {'role': 'assistant', 'content': 'reply 1'},
+        {'role': 'user', 'content': 'again'},
+      ]);
     },
   );
 

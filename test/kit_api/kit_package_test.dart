@@ -71,6 +71,7 @@ void main() {
   test('createAppKitApi registers harness kits', () {
     final api = createAppKitApi(store: SceneStore());
     expect(api.getKit(harnessLlmKitId), isNotNull);
+    expect(api.getKit(harnessConversationKitId), isNotNull);
     expect(api.getKit(harnessSystemPromptKitId), isNotNull);
     expect(api.getKit(harnessToolsKitId), isNotNull);
   });

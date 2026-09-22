@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/llm_request_preview.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 
@@ -82,5 +83,35 @@ void main() {
     expect(text, isNot(contains('other-model')));
     expect(text, isNot(contains('sk-live')));
     expect(text, contains('X-Title: Skapie'));
+  });
+
+  test('preview puts context first and keeps conversation roles', () {
+    final text = formatLlmRequestPreview(
+      prompt: 'again',
+      systemText: 'Texting from space',
+      history: const [
+        ConversationTurn(role: 'user', content: 'hello'),
+        ConversationTurn(role: 'assistant', content: 'reply 1'),
+      ],
+      useFake: false,
+      sessionModel: const FakeAgentModel(),
+      attachedTools: const [],
+      presetId: 'opencode-go',
+      baseUrl: 'https://opencode.ai/zen/go/v1',
+      apiKey: 'oc-secret',
+      runtimeModel: 'deepseek-v4-flash',
+      kitModel: 'deepseek-v4-flash',
+      kitProvider: 'opencode-go',
+      sessionId: 's1',
+    );
+    final systemAt = text.indexOf('"role": "system"');
+    final firstUser = text.indexOf('"content": "hello"');
+    final assistant = text.indexOf('"content": "reply 1"');
+    final again = text.indexOf('"content": "again"');
+    expect(systemAt, greaterThanOrEqualTo(0));
+    expect(systemAt, lessThan(firstUser));
+    expect(firstUser, lessThan(assistant));
+    expect(assistant, lessThan(again));
+    expect(text, contains('Texting from space'));
   });
 }

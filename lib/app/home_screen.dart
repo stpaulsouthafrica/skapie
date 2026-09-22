@@ -196,6 +196,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _openSettings();
       case 'add-llm':
         _add(harnessLlmKitId);
+      case 'add-conversation':
+        _add(harnessConversationKitId);
       case 'add-box':
         _add(boardBoxKitId);
       case 'add-text':
@@ -217,6 +219,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return [
       const PopupMenuItem(value: boardBoxKitId, child: Text('Box')),
       const PopupMenuItem(value: boardTextKitId, child: Text('Text')),
+      const PopupMenuItem(
+        value: harnessConversationKitId,
+        child: Text('Conversation'),
+      ),
       const PopupMenuItem(value: boardButtonKitId, child: Text('Button')),
       for (final kit in widget.kitApi.listKits())
         if (kit.id == harnessLlmKitId || kit.id.startsWith('tools.'))

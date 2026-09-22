@@ -16,6 +16,7 @@ import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
+import 'package:skapie/paint/cables/cable_hit.dart';
 import 'package:skapie/paint/cables/cable_motion.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
@@ -58,6 +59,8 @@ class CanvasViewportState extends State<CanvasViewport> {
   final _inlineFocus = FocusNode();
   String? _inlineEditId;
   final _cableMotion = CableMotion();
+  final _retractions = <RetractingCable>[];
+  CableHover? _cableHover;
   String? _cableFrameId;
   KitPortKind? _cableKind;
   Offset? _cableCursor;
@@ -213,7 +216,15 @@ class CanvasViewportState extends State<CanvasViewport> {
       _cableFrameId = port.frameId;
       _cableKind = port.kind;
       _cableCursor = world;
+      _cableHover = null;
       setState(() {});
+      return;
+    }
+    final cableHit = _cableAt(event.localPosition);
+    if (cableHit != null) {
+      _dragPointer = null;
+      _lastDrag = null;
+      _cutCable(cableHit);
       return;
     }
     final hit = hitTestObjects(widget.store.document.objects, world);
@@ -254,6 +265,71 @@ class CanvasViewportState extends State<CanvasViewport> {
     } else {
       _dragKind = _DragKind.none;
     }
+  }
+
+  void _onHover(PointerHoverEvent event) {
+    if (_dragKind != _DragKind.none) {
+      if (_cableHover != null) {
+        setState(() => _cableHover = null);
+      }
+      return;
+    }
+    final next = _cableAt(event.localPosition);
+    final same =
+        next?.cable.id == _cableHover?.cable.id &&
+        next?.screen == _cableHover?.screen;
+    if (same) {
+      return;
+    }
+    setState(() => _cableHover = next);
+  }
+
+  CableHover? _cableAt(Offset local) {
+    if (_viewportSize.isEmpty || _dragKind != _DragKind.none) {
+      return null;
+    }
+    final world = screenToWorld(local, _viewportSize, _camera);
+    if (hitTestObjects(widget.store.document.objects, world) != null) {
+      return null;
+    }
+    return hitCable(
+      cables: sceneCables(widget.store.document),
+      screenPoint: local,
+      worldEnds: (cable) => (
+        from: _shownWorld(cable.from, cable.sourceId),
+        to: _shownWorld(cable.to, cable.targetFrameId),
+      ),
+      toScreen: (point) => worldToScreen(point, _viewportSize, _camera),
+      zoom: _camera.zoom,
+    );
+  }
+
+  Offset _shownWorld(Offset center, String id) {
+    if (_previewIds.contains(id)) {
+      return center + widget.selection.previewDelta;
+    }
+    return center;
+  }
+
+  void _cutCable(CableHover hover) {
+    final retract = RetractingCable(
+      from: hover.from,
+      to: hover.to,
+      cut: hover.t,
+      color: hover.cable.color,
+    );
+    setState(() {
+      _retractions.add(retract);
+      _cableHover = null;
+    });
+    disconnectSceneCable(kitApi: widget.kitApi, cable: hover.cable);
+  }
+
+  void _endRetraction(RetractingCable cable) {
+    if (!_retractions.contains(cable)) {
+      return;
+    }
+    setState(() => _retractions.remove(cable));
   }
 
   void _onPointerMove(PointerMoveEvent event) {
@@ -355,6 +431,15 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (source == null) {
       return;
     }
+    if (sourceKind == KitPortKind.conversationOut) {
+      addKitLink(
+        kitApi: widget.kitApi,
+        objectId: frameId,
+        to: port.peerId,
+        port: llmConversationPort,
+      );
+      return;
+    }
     if (sourceKind == KitPortKind.llmOutput) {
       final sourcePort = kitPorts(widget.store.document)
           .where(
@@ -440,7 +525,8 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (object.type != textTypeId) {
       return false;
     }
-    if (isLlmKitObject(object)) {
+    if (isLlmKitObject(object) ||
+        kitIdOf(object) == harnessConversationKitId) {
       return false;
     }
     return object.props[skapieRoleProp] != 'grant';
@@ -643,7 +729,15 @@ class CanvasViewportState extends State<CanvasViewport> {
               onPointerPanZoomUpdate: _onPanZoomUpdate,
               onPointerPanZoomEnd: _onPanZoomEnd,
               child: MouseRegion(
-                cursor: SystemMouseCursors.grab,
+                cursor: _cableHover == null
+                    ? SystemMouseCursors.grab
+                    : SystemMouseCursors.click,
+                onHover: _onHover,
+                onExit: (_) {
+                  if (_cableHover != null) {
+                    setState(() => _cableHover = null);
+                  }
+                },
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -670,6 +764,8 @@ class CanvasViewportState extends State<CanvasViewport> {
                       paintDrag: false,
                       runningBodyId: widget.agentController?.runningBodyId,
                       motion: _cableMotion,
+                      retractions: _retractions,
+                      onRetractionDone: _endRetraction,
                     ),
                     SceneObjectLayer(
                       camera: _camera,
@@ -700,6 +796,29 @@ class CanvasViewportState extends State<CanvasViewport> {
                         previewDelta: widget.selection.previewDelta,
                       ),
                     ?_inlineEditor(size),
+                    if (_cableHover != null)
+                      Positioned(
+                        left: _cableHover!.screen.dx - 11,
+                        top: _cableHover!.screen.dy - 11,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            key: const Key('cable-cut'),
+                            decoration: BoxDecoration(
+                              color: _cableHover!.cable.color,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: Icon(
+                                Icons.content_cut,
+                                size: 14,
+                                color: Color(0xFFFFF8EC),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     Positioned(
                       right: 12,
                       bottom: 12,

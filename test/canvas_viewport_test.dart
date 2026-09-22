@@ -2,9 +2,12 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/paint/cables/cable_painter.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -452,5 +455,70 @@ void main() {
           .props['content'],
       'hello there',
     );
+  });
+
+  testWidgets('hovering a cable shows scissors and a click cuts it', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-220, -20),
+    );
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(160, -40),
+    );
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: llm.last,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(store: store, kitApi: kitApi),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final state = tester.state<CanvasViewportState>(
+      find.byType(CanvasViewport),
+    );
+    final viewport = find.byType(CanvasViewport);
+    final size = tester.getSize(viewport);
+    final cable = sceneCables(store.document).single;
+    final from = worldToScreen(cable.from, size, state.camera);
+    final to = worldToScreen(cable.to, size, state.camera);
+    final metric = cableCurve(
+      from,
+      to,
+      state.camera.zoom,
+    ).computeMetrics().first;
+    final mid = metric.getTangentForOffset(metric.length / 2)!.position;
+    final global = tester.getTopLeft(viewport) + mid;
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: global);
+    await gesture.moveTo(global);
+    await tester.pump();
+
+    expect(find.byKey(const Key('cable-cut')), findsOneWidget);
+
+    await gesture.down(global);
+    await gesture.up();
+    await tester.pump();
+
+    expect(
+      kitHasLink(
+        store.document.objectById(text.first)!,
+        to: llm.last,
+        port: llmInputPort,
+      ),
+      isFalse,
+    );
+    expect(sceneCables(store.document), isEmpty);
   });
 }

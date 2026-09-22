@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
@@ -103,4 +105,66 @@ void main() {
     expect(kitHasLink(after, to: llm.last, port: llmContextPort), isTrue);
     expect(llmCableInput(kitApi.store.document, llm.last), isEmpty);
   });
+
+  test('context text and a cabled conversation become the next request', () {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final text = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
+    final conversation = kitApi.instantiate(
+      harnessConversationKitId,
+      origin: const Offset(0, 220),
+    );
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(400, 0),
+    );
+    kitApi.updateProps(text.last, {'content': 'Texting from space'});
+    appendConversationExchange(
+      kitApi: kitApi,
+      bodyId: conversation.last,
+      userText: 'Text',
+      assistantText: 'Hi',
+    );
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: llm.last,
+      port: llmContextPort,
+    );
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: conversation.first,
+      llmBodyId: llm.last,
+      port: llmConversationPort,
+    );
+
+    final document = kitApi.store.document;
+    expect(llmContextText(document, llm.last), 'Texting from space');
+    expect(llmConversationHistory(document, llm.last), [
+      const ConversationTurn(role: 'user', content: 'Text'),
+      const ConversationTurn(role: 'assistant', content: 'Hi'),
+    ]);
+    expect(
+      kitPortAccepts(KitPortKind.conversationOut, KitPortKind.llmConversation),
+      isTrue,
+    );
+    expect(
+      kitPortAccepts(KitPortKind.textOut, KitPortKind.llmConversation),
+      isFalse,
+    );
+    expect(
+      portsOf(document).any((port) => port.kind == KitPortKind.llmConversation),
+      isTrue,
+    );
+
+    final cable = sceneCables(document)
+        .singleWhere((item) => item.port == llmConversationPort);
+    disconnectSceneCable(kitApi: kitApi, cable: cable);
+    expect(llmConversationHistory(kitApi.store.document, llm.last), isEmpty);
+    expect(
+      llmContextText(kitApi.store.document, llm.last),
+      'Texting from space',
+    );
+  });
 }
+
+List<KitPort> portsOf(SceneDocument document) => kitPorts(document);

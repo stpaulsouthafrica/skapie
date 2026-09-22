@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
+import 'package:skapie/paint/cables/cable_hit.dart';
 import 'package:skapie/paint/cables/cable_motion.dart';
 import 'package:skapie/paint/cables/cable_painter.dart';
 import 'package:skapie/scene/scene.dart';
@@ -28,6 +29,8 @@ class CableLayer extends StatefulWidget {
     this.paintDrag = true,
     this.runningBodyId,
     this.motion,
+    this.retractions = const [],
+    this.onRetractionDone,
   });
 
   final CanvasCamera camera;
@@ -42,6 +45,8 @@ class CableLayer extends StatefulWidget {
   final bool paintDrag;
   final String? runningBodyId;
   final CableMotion? motion;
+  final List<RetractingCable> retractions;
+  final ValueChanged<RetractingCable>? onRetractionDone;
 
   @override
   State<CableLayer> createState() => _CableLayerState();
@@ -65,7 +70,14 @@ class _CableLayerState extends State<CableLayer>
         return;
       }
       _pushMotion(sceneCables(widget.document));
+      final finished = [
+        for (final item in widget.retractions)
+          if (item.progress >= 1) item,
+      ];
       setState(() {});
+      for (final item in finished) {
+        widget.onRetractionDone?.call(item);
+      }
     });
     _watch.start();
   }
@@ -89,6 +101,7 @@ class _CableLayerState extends State<CableLayer>
     }
     final painted = <PaintedCable>[
       for (final cable in scene) _paintOf(cable),
+      ..._retracts(),
       ..._drag(),
     ];
     return IgnorePointer(
@@ -200,8 +213,48 @@ class _CableLayerState extends State<CableLayer>
     );
   }
 
+  List<PaintedCable> _retracts() {
+    final painted = <PaintedCable>[];
+    for (final item in widget.retractions) {
+      final from = _screen(item.from);
+      final to = _screen(item.to);
+      final left = cableRetractSpan(
+        towardEnd: false,
+        cut: item.cut,
+        progress: item.progress,
+      );
+      final right = cableRetractSpan(
+        towardEnd: true,
+        cut: item.cut,
+        progress: item.progress,
+      );
+      painted.add(
+        PaintedCable(
+          from: from,
+          to: to,
+          color: item.color,
+          drawStart: left.start,
+          draw: left.end,
+        ),
+      );
+      painted.add(
+        PaintedCable(
+          from: from,
+          to: to,
+          color: item.color,
+          drawStart: right.start,
+          draw: right.end,
+        ),
+      );
+    }
+    return painted;
+  }
+
   void _syncTicker() {
-    final live = _arrivals.isNotEmpty || widget.runningBodyId != null;
+    final live =
+        _arrivals.isNotEmpty ||
+        widget.runningBodyId != null ||
+        widget.retractions.isNotEmpty;
     if (live && !_ticker.isActive) {
       _ticker.start();
     } else if (!live && _ticker.isActive) {
@@ -266,10 +319,12 @@ class _CableLayerState extends State<CableLayer>
 
   Offset _center(SceneObject frame, KitPortKind kind) {
     return switch (kind) {
-      KitPortKind.textOut => textOutputCenter(frame),
+      KitPortKind.textOut ||
+      KitPortKind.conversationOut => textOutputCenter(frame),
       KitPortKind.toolOut => toolOutputCenter(frame),
       KitPortKind.llmInput => llmInputCenter(frame),
       KitPortKind.llmContext => llmContextCenter(frame),
+      KitPortKind.llmConversation => llmConversationCenter(frame),
       KitPortKind.llmTools => llmToolsCenter(frame),
       KitPortKind.llmOutput => llmOutputCenter(frame),
     };
@@ -311,6 +366,7 @@ class _CablePainter extends CustomPainter {
           previous.to != next.to ||
           previous.color != next.color ||
           previous.preview != next.preview ||
+          previous.drawStart != next.drawStart ||
           previous.draw != next.draw ||
           previous.flash != next.flash ||
           previous.flashAlpha != next.flashAlpha ||

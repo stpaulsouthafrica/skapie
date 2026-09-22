@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/llm_kit_mark.dart';
 
-enum KitIconKind { llm, text, box, button, tool, settings, link, unlink }
+enum KitIconKind {
+  llm,
+  text,
+  conversation,
+  box,
+  button,
+  tool,
+  settings,
+  link,
+  unlink,
+}
 
 class KitIcon extends StatelessWidget {
   const KitIcon({
@@ -50,6 +60,27 @@ class _KitIconPainter extends CustomPainter {
       size.height - inset * 2,
     );
     switch (kind) {
+      case KitIconKind.conversation:
+        final top = Rect.fromLTWH(
+          rect.left,
+          rect.top,
+          rect.width * 0.72,
+          rect.height * 0.42,
+        );
+        final bottom = Rect.fromLTWH(
+          rect.left + rect.width * 0.28,
+          rect.top + rect.height * 0.5,
+          rect.width * 0.72,
+          rect.height * 0.42,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(top, Radius.circular(rect.height * 0.2)),
+          paint,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(bottom, Radius.circular(rect.height * 0.2)),
+          paint,
+        );
       case KitIconKind.text:
         final left = rect.left;
         final right = rect.right;
@@ -121,6 +152,9 @@ KitIconKind kitIconForKitId(String? kitId) {
   }
   if (kitId == 'harness.llm') {
     return KitIconKind.llm;
+  }
+  if (kitId == 'harness.conversation') {
+    return KitIconKind.conversation;
   }
   if (kitId.startsWith('tools.')) {
     return KitIconKind.tool;

@@ -17,6 +17,11 @@ class CommandAction {
 
 const List<CommandAction> defaultCommandActions = [
   CommandAction(id: 'add-llm', label: 'Add LLM', icon: KitIconKind.llm),
+  CommandAction(
+    id: 'add-conversation',
+    label: 'Add Conversation',
+    icon: KitIconKind.conversation,
+  ),
   CommandAction(id: 'add-text', label: 'Add Text', icon: KitIconKind.text),
   CommandAction(id: 'add-box', label: 'Add Box', icon: KitIconKind.box),
   CommandAction(

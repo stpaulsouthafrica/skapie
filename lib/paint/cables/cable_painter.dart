@@ -9,6 +9,7 @@ class PaintedCable {
     required this.to,
     required this.color,
     this.preview = false,
+    this.drawStart = 0,
     this.draw = 1,
     this.flash,
     this.flashAlpha = 1,
@@ -21,7 +22,10 @@ class PaintedCable {
   final Color color;
   final bool preview;
 
-  /// How much of the curve is laid down, 0 to 1.
+  /// Where the visible stroke starts along the curve, 0 to 1.
+  final double drawStart;
+
+  /// Where the visible stroke ends along the curve, 0 to 1.
   final double draw;
 
   /// Position of the connect flash along the curve, 0 to 1.
@@ -54,9 +58,13 @@ void paintCables(Canvas canvas, List<PaintedCable> cables, double zoom) {
     if (metric.length <= 0) {
       continue;
     }
+    final start = cable.drawStart.clamp(0.0, 1.0);
     final draw = cable.draw.clamp(0.0, 1.0);
-    if (draw > 0.004) {
-      final shown = metric.extractPath(0, metric.length * draw);
+    if (draw - start > 0.004) {
+      final shown = metric.extractPath(
+        metric.length * start,
+        metric.length * draw,
+      );
       canvas.drawPath(
         shown,
         Paint()

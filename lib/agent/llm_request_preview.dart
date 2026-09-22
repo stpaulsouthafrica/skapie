@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/model_surface.dart';
@@ -15,6 +16,8 @@ const _encoder = JsonEncoder.withIndent('  ');
 /// The HTTP call [AgentController.sendUser] will make for this kit, before Run.
 String formatLlmRequestPreview({
   required String prompt,
+  String systemText = '',
+  List<ConversationTurn> history = const [],
   required bool useFake,
   required AgentModel sessionModel,
   required List<AgentTool> attachedTools,
@@ -31,13 +34,20 @@ String formatLlmRequestPreview({
       : '';
   if (attachedTools.isNotEmpty) {
     if (useFake || sessionModel is FakeAgentModel) {
-      return '$pending${_fake(prompt, tools: attachedTools)}';
+      return '$pending${_fake(prompt, systemText: systemText, history: history, tools: attachedTools)}';
     }
     if (sessionModel is OpenAiCompatibleAgentModel) {
       final body = openAiChatCompletionBody(
         model: sessionModel.model,
         messages: openaiMessagesFromSession([
-          const AgentMessage(role: AgentRole.system, content: ''),
+          AgentMessage(role: AgentRole.system, content: systemText),
+          for (final turn in history)
+            AgentMessage(
+              role: turn.role == 'assistant'
+                  ? AgentRole.assistant
+                  : AgentRole.user,
+              content: turn.content,
+            ),
           AgentMessage(role: AgentRole.user, content: prompt),
         ]),
         tools: openaiToolsFromAgent(attachedTools),
@@ -48,7 +58,7 @@ String formatLlmRequestPreview({
     return '${pending}No HTTP preview for this model.';
   }
   if (useFake) {
-    return '$pending${_fake(prompt)}';
+    return '$pending${_fake(prompt, systemText: systemText, history: history)}';
   }
   final model = kitModel.trim().isNotEmpty
       ? kitModel.trim()
@@ -84,14 +94,20 @@ String formatLlmRequestPreview({
     ModelSurface.completions => vanillaCompletionBody(
       model: model,
       userText: prompt,
+      systemText: systemText,
+      history: history,
     ),
     ModelSurface.responses => vanillaResponsesBody(
       model: model,
       userText: prompt,
+      systemText: systemText,
+      history: history,
     ),
     ModelSurface.messages => vanillaMessagesBody(
       model: model,
       userText: prompt,
+      systemText: systemText,
+      history: history,
     ),
   };
   return '$pending${_http(url: url, headers: headers, body: body, apiKey: apiKey)}';
@@ -108,10 +124,21 @@ ModelSurface? _surface({required String provider, required String model}) {
   return entry.surface;
 }
 
-String _fake(String prompt, {List<AgentTool> tools = const []}) {
-  final buffer = StringBuffer(
-    'No network request. Fake echo.\n\nuser:\n$prompt',
-  );
+String _fake(
+  String prompt, {
+  String systemText = '',
+  List<ConversationTurn> history = const [],
+  List<AgentTool> tools = const [],
+}) {
+  final buffer = StringBuffer('No network request. Fake echo.');
+  final system = systemText.trim();
+  if (system.isNotEmpty) {
+    buffer.write('\n\nsystem:\n$system');
+  }
+  for (final turn in history) {
+    buffer.write('\n\n${turn.role}:\n${turn.content}');
+  }
+  buffer.write('\n\nuser:\n$prompt');
   if (tools.isNotEmpty) {
     buffer.write('\n\ntools:\n');
     for (final tool in tools) {

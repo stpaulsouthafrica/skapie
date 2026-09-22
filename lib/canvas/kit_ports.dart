@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -10,7 +12,16 @@ import 'package:skapie/tools/attach.dart';
 
 export 'package:skapie/canvas/kit_links.dart';
 
-enum KitPortKind { textOut, toolOut, llmInput, llmContext, llmTools, llmOutput }
+enum KitPortKind {
+  textOut,
+  toolOut,
+  conversationOut,
+  llmInput,
+  llmContext,
+  llmConversation,
+  llmTools,
+  llmOutput,
+}
 
 class KitPort {
   const KitPort({
@@ -40,6 +51,7 @@ const double textOutputInset = 18;
 bool kitPortIsOutput(KitPortKind kind) {
   return kind == KitPortKind.textOut ||
       kind == KitPortKind.toolOut ||
+      kind == KitPortKind.conversationOut ||
       kind == KitPortKind.llmOutput;
 }
 
@@ -47,6 +59,7 @@ bool kitPortAccepts(KitPortKind source, KitPortKind target) {
   return switch (source) {
     KitPortKind.textOut =>
       target == KitPortKind.llmInput || target == KitPortKind.llmContext,
+    KitPortKind.conversationOut => target == KitPortKind.llmConversation,
     KitPortKind.toolOut => target == KitPortKind.llmTools,
     KitPortKind.llmOutput =>
       target == KitPortKind.llmInput || target == KitPortKind.llmContext,
@@ -54,11 +67,15 @@ bool kitPortAccepts(KitPortKind source, KitPortKind target) {
   };
 }
 
+/// Input, Context, Conversation, Tools, and the Output body.
+const int llmRegionCount = 5;
+
 /// Vertical center of an LLM section label, in world units from the frame top.
 double llmRegionLabelCenter(double frameHeight, int index) {
   final contentTop = kitBarWorld + kitBodyInset;
   final contentHeight = frameHeight - contentTop - kitBodyInset;
-  final region = (contentHeight - 3 * kitRuleExtent) / 4;
+  final rules = llmRegionCount - 1;
+  final region = (contentHeight - rules * kitRuleExtent) / llmRegionCount;
   final top = contentTop + index * (region + kitRuleExtent);
   return top + kitLabelSize / 2;
 }
@@ -78,7 +95,10 @@ Offset llmInputCenter(SceneObject frame) => _llmPort(frame, 0, right: false);
 
 Offset llmContextCenter(SceneObject frame) => _llmPort(frame, 1, right: false);
 
-Offset llmToolsCenter(SceneObject frame) => _llmPort(frame, 2, right: false);
+Offset llmConversationCenter(SceneObject frame) =>
+    _llmPort(frame, 2, right: false);
+
+Offset llmToolsCenter(SceneObject frame) => _llmPort(frame, 3, right: false);
 
 Offset llmOutputCenter(SceneObject frame) {
   return Offset(
@@ -110,6 +130,15 @@ List<KitPort> kitPorts(SceneDocument document) {
           peerId: object.id,
         ),
       );
+    } else if (kitId == harnessConversationKitId) {
+      ports.add(
+        KitPort(
+          frameId: object.id,
+          kind: KitPortKind.conversationOut,
+          center: textOutputCenter(object),
+          peerId: object.id,
+        ),
+      );
     } else if (kitId != null && kitId.startsWith('tools.')) {
       ports.add(
         KitPort(
@@ -135,6 +164,12 @@ List<KitPort> kitPorts(SceneDocument document) {
           frameId: object.id,
           kind: KitPortKind.llmContext,
           center: llmContextCenter(object),
+          peerId: body.id,
+        ),
+        KitPort(
+          frameId: object.id,
+          kind: KitPortKind.llmConversation,
+          center: llmConversationCenter(object),
           peerId: body.id,
         ),
         KitPort(
@@ -172,6 +207,8 @@ KitPort? hitKitPort(List<KitPort> ports, Offset world) {
 class SceneCable {
   const SceneCable({
     required this.id,
+    required this.ownerId,
+    required this.port,
     required this.sourceId,
     required this.targetFrameId,
     required this.from,
@@ -189,7 +226,13 @@ class SceneCable {
   final Color color;
   final String targetBodyId;
 
-  /// Input text, tools, and an upstream reply change the run. Context does not.
+  /// Object that stores the link. Cutting the cable removes it from here.
+  final String ownerId;
+
+  /// `input`, `context`, `conversation`, or `tools`.
+  final String port;
+
+  /// Input, context, conversation, and tools change the run.
   final bool affectsRun;
 }
 
@@ -210,13 +253,43 @@ List<SceneCable> sceneCables(SceneDocument document) {
       cables.add(
         SceneCable(
           id: '${frame.id}|${link.id}',
+          ownerId: frame.id,
+          port: link.port,
           sourceId: frame.id,
           targetFrameId: target.id,
           from: textOutputCenter(frame),
           to: _llmPortFor(target, link.port),
           color: kitAccentColor(target),
           targetBodyId: link.to,
-          affectsRun: link.port == llmInputPort,
+          affectsRun: true,
+        ),
+      );
+    }
+  }
+  for (final frame in conversationFrames(document)) {
+    for (final link in kitLinksOf(frame)) {
+      if (link.port != llmConversationPort) {
+        continue;
+      }
+      final target = kitFrameForSelection(
+        document: document,
+        selectedId: link.to,
+      );
+      if (target == null) {
+        continue;
+      }
+      cables.add(
+        SceneCable(
+          id: '${frame.id}|${link.id}',
+          ownerId: frame.id,
+          port: link.port,
+          sourceId: frame.id,
+          targetFrameId: target.id,
+          from: textOutputCenter(frame),
+          to: llmConversationCenter(target),
+          color: kitAccentColor(target),
+          targetBodyId: link.to,
+          affectsRun: true,
         ),
       );
     }
@@ -236,6 +309,8 @@ List<SceneCable> sceneCables(SceneDocument document) {
       cables.add(
         SceneCable(
           id: '${frame.id}|${link.id}',
+          ownerId: frame.id,
+          port: link.port,
           sourceId: frame.id,
           targetFrameId: target.id,
           from: toolOutputCenter(frame),
@@ -269,13 +344,15 @@ List<SceneCable> sceneCables(SceneDocument document) {
       cables.add(
         SceneCable(
           id: '${body.id}|${link.id}',
+          ownerId: body.id,
+          port: link.port,
           sourceId: source.id,
           targetFrameId: target.id,
           from: llmOutputCenter(source),
           to: _llmPortFor(target, link.port),
           color: kitAccentColor(target),
           targetBodyId: link.to,
-          affectsRun: link.port == llmInputPort,
+          affectsRun: true,
         ),
       );
     }
@@ -286,9 +363,19 @@ List<SceneCable> sceneCables(SceneDocument document) {
 Offset _llmPortFor(SceneObject frame, String port) {
   return switch (port) {
     llmContextPort => llmContextCenter(frame),
+    llmConversationPort => llmConversationCenter(frame),
     llmToolsPort => llmToolsCenter(frame),
     _ => llmInputCenter(frame),
   };
+}
+
+void disconnectSceneCable({required KitApi kitApi, required SceneCable cable}) {
+  removeKitLink(
+    kitApi: kitApi,
+    objectId: cable.ownerId,
+    to: cable.targetBodyId,
+    port: cable.port,
+  );
 }
 
 List<SceneObject> llmBodies(SceneDocument document) {
@@ -304,6 +391,15 @@ List<SceneObject> textFrames(SceneDocument document) {
     for (final object in document.objects)
       if (object.props[skapieRoleProp] == 'frame' &&
           kitIdOf(object) == boardTextKitId)
+        object,
+  ];
+}
+
+List<SceneObject> conversationFrames(SceneDocument document) {
+  return [
+    for (final object in document.objects)
+      if (object.props[skapieRoleProp] == 'frame' &&
+          kitIdOf(object) == harnessConversationKitId)
         object,
   ];
 }
@@ -345,6 +441,55 @@ String llmCableInput(SceneDocument document, String llmBodyId) {
     }
   }
   return replies.join('\n\n');
+}
+
+/// Text cabled into Context, then an upstream reply cabled into Context.
+String llmContextText(SceneDocument document, String llmBodyId) {
+  if (llmBodyId.isEmpty) {
+    return '';
+  }
+  final parts = <String>[];
+  for (final frame in textFrames(document)) {
+    if (!kitHasLink(frame, to: llmBodyId, port: llmContextPort)) {
+      continue;
+    }
+    final content = textKitContent(document, frame).trim();
+    if (content.isNotEmpty) {
+      parts.add(content);
+    }
+  }
+  for (final body in llmBodies(document)) {
+    if (!kitHasLink(body, to: llmBodyId, port: llmContextPort)) {
+      continue;
+    }
+    final reply = body.props['reply']?.toString().trim() ?? '';
+    if (reply.isNotEmpty) {
+      parts.add(reply);
+    }
+  }
+  return parts.join('\n\n');
+}
+
+/// Turns from every Conversation kit cabled into this LLM, in board order.
+List<ConversationTurn> llmConversationHistory(
+  SceneDocument document,
+  String llmBodyId,
+) {
+  if (llmBodyId.isEmpty) {
+    return const [];
+  }
+  final turns = <ConversationTurn>[];
+  for (final frame in conversationFrames(document)) {
+    if (!kitHasLink(frame, to: llmBodyId, port: llmConversationPort)) {
+      continue;
+    }
+    final body = conversationBody(document, frame);
+    if (body == null) {
+      continue;
+    }
+    turns.addAll(conversationTurnsOf(body));
+  }
+  return turns;
 }
 
 String textKitContent(SceneDocument document, SceneObject frame) {

@@ -62,9 +62,12 @@ class _LlmRequestInformationState extends State<LlmRequestInformation> {
     ).trim();
     final typed = widget.body.props['prompt']?.toString().trim() ?? '';
     final prompt = linked.isNotEmpty ? linked : typed;
+    final document = widget.kitApi.store.document;
     final runtime = widget.controller.runtime;
     return formatLlmRequestPreview(
       prompt: prompt,
+      systemText: llmContextText(document, widget.body.id),
+      history: llmConversationHistory(document, widget.body.id),
       useFake: runtime.useFake,
       sessionModel: widget.controller.session.model,
       attachedTools: worldToolsForLlm(

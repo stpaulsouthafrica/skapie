@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 import 'package:skapie/providers/vanilla_extract.dart';
@@ -9,12 +10,18 @@ import 'package:skapie/providers/vanilla_extract.dart';
 Map<String, Object?> vanillaMessagesBody({
   required String model,
   required String userText,
+  String systemText = '',
+  List<ConversationTurn> history = const [],
 }) {
+  final system = systemText.trim();
+  final messages = chatMessages(userText: userText, history: history);
   return {
     'model': model,
     'max_tokens': 1024,
+    if (system.isNotEmpty) 'system': system,
     'messages': [
-      {'role': 'user', 'content': userText},
+      for (final message in messages)
+        if (message['role'] != 'system') message,
     ],
   };
 }
@@ -55,8 +62,17 @@ class VanillaMessagesClient implements VanillaSurfaceClient {
   }
 
   @override
-  Future<String> complete({required String userText}) async {
-    final body = vanillaMessagesBody(model: model, userText: userText);
+  Future<String> complete({
+    required String userText,
+    String systemText = '',
+    List<ConversationTurn> history = const [],
+  }) async {
+    final body = vanillaMessagesBody(
+      model: model,
+      userText: userText,
+      systemText: systemText,
+      history: history,
+    );
     _record();
     final http.Response response;
     try {
