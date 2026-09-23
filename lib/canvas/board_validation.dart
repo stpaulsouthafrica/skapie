@@ -136,6 +136,53 @@ CableRefusal? cableDragRefusal(
   return null;
 }
 
+/// Stable enough to remember which issue the user is inspecting.
+String boardIssueKey(BoardIssue issue) {
+  return [
+    issue.kind.name,
+    issue.frameId,
+    issue.port?.name ?? '',
+    issue.message,
+  ].join('|');
+}
+
+/// Ports an issue is about. A missing requirement points at every port in
+/// its group; a cable issue without a port points at both cable ends.
+List<KitPort> boardIssuePorts(SceneDocument document, BoardIssue issue) {
+  final ports = kitPorts(document);
+  final kind = issue.port;
+  if (kind != null) {
+    final group = kitPortSpecOf(kind).requiredGroup;
+    final grouped =
+        group != null &&
+        (issue.kind == BoardIssueKind.missingInput ||
+            issue.kind == BoardIssueKind.missingGrant);
+    return [
+      for (final port in ports)
+        if (port.frameId == issue.frameId &&
+            (grouped ? port.spec.requiredGroup == group : port.kind == kind))
+          port,
+    ];
+  }
+  final cableId = issue.cableId;
+  if (cableId == null) {
+    return const [];
+  }
+  final cable = [
+    ...sceneCables(document),
+    ...validateBoard(document).extraCables,
+  ].where((item) => item.id == cableId).firstOrNull;
+  if (cable == null) {
+    return const [];
+  }
+  return [
+    for (final port in ports)
+      if ((port.frameId == cable.sourceId && port.kind == cable.fromKind) ||
+          (port.frameId == cable.targetFrameId && port.kind == cable.toKind))
+        port,
+  ];
+}
+
 /// LLM bodies whose Run is blocked right now.
 Set<String> blockedLlmBodies(BoardValidation validation) {
   return {
@@ -296,6 +343,10 @@ class _Validator {
       color: kitSwatches.first,
       targetBodyId: link.to,
       affectsRun: false,
+      fromKind: output ? mine.kind : null,
+      toKind: output ? null : mine.kind,
+      fromPeerId: output ? mine.peerId : null,
+      toPeerId: output ? null : mine.peerId,
     );
     marked.add(
       MarkedCable(
@@ -352,6 +403,10 @@ class _Validator {
       color: kitSwatches.first,
       targetBodyId: link.to,
       affectsRun: false,
+      fromKind: output ? mine.kind : theirs?.kind,
+      toKind: output ? theirs?.kind : mine.kind,
+      fromPeerId: output ? mine.peerId : theirs?.peerId,
+      toPeerId: output ? theirs?.peerId : mine.peerId,
     );
     marked.add(
       MarkedCable(

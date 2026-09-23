@@ -7,6 +7,7 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/conversation_turn.dart';
+import 'package:skapie/canvas/connection_info.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/openai_compatible.dart';
@@ -541,6 +542,83 @@ void main() {
     );
   });
 
+  test('a run records which cables it actually used', () async {
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    controller.session = AgentSession(
+      model: ScriptedAgentModel([
+        const AgentModelReply(
+          content: '',
+          toolCalls: [
+            AgentToolCall(id: 'c1', name: 'list_kits', argumentsJson: '{}'),
+          ],
+        ),
+        const AgentModelReply(content: 'listed'),
+      ]),
+      kitApi: kitApi,
+      includeTools: true,
+    );
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final used = kitApi.instantiate(
+      worldToolKitId('list_kits'),
+      origin: const Offset(-400, 0),
+    );
+    final idle = kitApi.instantiate(
+      worldToolKitId('get_kit'),
+      origin: const Offset(-400, 200),
+    );
+    final context = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-400, 400),
+    );
+    kitApi.updateProps(context.last, {'content': ''});
+    for (final tool in [used, idle]) {
+      attachToolKit(
+        kitApi: kitApi,
+        toolObjectId: tool.first,
+        llmBodyId: llm.last,
+      );
+    }
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: context.first,
+      llmBodyId: llm.last,
+      port: llmContextPort,
+    );
+    sinkLlm(kitApi, llm.last);
+    final document = kitApi.store.document;
+    SceneCable toolCable(List<String> tool) =>
+        sceneCables(kitApi.store.document)
+            .firstWhere((cable) => cable.sourceId == tool.first);
+
+    expect(
+      lastUseSummary(document, toolCable(used), controller.lastRunUse),
+      'No run yet this session',
+    );
+    await controller.sendUser('kits', targetBodyId: llm.last);
+
+    final uses = controller.lastRunUse;
+    final current = kitApi.store.document;
+    expect(cableLastUse(current, toolCable(used), uses), isNotNull);
+    expect(cableLastUse(current, toolCable(idle), uses), isNull);
+    expect(
+      lastUseSummary(current, toolCable(idle), uses),
+      'Not used in the latest run',
+    );
+    final output = sceneCables(current)
+        .firstWhere((cable) => cable.port == llmTextOutPort);
+    expect(
+      cableLastUse(current, output, uses)!.how,
+      'The reply was written here',
+    );
+    final contextCable = sceneCables(current)
+        .firstWhere((cable) => cable.port == llmContextPort);
+    expect(cableLastUse(current, contextCable, uses), isNull);
+  });
+
   test('sendUser refuses a run whose read tool has no Repository', () async {
     final controller = AgentController(
       kitApi: kitApi,
@@ -553,7 +631,11 @@ void main() {
       worldToolKitId('repo_list_files'),
       origin: const Offset(-400, 0),
     );
-    attachToolKit(kitApi: kitApi, toolObjectId: tool.first, llmBodyId: llm.last);
+    attachToolKit(
+      kitApi: kitApi,
+      toolObjectId: tool.first,
+      llmBodyId: llm.last,
+    );
 
     await controller.sendUser('list files', targetBodyId: llm.last);
 

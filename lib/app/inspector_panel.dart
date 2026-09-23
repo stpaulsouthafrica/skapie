@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/app/connection_inspector.dart';
 import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/app/llm_request_information.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -41,6 +42,7 @@ class InspectorPanel extends StatefulWidget {
     KitApi? kitApi,
     this.lastLlmBodyId,
     this.controller,
+    this.onCutCable,
   }) : kitApi =
            kitApi ?? KitApi(store: store, registry: createBuiltinRegistry());
 
@@ -49,6 +51,9 @@ class InspectorPanel extends StatefulWidget {
   final KitApi kitApi;
   final String? lastLlmBodyId;
   final AgentController? controller;
+
+  /// When set, Cut cable plays the board retraction instead of vanishing.
+  final ValueChanged<SceneCable>? onCutCable;
 
   @override
   State<InspectorPanel> createState() => _InspectorPanelState();
@@ -378,6 +383,16 @@ class _InspectorPanelState extends State<InspectorPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final cableId = widget.selection.selectedCableId;
+    if (cableId != null) {
+      return ConnectionInspector(
+        kitApi: widget.kitApi,
+        selection: widget.selection,
+        cableId: cableId,
+        controller: widget.controller,
+        onCut: widget.onCutCable,
+      );
+    }
     final object = _object;
     final frame = _frame;
     if (object == null || frame == null) {

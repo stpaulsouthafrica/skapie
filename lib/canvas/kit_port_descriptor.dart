@@ -23,17 +23,31 @@ enum PortDirection { input, output }
 
 /// What a cable carries. An output carries one value; an input lists the
 /// values it takes.
-enum PortValue {
-  text('Text'),
-  reply('Reply'),
-  conversation('Conversation'),
-  transcript('Transcript'),
-  tool('Tool'),
-  repository('Repository');
+/// Data flows into a run. A capability is offered to the model. A grant lets
+/// a kit act on something outside the board.
+enum PortRole {
+  data('Data', 'Carries a value into or out of a run.'),
+  capability('Capability', 'Offers a tool the model may call.'),
+  grant('Grant', 'Lets the tool reach something outside the board.');
 
-  const PortValue(this.label);
+  const PortRole(this.label, this.meaning);
 
   final String label;
+  final String meaning;
+}
+
+enum PortValue {
+  text('Text', PortRole.data),
+  reply('Reply', PortRole.data),
+  conversation('Conversation', PortRole.data),
+  transcript('Transcript', PortRole.data),
+  tool('Tool', PortRole.capability),
+  repository('Repository', PortRole.grant);
+
+  const PortValue(this.label, this.role);
+
+  final String label;
+  final PortRole role;
 }
 
 enum PortMultiplicity { one, many }

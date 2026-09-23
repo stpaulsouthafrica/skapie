@@ -95,10 +95,10 @@ void main() {
     final full = tester.getSize(find.byKey(const Key('llm-kit-chrome')));
     final card = tester.getSize(find.byKey(const ValueKey('kit-card-frame')));
 
-    await pumpLayer(tester, zoom: 0.5);
-    final half = tester.getSize(find.byKey(const Key('llm-kit-chrome')));
-    expect(half.height, closeTo(full.height / 2, 0.01));
-    expect(half.width, closeTo(full.width / 2, 0.01));
+    await pumpLayer(tester, zoom: 0.75);
+    final smaller = tester.getSize(find.byKey(const Key('llm-kit-chrome')));
+    expect(smaller.height, closeTo(full.height * 0.75, 0.01));
+    expect(smaller.width, closeTo(full.width * 0.75, 0.01));
     expect(tester.takeException(), isNull);
 
     await pumpLayer(tester, zoom: 1, selectedId: 'body');
@@ -124,6 +124,155 @@ void main() {
       tester.getCenter(find.byKey(const Key('llm-kit-mark'))).dy,
       closeTo(chrome.center.dy, 1.5),
     );
+  });
+
+  testWidgets('zoomed out, an LLM kit is a name and a status', (tester) async {
+    await pumpLayer(tester, zoom: kitOverviewZoom - 0.1);
+
+    expect(find.byKey(const Key('kit-overview-frame')), findsOneWidget);
+    expect(find.text('LLM'), findsOneWidget);
+    expect(find.text('Ready'), findsOneWidget);
+    for (final label in ['Input', 'Context', 'Tools', 'Conversation']) {
+      expect(find.text(label), findsNothing);
+    }
+    expect(find.byKey(const Key('llm-kit-run-button')), findsNothing);
+    expect(find.byKey(const Key('llm-resize-handle')), findsNothing);
+    final name = tester.widget<Text>(
+      find.byKey(const Key('kit-overview-name')),
+    );
+    expect(name.style!.fontSize, greaterThanOrEqualTo(11));
+
+    await pumpLayer(tester, zoom: 1);
+    expect(find.byKey(const Key('kit-overview-frame')), findsNothing);
+    for (final label in ['Input', 'Context', 'Tools', 'Conversation']) {
+      expect(find.text(label), findsOneWidget);
+    }
+  });
+
+  testWidgets('mid-transition, detail and overview crossfade', (tester) async {
+    Future<void> at(double progress) {
+      return tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox.fromSize(
+            size: viewport,
+            child: SceneObjectLayer(
+              camera: CanvasCamera(zoom: 0.7),
+              viewportSize: viewport,
+              objects: const [frame, body],
+              registry: createBuiltinRegistry(),
+              overviewProgress: progress,
+            ),
+          ),
+        ),
+      );
+    }
+
+    double opacityOf(Key key) => tester
+        .widget<Opacity>(
+          find.ancestor(of: find.byKey(key), matching: find.byType(Opacity)),
+        )
+        .opacity;
+
+    await at(0.25);
+    expect(find.byKey(const Key('kit-overview-frame')), findsOneWidget);
+    expect(find.byKey(const Key('llm-kit-chrome')), findsOneWidget);
+    expect(opacityOf(const Key('kit-overview-frame')), closeTo(0.25, 0.001));
+    expect(opacityOf(const Key('llm-kit-chrome')), closeTo(0.75, 0.001));
+
+    await at(0);
+    expect(find.byKey(const Key('kit-overview-frame')), findsNothing);
+    await at(1);
+    expect(find.byKey(const Key('llm-kit-chrome')), findsNothing);
+    expect(find.byKey(const Key('kit-overview-frame')), findsOneWidget);
+  });
+
+  testWidgets('zoomed out, other kits show a one-line status', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox.fromSize(
+          size: viewport,
+          child: SceneObjectLayer(
+            camera: CanvasCamera(zoom: 0.4),
+            viewportSize: viewport,
+            objects: const [
+              SceneObject(
+                id: 'text-frame',
+                type: 'box',
+                x: -300,
+                y: -75,
+                width: 280,
+                height: 120,
+                props: {skapieKitProp: boardTextKitId, skapieRoleProp: 'frame'},
+              ),
+              SceneObject(
+                id: 'text-body',
+                type: 'text',
+                x: -288,
+                y: -35,
+                width: 256,
+                height: 48,
+                props: {
+                  skapieKitProp: boardTextKitId,
+                  skapieRoleProp: 'body',
+                  'content': 'Hello\nsecond',
+                },
+              ),
+              SceneObject(
+                id: 'conversation-frame',
+                type: 'box',
+                x: 20,
+                y: -75,
+                width: 280,
+                height: 120,
+                props: {
+                  skapieKitProp: harnessConversationKitId,
+                  skapieRoleProp: 'frame',
+                },
+              ),
+              SceneObject(
+                id: 'conversation-body',
+                type: 'text',
+                x: 32,
+                y: -35,
+                width: 256,
+                height: 48,
+                props: {
+                  skapieKitProp: harnessConversationKitId,
+                  skapieRoleProp: 'body',
+                  'content': 'User\nhi\n\nAssistant\nhello',
+                  'turns': [
+                    {'role': 'user', 'content': 'hi'},
+                    {'role': 'assistant', 'content': 'hello'},
+                  ],
+                },
+              ),
+              SceneObject(
+                id: 'repo-frame',
+                type: 'box',
+                x: -300,
+                y: 100,
+                width: 280,
+                height: 64,
+                props: {
+                  skapieKitProp: codingRepositoryKitId,
+                  skapieRoleProp: 'frame',
+                  repositoryPathProp: '/Users/me/src/skapie',
+                },
+              ),
+            ],
+            registry: createBuiltinRegistry(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Hello'), findsOneWidget);
+    expect(find.text('+1 Line'), findsNothing);
+    expect(find.text('2 turns'), findsOneWidget);
+    expect(find.text('skapie'), findsOneWidget);
+    expect(find.text('In'), findsNothing);
+    expect(find.text('Out'), findsNothing);
+    expect(find.text('In / Out'), findsNothing);
   });
 
   testWidgets('a text kit shows two lines and In and Out under a rule', (

@@ -23,6 +23,7 @@ class PaintedCable {
     this.invalid = false,
     this.danglingStart = false,
     this.danglingEnd = false,
+    this.selected = false,
   });
 
   final Offset from;
@@ -67,6 +68,9 @@ class PaintedCable {
   /// This end has nothing to plug into; it gets a cross.
   final bool danglingStart;
   final bool danglingEnd;
+
+  /// Picked in the connection inspector. Drawn with a wider halo.
+  final bool selected;
 }
 
 Path cableCurve(
@@ -108,6 +112,17 @@ void paintCables(Canvas canvas, List<PaintedCable> cables, double zoom) {
     final metric = metrics.first;
     if (metric.length <= 0) {
       continue;
+    }
+    if (cable.selected) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = cable.color.withValues(alpha: 0.45)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 7 * zoom
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 2.5 * zoom),
+      );
     }
     if (cable.invalid) {
       _invalid(canvas, cable, metric, zoom);

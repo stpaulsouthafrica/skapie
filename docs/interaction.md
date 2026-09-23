@@ -9,11 +9,15 @@ Selection, move, and inspector edits are UI. The scene document stays the source
 - **Middle mouse (button 2) down + drag:** pan the camera. Does not select or move objects, even over a hit.
 - **Trackpad pan / scroll / pinch zoom:** unchanged. Zoom still aims at the cursor.
 - While move-dragging, the camera does not pan.
-- **Escape:** cancel an in-progress move preview, otherwise clear selection. If the command palette is open, Escape closes it instead.
-- **Space / F3:** open the command palette when the canvas has focus and the user is not typing in a text field. Hovering a row and Up/Down (optional Ctrl-N/P) share one highlight; Enter runs the highlight; click runs that row; Esc closes. Search keeps focus.
+- **Escape:** cancel an in-progress move preview, otherwise clear selection. A ringed port clears with the kit. If the command palette is open, Escape closes it instead.
+- **Space / F3:** open the command palette when the canvas has focus and the user is not typing in a text field. With a port ringed, this opens **Connect mode** instead of the add list. Hovering a row and Up/Down (optional Ctrl-N/P) share one highlight; Enter runs the highlight; click runs that row; Esc closes. Search keeps focus.
+- **Tab / Shift-Tab:** move through kit frames, top to bottom then left to right. The first Tab selects the first kit.
+- **P / Shift-P:** move through the selected kit's ports and ring the active one. With no kit selected, these keys do nothing. Enter with a kit selected but no port ringed does nothing.
+- **Enter** with a port ringed opens Connect mode. Connect rows are compatible targets, labeled `Kit · Port`, with the kit id appended when two labels match. A target already cabled to this exact port is omitted; other free targets on a multi-input stay. Incompatible ports are omitted. Enter on a target calls the same connect path as a drag and closes the palette. The port ring stays. A board click or Escape clears that ring. The new cable is not selected. Delete or Backspace still cuts a cable once one is selected. Undo restores a cut.
+- **Connect mode** also lists each cable already on the ringed port as `Cut · Kit · Port`. Enter on that row cuts it, plays the same retraction as the scissor, and closes the palette. The port ring stays until a board click or Escape. Escape closes the palette whenever it is open, including while the search field is focused. If nothing can be connected and nothing is connected, the palette says `No compatible targets` and Enter does nothing.
 - **LLM compound drag:** dragging any part of a `skapieKit` instance (LLM or `tools.*`) moves the whole group. The body is not a free-floating note.
 - **Double-click** a non-kit `text` object: inline edit on the canvas (caret in world). Esc or unfocus saves through KitApi. Single-click still selects and shows the inspector.
-- **Delete / Backspace:** removes the selected object, or the whole kit compound when a kit member is selected. Inspector Delete does the same.
+- **Delete / Backspace:** removes the selected object, or the whole kit compound when a kit member is selected. On a selected cable, it cuts that cable. Inspector Delete does the same for an object. The connection inspector's Cut cable, and a Connect-mode cut row, cut the cable with the same retraction as the scissor. Undo restores it.
 
 Hit-test is world-space AABB from `x,y,width,height`. **Rotation is ignored** (same as camera content bounds). Invisible objects are skipped. Highest `zIndex` wins; later list order breaks ties.
 

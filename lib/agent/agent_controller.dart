@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/agent/llm_run_use.dart';
 import 'package:skapie/canvas/board_validation.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/agent/agent_models_catalog.dart';
@@ -83,6 +84,10 @@ class AgentController extends ChangeNotifier {
   int outputPulse = 0;
   String? outputBodyId;
   final Map<String, List<AgentToolActivity>> _toolActivities = {};
+  final Map<String, LlmRunUse> _runUse = {};
+
+  /// Each LLM's latest run this session. Not persisted.
+  Map<String, LlmRunUse> get lastRunUse => Map.unmodifiable(_runUse);
 
   List<AgentToolActivity> toolActivitiesFor(String bodyId) =>
       List.unmodifiable(_toolActivities[bodyId] ?? const <AgentToolActivity>[]);
@@ -173,10 +178,20 @@ class AgentController extends ChangeNotifier {
     activeToolFrameId = null;
     seedPorts = _seedPortsFor(bodyId);
     _toolActivities[bodyId] = [];
+    _runUse[bodyId] = LlmRunUse(
+      bodyId: bodyId,
+      startedAt: _runStartedAt!,
+      readPorts: seedPorts,
+      readConversation: llmConversationHistory(
+        kitApi.store.document,
+        bodyId,
+      ).isNotEmpty,
+    );
     notifyListeners();
     try {
       await _completeSend(prompt: prompt, bodyId: bodyId);
     } finally {
+      _runUse[bodyId]?.finishedAt = DateTime.now();
       runningBodyId = null;
       activeToolFrameId = null;
       seedPorts = const {};
@@ -323,6 +338,7 @@ class AgentController extends ChangeNotifier {
       llmBodyId: bodyId,
       text: failure == null ? (reply ?? '') : failure.toString(),
     );
+    _runUse[bodyId]?.wroteOutputAt = DateTime.now();
     _showOutput(bodyId);
     if (failure == null) {
       _appendConversation(
@@ -330,6 +346,7 @@ class AgentController extends ChangeNotifier {
         userText: prompt,
         assistantText: reply ?? '',
       );
+      _runUse[bodyId]?.wroteConversationAt = DateTime.now();
     }
     notifyListeners();
     if (failure != null) {
@@ -358,6 +375,7 @@ class AgentController extends ChangeNotifier {
         toolPulseFrameId = frameId;
         toolPulseBodyId = bodyId;
         toolPulse++;
+        _runUse[bodyId]?.toolCalls[frameId] = DateTime.now();
       }
       _markToolUsed(activeToolFrameId);
       notifyListeners();

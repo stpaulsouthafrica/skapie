@@ -1,35 +1,3 @@
-## 11.1 — typed ports and legible board composition
-
-**Goal.** Make manual assembly understandable and extensible without encoding every new kit ID in the canvas.
-
-**Layer.** HOST. Introduce a small built-in port descriptor in core and route existing kit-ID port switches through it. Kit packages do not own hit-testing or cable rules yet; Phase 13 publishes the package contract. Prefer shared port primitives over new `if (kitId == …)` canvas branches.
-
-**Vocabulary.** Use **kit**, **port**, **port row** / **port label**, and **cable**.
-
-**Implementation detail.**
-
-
-2. Validate type compatibility, multiplicity, missing required inputs, stale endpoints, and disconnected grants. Detect cycles only for connections whose value semantics would make them invalid; an unused visual loop need not trigger a generic graph engine. Make validation accessible from the board and Run button. A link can be drawn only when valid or explicitly marked invalid.
-   - **What this is.** The board refuses or clearly marks bad cables before Run, including wrong types, too many inputs, dead ends, and grants that are no longer live.
-   - **How to test.** Try Text Out → LLM Tools (should refuse or show invalid). Cable a read tool with no Repository (Run or board should say the grant is missing). Delete a kit that still has a cable and confirm the stale end is visible, not silently live. Press Run with LLM Input empty when Input is required and confirm a clear board/Run message. Undo should restore a cut valid cable.
-
-3. Define a connection inspector: source, destination, data or capability role, preview of the value or grant, and last use from current activity when available. Phase 11.2 adds durable past-use evidence. Keep the existing cable-cut affordance and make it keyboard reachable.
-   - **What this is.** Selecting a cable shows what it is for (value vs grant), what it carries right now, and whether it was used on the latest run.
-   - **How to test.** Select a Text → LLM Input cable and confirm inspector shows source, destination, and a text preview. Select Repository → read-tool cable and confirm it reads as a grant/capability, not ordinary text. After a run that used a tool, confirm “last use” appears only on cables that actually ran. Cut a cable with the existing scissor and with the keyboard path; Undo brings it back.
-
-4. Add one useful overview/detail transition: at small zoom show name and status; at normal zoom show ports and concise content. Defer multi-level semantic zoom, pinning, and elaborate group collapse to Phase 15 unless a specific 11.x screen cannot remain legible without them.
-   - **What this is.** Zoomed out, kits read as compact labeled blocks; zoomed in, port rows and short content return.
-   - **How to test.** Zoom out until cards shrink: you should see kit name and status, not a wall of port text. Zoom back to normal: Input, Context, Conversation, Tools, Output (and other kits’ ports) are readable again. Pan across a crowded board and confirm overview stays calm.
-
-5. Define a basic keyboard path: find a kit, select a port, list compatible targets, connect, inspect, disconnect, and undo. Mouse motion is an enhancement, not the only path.
-   - **What this is.** You can assemble and fix the reader graph without relying on drag alone.
-   - **How to test.** Using only the keyboard: focus/find the LLM kit, select Input, choose a compatible Text Out target, connect, open the connection inspector, disconnect, then Undo. Confirm mouse drag still works afterward. Confirm incompatible targets are omitted or explained, not silently connected.
-
-**Stop after.** Items 1–2 are the minimum ship for this slice if time is tight; 3–5 may follow in the same PR only when 1–2 already pass acceptance. Do not start 11.2 here.
-
-**Feel and wow.** Compatible ports respond as a cable approaches; incompatible ones remain still and explain why. A valid drop produces a brief source-to-target arrival, and an invalid drop retreats without pretending to connect. At overview zoom, the board reads like a circuit diagram, not a wall of text; at normal zoom, the source and destination are immediately understandable.
-
-**Acceptance.** A person can build the reader flow with mouse or keyboard, distinguish a read grant from a value cable, find a failed connection, cut it, and restore it via undo. Port metadata is no longer selected by a new kit-ID branch in canvas code. Existing boards still render their links. LLM Conversation remains an output port into Conversation In when that cable is present.
 ## 11.2 — durable, navigable run evidence
 
 **Goal.** Make legibility a reusable product primitive rather than a last-run inspector widget.

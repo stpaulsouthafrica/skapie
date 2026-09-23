@@ -121,9 +121,8 @@ class _LlmKitInputState extends State<LlmKitInput> {
   String get _cableInput =>
       llmCableInput(widget.kitApi.store.document, widget.body.id).trim();
 
-  List<BoardIssue> get _blockers => validateBoard(
-    widget.kitApi.store.document,
-  ).runBlockers(widget.body.id);
+  List<BoardIssue> get _blockers =>
+      validateBoard(widget.kitApi.store.document).runBlockers(widget.body.id);
 
   Future<void> _submit() async {
     final prompt = _cableInput;

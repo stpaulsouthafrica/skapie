@@ -83,6 +83,7 @@ class CableLayer extends StatefulWidget {
     this.onRetractionDone,
     this.validation = BoardValidation.empty,
     this.invalidColor = const Color(0xFFB85C5C),
+    this.selectedCableId,
   });
 
   final CanvasCamera camera;
@@ -106,6 +107,7 @@ class CableLayer extends StatefulWidget {
   /// Marked cables are drawn dashed in [invalidColor], never as live.
   final BoardValidation validation;
   final Color invalidColor;
+  final String? selectedCableId;
 
   @override
   State<CableLayer> createState() => _CableLayerState();
@@ -292,6 +294,7 @@ class _CableLayerState extends State<CableLayer>
         invalid: true,
         danglingStart: mark.dangling == CableDangling.start,
         danglingEnd: mark.dangling == CableDangling.end,
+        selected: cable.id == widget.selectedCableId,
       );
     }
     final arrival = _arrivals[cable.id];
@@ -310,6 +313,7 @@ class _CableLayerState extends State<CableLayer>
       rest: live?.rest ?? 0,
       flashTowardSource: pose?.towardSource ?? (live?.towardSource ?? false),
       arrivalAtStart: pose?.towardSource ?? (live?.towardSource ?? false),
+      selected: cable.id == widget.selectedCableId,
     );
   }
 
@@ -635,6 +639,8 @@ class _CableLayerState extends State<CableLayer>
           color: item.color,
           drawStart: left.start,
           draw: left.end,
+          exitsRight: item.exitsRight,
+          entersFromLeft: item.entersFromLeft,
         ),
       );
       painted.add(
@@ -644,6 +650,8 @@ class _CableLayerState extends State<CableLayer>
           color: item.color,
           drawStart: right.start,
           draw: right.end,
+          exitsRight: item.exitsRight,
+          entersFromLeft: item.entersFromLeft,
         ),
       );
     }
@@ -781,7 +789,11 @@ class _CablePainter extends CustomPainter {
           previous.flow != next.flow ||
           previous.flashTowardSource != next.flashTowardSource ||
           previous.arrivalAtStart != next.arrivalAtStart ||
-          previous.rest != next.rest) {
+          previous.rest != next.rest ||
+          previous.invalid != next.invalid ||
+          previous.danglingStart != next.danglingStart ||
+          previous.danglingEnd != next.danglingEnd ||
+          previous.selected != next.selected) {
         return true;
       }
     }

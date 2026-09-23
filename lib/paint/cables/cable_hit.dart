@@ -57,12 +57,18 @@ class RetractingCable {
     required this.to,
     required this.cut,
     required this.color,
+    this.exitsRight = true,
+    this.entersFromLeft = true,
   }) : started = DateTime.now();
 
   final Offset from;
   final Offset to;
+
+  /// 0 to 1 along the curve. A cut of 1 pulls the whole cable back to [from].
   final double cut;
   final Color color;
+  final bool exitsRight;
+  final bool entersFromLeft;
   final DateTime started;
 
   double get progress {

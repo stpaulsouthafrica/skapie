@@ -38,6 +38,52 @@ void main() {
 
   BoardValidation check() => validateBoard(kitApi.store.document);
 
+  test('each issue points at the ports it is about', () {
+    final llm = llmKit();
+    final result = check();
+    final input = result.issues.firstWhere((i) => i.message == 'Needs input');
+    final sinkIssue = result.issues.firstWhere(
+      (i) => i.message == 'Needs Output or Conversation',
+    );
+    expect(boardIssuePorts(kitApi.store.document, input).map((p) => p.kind), [
+      KitPortKind.llmInput,
+    ]);
+    expect(
+      boardIssuePorts(kitApi.store.document, sinkIssue).map((p) => p.kind),
+      unorderedEquals([KitPortKind.llmConversation, KitPortKind.llmOutput]),
+    );
+    expect(
+      boardIssuePorts(
+        kitApi.store.document,
+        input,
+      ).every((port) => port.frameId == llm.first),
+      isTrue,
+    );
+    expect(boardIssueKey(input), isNot(boardIssueKey(sinkIssue)));
+  });
+
+  test('a reply loop points at the ports on both ends of its cable', () {
+    final a = llmKit();
+    final b = kitApi.instantiate(harnessLlmKitId, origin: const Offset(500, 0));
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: a.last,
+      targetBodyId: b.last,
+    );
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: b.last,
+      targetBodyId: a.last,
+    );
+    final loop = check().issues.firstWhere(
+      (i) => i.kind == BoardIssueKind.cycle,
+    );
+    expect(
+      boardIssuePorts(kitApi.store.document, loop).map((p) => p.kind),
+      unorderedEquals([KitPortKind.llmOutput, KitPortKind.llmInput]),
+    );
+  });
+
   test('Text Out → LLM Tools is refused with a reason', () {
     expect(kitPortsConnect(KitPortKind.textOut, KitPortKind.llmTools), isFalse);
     expect(

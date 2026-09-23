@@ -6,8 +6,11 @@ import 'package:skapie/app/agent_settings_panel.dart';
 import 'package:skapie/app/command_palette.dart';
 import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
+import 'package:skapie/canvas/keyboard_connect.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/scene/board_catalog.dart';
@@ -118,7 +121,10 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _paletteOpen = true);
   }
 
-  void _closePalette() => setState(() => _paletteOpen = false);
+  void _closePalette() {
+    setState(() => _paletteOpen = false);
+    _viewportKey.currentState?.requestBoardFocus();
+  }
 
   Offset get _placeOrigin {
     return _viewportKey.currentState?.camera.offset ?? Offset.zero;
@@ -175,7 +181,51 @@ class _HomeScreenState extends State<HomeScreen> {
     detachToolKit(kitApi: widget.kitApi, toolObjectId: toolId);
   }
 
+  KitPort? _sourcePort() {
+    final kind = _selection.selectedPort;
+    final id = _selection.selectedId;
+    if (kind == null || id == null) {
+      return null;
+    }
+    final frame = kitFrameForSelection(
+      document: widget.store.document,
+      selectedId: id,
+    );
+    if (frame == null) {
+      return null;
+    }
+    for (final port in kitPorts(widget.store.document)) {
+      if (port.frameId == frame.id && port.kind == kind) {
+        return port;
+      }
+    }
+    return null;
+  }
+
   List<CommandAction> _paletteActions() {
+    final source = _sourcePort();
+    if (source != null) {
+      return [
+        for (final live in portConnections(
+          document: widget.store.document,
+          source: source,
+        ))
+          CommandAction(
+            id: 'cut-cable:${live.cable.id}',
+            label: live.label,
+            icon: KitIconKind.unlink,
+          ),
+        for (final choice in connectChoices(
+          document: widget.store.document,
+          source: source,
+        ))
+          CommandAction(
+            id: 'connect-port:${choice.port.frameId}:${choice.port.kind.name}',
+            label: choice.label,
+            icon: KitIconKind.link,
+          ),
+      ];
+    }
     return [
       ...defaultCommandActions,
       if (widget.onNewBoard != null)
@@ -211,6 +261,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _runCommand(CommandAction action) {
+    if (action.id.startsWith('cut-cable:')) {
+      _cutChosen(action.id);
+      _closePalette();
+      return;
+    }
+    if (action.id.startsWith('connect-port:')) {
+      _connectChosen(action.id);
+      _closePalette();
+      return;
+    }
     _closePalette();
     switch (action.id) {
       case 'settings':
@@ -240,6 +300,59 @@ class _HomeScreenState extends State<HomeScreen> {
           _add(action.id.substring(4));
         }
     }
+  }
+
+  void _cutChosen(String id) {
+    final cableId = id.substring('cut-cable:'.length);
+    SceneCable? cable;
+    for (final item in sceneCables(widget.store.document)) {
+      if (item.id == cableId) {
+        cable = item;
+      }
+    }
+    if (cable == null) {
+      return;
+    }
+    final viewport = _viewportKey.currentState;
+    if (viewport != null) {
+      viewport.retractCable(cable);
+      return;
+    }
+    disconnectSceneCable(kitApi: widget.kitApi, cable: cable);
+  }
+
+  void _connectChosen(String id) {
+    final source = _sourcePort();
+    if (source == null) {
+      return;
+    }
+    const prefix = 'connect-port:';
+    final body = id.substring(prefix.length);
+    final split = body.lastIndexOf(':');
+    if (split <= 0) {
+      return;
+    }
+    final frameId = body.substring(0, split);
+    final kindName = body.substring(split + 1);
+    KitPortKind? kind;
+    for (final value in KitPortKind.values) {
+      if (value.name == kindName) {
+        kind = value;
+      }
+    }
+    if (kind == null) {
+      return;
+    }
+    KitPort? target;
+    for (final port in kitPorts(widget.store.document)) {
+      if (port.frameId == frameId && port.kind == kind) {
+        target = port;
+      }
+    }
+    if (target == null || !kitPortsConnect(source.kind, target.kind)) {
+      return;
+    }
+    connectKitPorts(kitApi: widget.kitApi, from: source, to: target);
   }
 
   Future<void> _newBoard() async {
@@ -425,8 +538,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 selection: _selection,
                 kitApi: widget.kitApi,
                 agentController: widget.agentController,
+                onConnect: _openPaletteIfIdle,
               ),
-              if (_selection.selectedId != null)
+              if (_selection.selectedId != null ||
+                  _selection.selectedCableId != null)
                 Positioned(
                   top: 16,
                   right: 16,
@@ -439,6 +554,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       kitApi: widget.kitApi,
                       lastLlmBodyId: _lastLlmBodyId,
                       controller: widget.agentController,
+                      onCutCable: (cable) {
+                        _viewportKey.currentState?.retractCable(cable);
+                      },
                     ),
                   ),
                 ),
@@ -478,6 +596,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: CommandPalette(
                               key: const Key('command-palette'),
                               actions: _paletteActions(),
+                              hint: _sourcePort() == null
+                                  ? 'Search'
+                                  : 'Connect ${kitPortSpecOf(_selection.selectedPort!).label}',
+                              emptyLabel: _sourcePort() == null
+                                  ? null
+                                  : 'No compatible targets',
                               onClose: _closePalette,
                               onRun: _runCommand,
                             ),

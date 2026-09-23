@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/canvas/cable_activity.dart';
+import 'package:skapie/canvas/cable_drag.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -9,6 +10,14 @@ import 'package:skapie/paint/kit_icon.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
+
+/// Below this zoom, kits read as a name and a status instead of port rows.
+const double kitOverviewZoom = 0.6;
+
+bool kitOverviewAt(double zoom) => zoom < kitOverviewZoom;
+
+/// How long cards take to crossfade between detail and overview.
+const Duration kitOverviewTransition = Duration(milliseconds: 360);
 
 /// Places registered scene objects in world space. Does not mutate the scene.
 class SceneObjectLayer extends StatelessWidget {
@@ -19,6 +28,7 @@ class SceneObjectLayer extends StatelessWidget {
     required this.objects,
     required this.registry,
     this.selectedId,
+    this.focusedPort,
     this.previewDelta = Offset.zero,
     this.previewIds = const {},
     this.activity = CableActivity.idle,
@@ -26,6 +36,8 @@ class SceneObjectLayer extends StatelessWidget {
     this.resizeFrameId,
     this.resizeHeight,
     this.blockedRunBodyIds = const {},
+    this.overviewProgress,
+    this.portReadiness = const {},
   });
 
   final CanvasCamera camera;
@@ -33,6 +45,9 @@ class SceneObjectLayer extends StatelessWidget {
   final List<SceneObject> objects;
   final ObjectRegistry registry;
   final String? selectedId;
+
+  /// Port ringed by the keyboard on [selectedId]'s kit.
+  final KitPortKind? focusedPort;
   final Offset previewDelta;
   final Set<String> previewIds;
   final CableActivity activity;
@@ -42,6 +57,19 @@ class SceneObjectLayer extends StatelessWidget {
 
   /// LLM bodies with a board issue that stops Run. Their play is dimmed.
   final Set<String> blockedRunBodyIds;
+
+  /// 0 is full detail, 1 is overview, between is a crossfade. Null follows
+  /// [kitOverviewAt] with no transition.
+  final double? overviewProgress;
+
+  /// [portReadinessKey] → 0 to 1 while a cable is held near compatible ports.
+  final Map<String, double> portReadiness;
+
+  double get _overviewT =>
+      (overviewProgress ?? (kitOverviewAt(camera.zoom) ? 1.0 : 0.0)).clamp(
+        0.0,
+        1.0,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -96,25 +124,29 @@ class SceneObjectLayer extends StatelessWidget {
     final isTextBody = kitIdOf(object) == boardTextKitId && role == 'body';
     final isConversationBody =
         kitIdOf(object) == harnessConversationKitId && role == 'body';
+    final t = _overviewT;
+    final kitChild = isKitObject(object) && role != 'frame';
     final hide =
-        isLlmBody || isTextBody || isConversationBody || role == 'grant';
+        isLlmBody ||
+        isTextBody ||
+        isConversationBody ||
+        role == 'grant' ||
+        (t >= 1 && kitChild);
     final paintedHeight = object.id == resizeFrameId && resizeHeight != null
         ? resizeHeight!
         : object.height;
-    Widget child = SizedBox(
-      width: object.width * camera.zoom,
-      height: paintedHeight * camera.zoom,
+    final size = Size(object.width * camera.zoom, paintedHeight * camera.zoom);
+    Widget child = SizedBox.fromSize(
+      size: size,
       child: hide
           ? const SizedBox.expand()
           : registry.build(context, object, ctx: ctx),
     );
-    if (role == 'frame' && isLlmKitObject(object)) {
-      child = _llmChrome(context, object, child);
-    } else if (role == 'frame' &&
-        (kitIdOf(object)?.startsWith('tools.') ?? false)) {
-      child = _toolChrome(context, object, child);
-    } else if (role == 'frame' && isKitObject(object)) {
-      child = _namedChrome(context, object, child);
+    if (kitChild && !hide && t > 0) {
+      child = Opacity(opacity: 1 - t, child: child);
+    }
+    if (role == 'frame' && isKitObject(object)) {
+      child = _crossfade(context, object, child, size, t);
     }
     final glow = _level(levels, object.id);
     if (role == 'frame' && isKitObject(object)) {
@@ -573,6 +605,180 @@ class SceneObjectLayer extends StatelessWidget {
     );
   }
 
+  /// Detail rows shrink and fade out while the overview label rises, grows,
+  /// and fades in. At either end only one layer is built.
+  Widget _crossfade(
+    BuildContext context,
+    SceneObject frame,
+    Widget box,
+    Size size,
+    double t,
+  ) {
+    Widget blank() => SizedBox.fromSize(size: size);
+    if (t <= 0) {
+      return _detailChrome(context, frame, box);
+    }
+    if (t >= 1) {
+      return _overviewChrome(context, frame, box);
+    }
+    return Stack(
+      children: [
+        box,
+        Opacity(
+          opacity: 1 - t,
+          child: Transform.scale(
+            scale: 1 - 0.04 * t,
+            child: _detailChrome(context, frame, blank()),
+          ),
+        ),
+        Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(0, 8 * (1 - t)),
+            child: Transform.scale(
+              scale: 0.86 + 0.14 * t,
+              child: _overviewChrome(context, frame, blank()),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _detailChrome(BuildContext context, SceneObject frame, Widget box) {
+    if (isLlmKitObject(frame)) {
+      return _llmChrome(context, frame, box);
+    }
+    if (kitIdOf(frame)?.startsWith('tools.') ?? false) {
+      return _toolChrome(context, frame, box);
+    }
+    return _namedChrome(context, frame, box);
+  }
+
+  /// Zoomed out: icon, name, and one status line, sized in screen pixels so
+  /// they stay legible while the card shrinks.
+  Widget _overviewChrome(
+    BuildContext context,
+    SceneObject frame,
+    Widget child,
+  ) {
+    final tokens = PaintScope.of(context);
+    final accent = kitAccentColor(frame);
+    final name = _toolName(frame).isNotEmpty
+        ? _toolTitle(frame)
+        : kitDisplayName(_preview, frame);
+    final (status, statusColor) = _overviewStatus(frame, tokens, accent);
+    final iconKind = kitIconForKitId(kitIdOf(frame));
+    return Stack(
+      children: [
+        child,
+        Positioned.fill(
+          child: ColoredBox(
+            key: ValueKey('kit-overview-${frame.id}'),
+            color: accent.withValues(alpha: 0.12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        KitIcon(kind: iconKind, color: accent, size: 12),
+                        const SizedBox(width: 5),
+                        Text(
+                          name,
+                          key: const Key('kit-overview-name'),
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: tokens.ink,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            height: 1.1,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (status.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        status,
+                        key: const Key('kit-overview-status'),
+                        maxLines: 1,
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 10.5,
+                          height: 1.1,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// One status line from what the kit holds, not from its kit id.
+  (String, Color) _overviewStatus(
+    SceneObject frame,
+    PaintTokens tokens,
+    Color accent,
+  ) {
+    if (isLlmKitObject(frame)) {
+      final body = _bodyForFrame(frame);
+      final running = body != null && activity.runningBodyId == body.id;
+      if (!running && blockedRunBodyIds.contains(body?.id)) {
+        return ('Blocked', tokens.danger);
+      }
+      final status = llmRunStatusOf(body, running: running);
+      return (llmRunStatusLabel(status), _statusColor(tokens, accent, status));
+    }
+    if (frame.props.containsKey(repositoryPathProp)) {
+      final path = frame.props[repositoryPathProp]?.toString().trim() ?? '';
+      if (path.isEmpty) {
+        return ('No folder', tokens.muted);
+      }
+      final parts = path.split('/').where((part) => part.isNotEmpty);
+      return (parts.isEmpty ? path : parts.last, tokens.muted);
+    }
+    final children = [
+      for (final object in objects)
+        if (object.id != frame.id &&
+            kitIdOf(object) == kitIdOf(frame) &&
+            kitChildBelongsToFrame(object, frame))
+          object,
+    ];
+    for (final child in children) {
+      final turns = child.props['turns'];
+      if (turns is List) {
+        final count = turns.length;
+        return (
+          count == 0 ? 'No turns' : '$count ${count == 1 ? 'turn' : 'turns'}',
+          tokens.muted,
+        );
+      }
+    }
+    final tool = _toolName(frame);
+    if (tool.isNotEmpty) {
+      return (tool, tokens.muted);
+    }
+    for (final child in children) {
+      final content = child.props['content']?.toString() ?? '';
+      if (content.trim().isNotEmpty) {
+        return (textKitSummary(content).firstLine, tokens.muted);
+      }
+    }
+    return children.isEmpty ? ('', tokens.muted) : ('Empty', tokens.muted);
+  }
+
   String _toolTitle(SceneObject frame) {
     final toolName = _toolName(frame);
     final stored = kitDisplayName(
@@ -775,19 +981,30 @@ class SceneObjectLayer extends StatelessWidget {
     }
     final zoom = camera.zoom;
     final accent = kitAccentColor(frame);
-    final diameter = 11.0 * zoom;
     return Stack(
       clipBehavior: Clip.none,
       children: [
         child,
         for (final port in ports)
-          Positioned(
-            left: (port.center.dx - frame.x) * zoom - diameter / 2,
-            top: (port.center.dy - frame.y) * zoom - diameter / 2,
-            width: diameter,
-            height: diameter,
-            child: _portMark(accent, zoom, port: port, glow: glow),
-          ),
+          () {
+            final ready =
+                portReadiness[portReadinessKey(port.kind, port.frameId)] ?? 0;
+            final diameter = 11.0 * zoom * (1 + 0.5 * ready);
+            return Positioned(
+              left: (port.center.dx - frame.x) * zoom - diameter / 2,
+              top: (port.center.dy - frame.y) * zoom - diameter / 2,
+              width: diameter,
+              height: diameter,
+              child: _portMark(
+                accent,
+                zoom,
+                port: port,
+                glow: glow > ready ? glow : ready,
+                focused:
+                    focusedPort == port.kind && _selectedKitContains(frame),
+              ),
+            );
+          }(),
       ],
     );
   }
@@ -797,16 +1014,22 @@ class SceneObjectLayer extends StatelessWidget {
     double zoom, {
     required KitPort port,
     required double glow,
+    required bool focused,
   }) {
     final lit = glow.clamp(0.0, 1.0);
+    final width = focused ? 2.6 * zoom : (1.25 + 0.2 * lit) * zoom;
     return DecoratedBox(
-      key: ValueKey('${port.kind.name}-${port.frameId}'),
+      key: focused
+          ? const Key('focused-port')
+          : ValueKey('${port.kind.name}-${port.frameId}'),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Color.lerp(const Color(0xFF161618), accent, 0.4 * lit),
         border: Border.all(
-          color: Color.lerp(accent, const Color(0xFFFFF8EC), 0.45 * lit)!,
-          width: (1.25 + 0.2 * lit) * zoom,
+          color: focused
+              ? const Color(0xFFFFF8EC)
+              : Color.lerp(accent, const Color(0xFFFFF8EC), 0.45 * lit)!,
+          width: width,
         ),
         boxShadow: [
           BoxShadow(

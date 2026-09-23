@@ -85,11 +85,17 @@ class CommandPalette extends StatefulWidget {
     required this.actions,
     required this.onClose,
     required this.onRun,
+    this.hint = 'Search',
+    this.emptyLabel,
   });
 
   final List<CommandAction> actions;
   final VoidCallback onClose;
   final ValueChanged<CommandAction> onRun;
+  final String hint;
+
+  /// Shown when [actions] filter down to nothing. Enter does not run it.
+  final String? emptyLabel;
 
   @override
   State<CommandPalette> createState() => _CommandPaletteState();
@@ -131,6 +137,10 @@ class _CommandPaletteState extends State<CommandPalette> {
   KeyEventResult _onSearchKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.escape) {
+      widget.onClose();
+      return KeyEventResult.handled;
     }
     final control = HardwareKeyboard.instance.isControlPressed;
     if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
@@ -209,10 +219,19 @@ class _CommandPaletteState extends State<CommandPalette> {
               controller: _query,
               focusNode: _searchFocus,
               autofocus: true,
-              hint: 'Search',
+              hint: widget.hint,
               onSubmitted: (_) => _runHighlighted(),
             ),
             const SizedBox(height: 8),
+            if (filtered.isEmpty && widget.emptyLabel != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                child: Text(
+                  widget.emptyLabel!,
+                  key: const Key('command-palette-empty'),
+                  style: TextStyle(color: tokens.muted, fontSize: 13),
+                ),
+              ),
             ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 280),
               child: ListView.builder(
