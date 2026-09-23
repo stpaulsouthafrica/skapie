@@ -864,8 +864,6 @@ class _InspectorPanelState extends State<InspectorPanel> {
       ..._textPortRows(body, texts, llmInputPort),
       _portHeading('Context'),
       ..._textPortRows(body, texts, llmContextPort),
-      _portHeading('Conversation'),
-      ..._conversationPortRows(body),
       _portHeading('Tools'),
       if (tools.isEmpty)
         _readOnly('', 'None on the board', hideLabel: true)
@@ -891,6 +889,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
               }
             },
           ),
+      _portHeading('Conversation'),
+      ..._conversationPortRows(body),
       _portHeading('Output'),
       if (texts.isEmpty && others.isEmpty)
         _readOnly('', 'None on the board', hideLabel: true)

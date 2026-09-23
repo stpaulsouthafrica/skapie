@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/cable_activity.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -20,7 +21,8 @@ class SceneObjectLayer extends StatelessWidget {
     this.selectedId,
     this.previewDelta = Offset.zero,
     this.previewIds = const {},
-    this.runningBodyId,
+    this.activity = CableActivity.idle,
+    this.glow,
     this.resizeFrameId,
     this.resizeHeight,
   });
@@ -32,16 +34,24 @@ class SceneObjectLayer extends StatelessWidget {
   final String? selectedId;
   final Offset previewDelta;
   final Set<String> previewIds;
-  final String? runningBodyId;
+  final CableActivity activity;
+  final ActivityGlow? glow;
   final String? resizeFrameId;
   final double? resizeHeight;
 
   @override
   Widget build(BuildContext context) {
-    return _layout(context);
+    final glow = this.glow;
+    if (glow == null) {
+      return _layout(context, const {});
+    }
+    return AnimatedBuilder(
+      animation: glow,
+      builder: (context, _) => _layout(context, glow.levels),
+    );
   }
 
-  Widget _layout(BuildContext context) {
+  Widget _layout(BuildContext context, Map<String, double> levels) {
     if (viewportSize.isEmpty) {
       return const SizedBox.expand();
     }
@@ -53,12 +63,21 @@ class SceneObjectLayer extends StatelessWidget {
     return IgnorePointer(
       child: Stack(
         clipBehavior: Clip.none,
-        children: [for (final object in ordered) _placed(context, object)],
+        children: [
+          for (final object in ordered) _placed(context, object, levels),
+        ],
       ),
     );
   }
 
-  Widget _placed(BuildContext context, SceneObject object) {
+  double _level(Map<String, double> levels, String frameId) =>
+      levels[frameId] ?? 0;
+
+  Widget _placed(
+    BuildContext context,
+    SceneObject object,
+    Map<String, double> levels,
+  ) {
     final preview = previewIds.contains(object.id) || object.id == selectedId
         ? previewDelta
         : Offset.zero;
@@ -93,9 +112,10 @@ class SceneObjectLayer extends StatelessWidget {
     } else if (role == 'frame' && isKitObject(object)) {
       child = _namedChrome(context, object, child);
     }
+    final glow = _level(levels, object.id);
     if (role == 'frame' && isKitObject(object)) {
-      child = _kitShell(context, object, child);
-      child = _withPort(context, object, child);
+      child = _kitShell(context, object, child, glow: glow);
+      child = _withPort(context, object, child, glow);
     }
     if (object.rotation != 0) {
       child = Transform.rotate(angle: object.rotation, child: child);
@@ -127,18 +147,21 @@ class SceneObjectLayer extends StatelessWidget {
     final body = _bodyForFrame(frame);
     final model = body?.props['model']?.toString().trim() ?? '';
     final document = _preview;
-    final status = llmRunStatusOf(body, running: runningBodyId == body?.id);
+    final status = llmRunStatusOf(
+      body,
+      running: activity.runningBodyId == body?.id,
+    );
     final accent = kitAccentColor(frame);
     final hairline = kitAccentHairline(accent);
     const rows = <(KitPortKind, String, Key)>[
       (KitPortKind.llmInput, 'Input', Key('llm-kit-input-region')),
       (KitPortKind.llmContext, 'Context', Key('llm-kit-context-region')),
+      (KitPortKind.llmTools, 'Tools', Key('llm-kit-tools-region')),
       (
         KitPortKind.llmConversation,
         'Conversation',
         Key('llm-kit-conversation-region'),
       ),
-      (KitPortKind.llmTools, 'Tools', Key('llm-kit-tools-region')),
       (KitPortKind.llmOutput, 'Output', Key('llm-kit-output-region')),
     ];
     return Stack(
@@ -154,7 +177,7 @@ class SceneObjectLayer extends StatelessWidget {
           barKey: const Key('llm-kit-chrome'),
           iconKey: const Key('llm-kit-mark'),
           showRun: true,
-          running: runningBodyId == body?.id,
+          running: activity.runningBodyId == body?.id,
         ),
         Positioned(
           left: 16 * zoom,
@@ -205,6 +228,7 @@ class SceneObjectLayer extends StatelessWidget {
                             ),
                             many: llmPortAcceptsMany(rows[index].$1),
                           ),
+                          alignEnd: kitPortIsOutput(rows[index].$1),
                         ),
                 ),
               ],
@@ -391,7 +415,8 @@ class SceneObjectLayer extends StatelessWidget {
               zoom,
               frame,
               content: _bodyContent(frame, harnessConversationKitId),
-              trailing: 'Output',
+              leading: 'In',
+              trailing: 'Out',
             ),
           ),
         if (kitIdOf(frame) == codingRepositoryKitId)
@@ -433,56 +458,115 @@ class SceneObjectLayer extends StatelessWidget {
             bottom: BorderSide(color: hairline, width: zoom),
           ),
         ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8 * zoom),
-          child: Row(
-            children: [
-              KitIcon(
-                key: iconKey,
-                kind: iconKind,
-                color: accent,
-                size: (iconKind == KitIconKind.text ? 15.0 : 12.0) * zoom,
-              ),
-              SizedBox(width: 6 * zoom),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: tokens.ink,
-                    fontSize: 12.0 * zoom,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (trailing.isNotEmpty) ...[
-                SizedBox(width: 8 * zoom),
-                Flexible(
-                  child: Text(
-                    trailing,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      color: tokens.muted,
-                      fontSize: 10.0 * zoom,
+        child: showRun
+            ? Stack(
+                fit: StackFit.expand,
+                alignment: Alignment.centerLeft,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: 8 * zoom,
+                      right: (llmRunButtonRight + llmRunButtonSlot) * zoom,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        KitIcon(
+                          key: iconKey,
+                          kind: iconKind,
+                          color: accent,
+                          size:
+                              (iconKind == KitIconKind.text ? 15.0 : 12.0) *
+                              zoom,
+                        ),
+                        SizedBox(width: 6 * zoom),
+                        Expanded(
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: tokens.ink,
+                              fontSize: 12.0 * zoom,
+                              fontWeight: FontWeight.w600,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                        if (trailing.isNotEmpty)
+                          Expanded(
+                            child: Text(
+                              trailing,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                color: tokens.muted,
+                                fontSize: 10.0 * zoom,
+                                height: 1,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                  Positioned(
+                    right: llmRunButtonRight * zoom,
+                    top: 0,
+                    bottom: 0,
+                    width: llmRunButtonSlot * zoom,
+                    child: Center(
+                      child: Icon(
+                        key: const Key('llm-kit-run-button'),
+                        running ? Icons.hourglass_top : Icons.play_arrow,
+                        size: 16 * zoom,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8 * zoom),
+                child: Row(
+                  children: [
+                    KitIcon(
+                      key: iconKey,
+                      kind: iconKind,
+                      color: accent,
+                      size: (iconKind == KitIconKind.text ? 15.0 : 12.0) * zoom,
+                    ),
+                    SizedBox(width: 6 * zoom),
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: tokens.ink,
+                          fontSize: 12.0 * zoom,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (trailing.isNotEmpty) ...[
+                      SizedBox(width: 8 * zoom),
+                      Flexible(
+                        child: Text(
+                          trailing,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.right,
+                          style: TextStyle(
+                            color: tokens.muted,
+                            fontSize: 10.0 * zoom,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-              if (showRun) ...[
-                SizedBox(width: 6 * zoom),
-                Icon(
-                  key: const Key('llm-kit-run-button'),
-                  running ? Icons.hourglass_top : Icons.play_arrow,
-                  size: 14 * zoom,
-                  color: accent,
-                ),
-              ],
-            ],
-          ),
-        ),
+              ),
       ),
     );
   }
@@ -512,7 +596,12 @@ class SceneObjectLayer extends StatelessWidget {
     return '';
   }
 
-  Widget _kitShell(BuildContext context, SceneObject frame, Widget child) {
+  Widget _kitShell(
+    BuildContext context,
+    SceneObject frame,
+    Widget child, {
+    required double glow,
+  }) {
     final zoom = camera.zoom;
     final radius = kitCornerRadius(frame) * zoom;
     final selected = _selectedKitContains(frame);
@@ -526,6 +615,15 @@ class SceneObjectLayer extends StatelessWidget {
           width: zoom,
           strokeAlign: BorderSide.strokeAlignOutside,
         ),
+        boxShadow: glow > 0.02
+            ? [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.42 * glow),
+                  blurRadius: 18 * zoom,
+                  spreadRadius: glow * zoom,
+                ),
+              ]
+            : null,
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
@@ -656,7 +754,12 @@ class SceneObjectLayer extends StatelessWidget {
   SceneDocument get _preview =>
       SceneDocument(id: 'preview', schemaVersion: 1, objects: objects);
 
-  Widget _withPort(BuildContext context, SceneObject frame, Widget child) {
+  Widget _withPort(
+    BuildContext context,
+    SceneObject frame,
+    Widget child,
+    double glow,
+  ) {
     final ports = [
       for (final port in kitPorts(
         SceneDocument(id: 'preview', schemaVersion: 1, objects: objects),
@@ -681,30 +784,42 @@ class SceneObjectLayer extends StatelessWidget {
             top: (port.center.dy - frame.y) * zoom - diameter / 2,
             width: diameter,
             height: diameter,
-            child: _portMark(accent, zoom, port: port),
+            child: _portMark(accent, zoom, port: port, glow: glow),
           ),
       ],
     );
   }
 
-  Widget _portMark(Color accent, double zoom, {required KitPort port}) {
+  Widget _portMark(
+    Color accent,
+    double zoom, {
+    required KitPort port,
+    required double glow,
+  }) {
+    final lit = glow.clamp(0.0, 1.0);
     return DecoratedBox(
       key: ValueKey('${port.kind.name}-${port.frameId}'),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: const Color(0xFF161618),
-        border: Border.all(color: accent, width: 1.25 * zoom),
+        color: Color.lerp(const Color(0xFF161618), accent, 0.4 * lit),
+        border: Border.all(
+          color: Color.lerp(accent, const Color(0xFFFFF8EC), 0.45 * lit)!,
+          width: (1.25 + 0.2 * lit) * zoom,
+        ),
         boxShadow: [
           BoxShadow(
-            color: accent.withValues(alpha: 0.55),
-            blurRadius: 8 * zoom,
-            spreadRadius: 0.5 * zoom,
+            color: accent.withValues(alpha: 0.55 + 0.25 * lit),
+            blurRadius: (8 + 6 * lit) * zoom,
+            spreadRadius: (0.5 + lit) * zoom,
           ),
         ],
       ),
       child: Center(
         child: DecoratedBox(
-          decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Color.lerp(accent, const Color(0xFFFFF8EC), 0.5 * lit),
+          ),
           child: SizedBox(width: 3.5 * zoom, height: 3.5 * zoom),
         ),
       ),

@@ -108,6 +108,22 @@ void main() {
       tester.getCenter(find.byKey(const Key('llm-kit-status'))).dy,
       closeTo(tester.getCenter(find.text('Output')).dy, 0.5),
     );
+    final chrome = tester.getRect(find.byKey(const Key('llm-kit-chrome')));
+    final button = tester.getRect(find.byKey(const Key('llm-kit-run-button')));
+    final title = tester.getCenter(find.text('LLM'));
+    final name = tester.getCenter(find.text('select a model'));
+    expect(chrome.right - button.right, lessThan(14));
+    expect(button.center.dx, greaterThan(chrome.center.dx));
+    expect(name.dx, greaterThan(title.dx + 24));
+    expect(button.center.dx, greaterThan(name.dx));
+    expect(button.center.dx - name.dx, lessThan(name.dx - title.dx));
+    expect(button.center.dy, closeTo(chrome.center.dy, 1));
+    expect(title.dy, closeTo(chrome.center.dy, 1.5));
+    expect(name.dy, closeTo(chrome.center.dy, 1.5));
+    expect(
+      tester.getCenter(find.byKey(const Key('llm-kit-mark'))).dy,
+      closeTo(chrome.center.dy, 1.5),
+    );
   });
 
   testWidgets('a text kit shows two lines and In and Out under a rule', (
@@ -202,8 +218,9 @@ void main() {
 
     expect(find.text('User'), findsOneWidget);
     expect(find.text('+4 Lines'), findsOneWidget);
-    expect(find.text('Output'), findsOneWidget);
+    expect(find.text('In'), findsOneWidget);
+    expect(find.text('Out'), findsOneWidget);
+    expect(find.text('Output'), findsNothing);
     expect(find.text('list repo files.'), findsNothing);
-    expect(find.text('In'), findsNothing);
   });
 }

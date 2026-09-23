@@ -248,6 +248,16 @@ void main() {
       textObjectId: text.first,
       llmBodyId: bodyId,
     );
+    final out = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(400, 0),
+    );
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: bodyId,
+      targetBodyId: out.first,
+      port: llmTextOutPort,
+    );
     await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('llm-kit-run')));
     await tester.tap(find.byKey(const Key('llm-kit-run')));

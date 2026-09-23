@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/llm_kit.dart';
-import 'package:skapie/canvas/cable_layer.dart';
+import 'package:skapie/canvas/cable_activity.dart';
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -222,11 +222,19 @@ void main() {
       const ConversationTurn(role: 'assistant', content: 'Hi'),
     ]);
     expect(
-      kitPortAccepts(KitPortKind.conversationOut, KitPortKind.llmConversation),
+      kitPortAccepts(KitPortKind.llmConversation, KitPortKind.conversationIn),
       isTrue,
     );
     expect(
+      kitPortAccepts(KitPortKind.conversationOut, KitPortKind.llmConversation),
+      isFalse,
+    );
+    expect(
       kitPortAccepts(KitPortKind.textOut, KitPortKind.llmConversation),
+      isFalse,
+    );
+    expect(
+      kitPortAccepts(KitPortKind.llmOutput, KitPortKind.conversationIn),
       isFalse,
     );
     expect(
@@ -241,6 +249,60 @@ void main() {
     expect(
       llmContextText(kitApi.store.document, llm.last),
       'Texting from space',
+    );
+  });
+
+  test('LLM Conversation leaves on the right and lands on Conversation In', () {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final conversation = kitApi.instantiate(
+      harnessConversationKitId,
+      origin: Offset.zero,
+    );
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(400, 0),
+    );
+    final frame = kitApi.store.document.objectById(conversation.first)!;
+    final llmFrame = kitApi.store.document.objectById(llm.first)!;
+    final ports = kitPorts(kitApi.store.document);
+    final incoming = ports.firstWhere(
+      (port) =>
+          port.frameId == frame.id && port.kind == KitPortKind.conversationIn,
+    );
+    final outgoing = ports.firstWhere(
+      (port) =>
+          port.frameId == frame.id && port.kind == KitPortKind.conversationOut,
+    );
+    final llmConversation = ports.firstWhere(
+      (port) => port.kind == KitPortKind.llmConversation,
+    );
+    expect(incoming.center, textInputCenter(frame));
+    expect(outgoing.center, textOutputCenter(frame));
+    expect(llmConversation.center.dx, llmFrame.x + llmFrame.width);
+    expect(kitPortIsOutput(KitPortKind.llmConversation), isTrue);
+    expect(llmConversation.center.dy, lessThan(llmOutputCenter(llmFrame).dy));
+    expect(llmToolsCenter(llmFrame).dx, llmFrame.x);
+
+    connectKitPorts(
+      kitApi: kitApi,
+      from: ports.firstWhere((port) => port.kind == KitPortKind.llmOutput),
+      to: incoming,
+    );
+    expect(sceneCables(kitApi.store.document), isEmpty);
+
+    connectKitPorts(kitApi: kitApi, from: incoming, to: llmConversation);
+    final cable = sceneCables(kitApi.store.document).single;
+    expect(cable.port, llmConversationPort);
+    expect(cable.from, llmConversationCenter(llmFrame));
+    expect(cable.to, textInputCenter(frame));
+    expect(llmConversationHistory(kitApi.store.document, llm.last), isEmpty);
+    expect(
+      kitHasLink(
+        kitApi.store.document.objectById(frame.id)!,
+        to: llm.last,
+        port: llmConversationPort,
+      ),
+      isTrue,
     );
   });
 
@@ -280,7 +342,7 @@ void main() {
       harnessLlmKitId,
       origin: const Offset(400, 0),
     );
-    final text = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
+    kitApi.instantiate(boardTextKitId, origin: Offset.zero);
     final first = kitApi.instantiate(
       worldToolKitId('list_kits'),
       origin: const Offset(0, 300),
@@ -325,7 +387,38 @@ void main() {
     );
   });
 
-  test('a cable pulses only while its tool is being called', () {
+  test('a Conversation cable flashes with the reply write, not the read', () {
+    final conversation = SceneCable(
+      id: 'conversation',
+      ownerId: 'conversation-frame',
+      port: llmConversationPort,
+      sourceId: 'llm-frame',
+      targetFrameId: 'conversation-frame',
+      from: Offset.zero,
+      to: const Offset(10, 0),
+      color: const Color(0xFF000000),
+      targetBodyId: 'llm-body',
+      affectsRun: true,
+    );
+    expect(
+      cableCarriesActivity(
+        conversation,
+        const CableActivity(runningBodyId: 'llm-body'),
+      ),
+      isFalse,
+    );
+    expect(
+      cableCarriesActivity(
+        conversation,
+        const CableActivity(writingBodyId: 'llm-body'),
+      ),
+      isTrue,
+    );
+    expect(cableWritesReply(conversation, 'llm-body'), isTrue);
+    expect(cableWritesReply(conversation, 'other-body'), isFalse);
+  });
+
+  test('a cable flashes only while that transfer is live', () {
     final tool = SceneCable(
       id: 'tool',
       ownerId: 'tool-frame',
@@ -338,24 +431,18 @@ void main() {
       targetBodyId: 'llm-body',
       affectsRun: true,
     );
-    expect(
-      cableInvocationFlow(
-        cable: tool,
-        runningBodyId: 'llm-body',
-        activeToolFrameId: null,
-        clock: 0.2,
-      ),
-      isNull,
+    final seeding = CableActivity(
+      runningBodyId: 'llm-body',
+      seedPorts: {llmInputPort},
     );
-    expect(
-      cableInvocationFlow(
-        cable: tool,
-        runningBodyId: 'llm-body',
-        activeToolFrameId: 'tool-frame',
-        clock: 0.2,
-      ),
-      isNotNull,
+    expect(cableCarriesActivity(tool, seeding), isFalse);
+    final calling = CableActivity(
+      runningBodyId: 'llm-body',
+      seedPorts: {llmInputPort},
+      activeToolFrameId: 'tool-frame',
     );
+    expect(cableCarriesActivity(tool, calling), isTrue);
+    expect(cableActivityTowardSource(tool, calling), isTrue);
     final input = SceneCable(
       id: 'input',
       ownerId: 'text',
@@ -368,15 +455,195 @@ void main() {
       targetBodyId: 'llm-body',
       affectsRun: true,
     );
-    expect(
-      cableInvocationFlow(
-        cable: input,
-        runningBodyId: 'llm-body',
-        activeToolFrameId: 'tool-frame',
-        clock: 0.2,
-      ),
-      isNull,
+    expect(cableCarriesActivity(input, calling), isTrue);
+    expect(cableActivityTowardSource(input, calling), isFalse);
+    final context = SceneCable(
+      id: 'context',
+      ownerId: 'prompt',
+      port: llmContextPort,
+      sourceId: 'prompt',
+      targetFrameId: 'llm-frame',
+      from: Offset.zero,
+      to: const Offset(10, 0),
+      color: const Color(0xFF000000),
+      targetBodyId: 'llm-body',
+      affectsRun: true,
     );
+    expect(cableCarriesActivity(context, calling), isFalse);
+    final repository = SceneCable(
+      id: 'repo',
+      ownerId: 'repo-frame',
+      port: repositoryPort,
+      sourceId: 'repo-frame',
+      targetFrameId: 'tool-frame',
+      from: Offset.zero,
+      to: const Offset(10, 0),
+      color: const Color(0xFF000000),
+      targetBodyId: 'tool-frame',
+      affectsRun: true,
+    );
+    expect(cableCarriesActivity(repository, seeding), isFalse);
+    expect(cableCarriesActivity(repository, calling), isTrue);
+    expect(cableActivityTowardSource(repository, calling), isTrue);
+    final output = SceneCable(
+      id: 'output',
+      ownerId: 'llm-body',
+      port: llmTextOutPort,
+      sourceId: 'llm-frame',
+      targetFrameId: 'reply',
+      from: Offset.zero,
+      to: const Offset(10, 0),
+      color: const Color(0xFF000000),
+      targetBodyId: 'reply',
+      affectsRun: false,
+    );
+    expect(cableCarriesActivity(output, calling), isFalse);
+    expect(
+      cableCarriesActivity(
+        output,
+        const CableActivity(writingBodyId: 'llm-body'),
+      ),
+      isTrue,
+    );
+    expect(
+      cableActivityTowardSource(
+        output,
+        const CableActivity(writingBodyId: 'llm-body'),
+      ),
+      isFalse,
+    );
+  });
+
+  test('a transfer fades only after its current pass finishes', () {
+    const born = 2.0;
+    expect(
+      activityFadeAt(
+        born: born,
+        now: born + 0.1,
+        cycle: cableFlashTravelSeconds,
+        finishCycle: false,
+      ),
+      born + cableFlashTravelSeconds,
+    );
+    expect(
+      activityFadeAt(
+        born: born,
+        now: born + 1,
+        cycle: cableFlashTravelSeconds,
+        finishCycle: false,
+      ),
+      born + 1,
+    );
+    const toolCycle = cableFlashTravelSeconds * 2;
+    expect(
+      activityFadeAt(
+        born: born,
+        now: born + 0.1,
+        cycle: toolCycle,
+        finishCycle: true,
+      ),
+      born + toolCycle,
+    );
+    expect(
+      activityFadeAt(
+        born: born,
+        now: born + toolCycle + 0.05,
+        cycle: toolCycle,
+        finishCycle: true,
+      ),
+      born + toolCycle * 2,
+    );
+    expect(cableGlowEnvelope(elapsed: 0, sinceFade: null), 0);
+    expect(cableGlowEnvelope(elapsed: cableGlowInSeconds, sinceFade: null), 1);
+    expect(cableGlowEnvelope(elapsed: 1, sinceFade: cableGlowFadeSeconds), 0);
+    expect(toolFlashIndex(elapsed: 0, count: 2), 0);
+    expect(
+      toolFlashIndex(elapsed: cableFlashTravelSeconds + 0.01, count: 2),
+      1,
+    );
+    expect(toolFlashTravel(elapsed: 0, count: 2), 0);
+    expect(
+      cableGlowEnvelope(elapsed: cableFlashTravelSeconds, sinceFade: 0),
+      1,
+    );
+    expect(
+      cableGlowEnvelope(
+        elapsed: cableFlashTravelSeconds + cableGlowFadeSeconds,
+        sinceFade: cableGlowFadeSeconds,
+      ),
+      0,
+    );
+  });
+
+  test('a tool call lights the tools cable and the repository cable', () {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(400, 0),
+    );
+    final tool = kitApi.instantiate(
+      worldToolKitId('repo_list_files'),
+      origin: Offset.zero,
+    );
+    final repository = kitApi.instantiate(
+      codingRepositoryKitId,
+      origin: const Offset(-400, 0),
+    );
+    attachToolKit(
+      kitApi: kitApi,
+      toolObjectId: tool.first,
+      llmBodyId: llm.last,
+    );
+    connectRepositoryToTool(
+      kitApi: kitApi,
+      repositoryFrameId: repository.first,
+      toolFrameId: tool.first,
+    );
+    final members = cablesForToolCall(
+      cables: sceneCables(kitApi.store.document),
+      toolFrameId: tool.first,
+      llmBodyId: llm.last,
+    );
+    expect(members.map((cable) => cable.port), [llmToolsPort, repositoryPort]);
+    expect(
+      toolFrameIdForName(kitApi.store.document, llm.last, 'repo_list_files'),
+      tool.first,
+    );
+  });
+
+  test('a run needs Output or Conversation', () {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    expect(llmRunHasSink(kitApi.store.document, llm.last), isFalse);
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(400, 0),
+    );
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: llm.last,
+      targetBodyId: text.first,
+      port: llmTextOutPort,
+    );
+    expect(llmRunHasSink(kitApi.store.document, llm.last), isTrue);
+    disconnectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: llm.last,
+      targetBodyId: text.first,
+      port: llmTextOutPort,
+    );
+    expect(llmRunHasSink(kitApi.store.document, llm.last), isFalse);
+    final conversation = kitApi.instantiate(
+      harnessConversationKitId,
+      origin: const Offset(0, 400),
+    );
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: conversation.first,
+      llmBodyId: llm.last,
+      port: llmConversationPort,
+    );
+    expect(llmRunHasSink(kitApi.store.document, llm.last), isTrue);
   });
 }
 

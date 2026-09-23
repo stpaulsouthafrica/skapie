@@ -19,6 +19,10 @@ String formatConversationTranscript(List<ConversationTurn> turns) {
   ].join('\n\n');
 }
 
+void clearConversation({required KitApi kitApi, required String bodyId}) {
+  kitApi.updateProps(bodyId, {turnsProp: <Object?>[], 'content': ''});
+}
+
 SceneObject? conversationBody(SceneDocument document, SceneObject frame) {
   for (final object in document.objects) {
     if (object.props[skapieRoleProp] != 'body') {
@@ -40,15 +44,22 @@ void appendConversationExchange({
   required String bodyId,
   required String userText,
   required String assistantText,
+  DateTime? userAt,
+  DateTime? assistantAt,
 }) {
   final body = kitApi.store.document.objectById(bodyId);
   if (body == null || kitIdOf(body) != harnessConversationKitId) {
     return;
   }
+  final now = DateTime.now();
   final turns = [
     ...conversationTurnsOf(body),
-    ConversationTurn(role: 'user', content: userText),
-    ConversationTurn(role: 'assistant', content: assistantText),
+    ConversationTurn(role: 'user', content: userText, at: userAt ?? now),
+    ConversationTurn(
+      role: 'assistant',
+      content: assistantText,
+      at: assistantAt ?? now,
+    ),
   ];
   kitApi.updateProps(bodyId, {
     turnsProp: [for (final turn in turns) turn.toJson()],

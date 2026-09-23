@@ -2,6 +2,10 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/agent_provider.dart';
+import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -492,6 +496,69 @@ void main() {
     );
   });
 
+  testWidgets('double-click a conversation kit opens a chat view', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final conversation = kitApi.instantiate(
+      harnessConversationKitId,
+      origin: const Offset(-140, -75),
+    );
+    const reply = 'Here is the breakdown:\n\n**Root level:**\n- logo.png';
+    appendConversationExchange(
+      kitApi: kitApi,
+      bodyId: conversation.last,
+      userText: 'What is in this folder?',
+      assistantText: reply,
+    );
+    final before = store.document.objectById(conversation.last)!.props;
+    final selection = SelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(
+            store: store,
+            kitApi: kitApi,
+            selection: selection,
+          ),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.tapAt(center);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(center);
+    await tester.pump();
+
+    expect(find.byKey(const Key('conversation-kit-viewer')), findsOneWidget);
+    expect(find.byKey(const Key('text-kit-editor')), findsNothing);
+    final user = find.byKey(const Key('conversation-turn-user'));
+    final assistant = find.byKey(const Key('conversation-turn-assistant'));
+    expect(user, findsOneWidget);
+    expect(assistant, findsOneWidget);
+    final userBubble = tester.getRect(
+      find.descendant(of: user, matching: find.byType(DecoratedBox)),
+    );
+    final assistantBubble = tester.getRect(
+      find.descendant(of: assistant, matching: find.byType(DecoratedBox)),
+    );
+    expect(userBubble.right, greaterThan(assistantBubble.right));
+    expect(assistantBubble.left, lessThan(userBubble.left));
+    expect(find.textContaining('**Root level:**'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('conversation-kit-viewer-close')));
+    await tester.pumpAndSettle();
+    final after = store.document.objectById(conversation.last)!.props;
+    expect(after[turnsProp], before[turnsProp]);
+    expect(
+      conversationTurnsOf(store.document.objectById(conversation.last)!)
+          .map((turn) => turn.role),
+      ['user', 'assistant'],
+    );
+  });
+
   testWidgets('hovering a cable shows scissors and a click cuts it', (
     tester,
   ) async {
@@ -555,5 +622,109 @@ void main() {
       isFalse,
     );
     expect(sceneCables(store.document), isEmpty);
+  });
+
+  testWidgets('the LLM header play button runs the cabled input', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-400, 0),
+    );
+    kitApi.updateProps(text.last, {'content': 'hello'});
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: llm.last,
+    );
+    final out = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(400, 0),
+    );
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: llm.last,
+      targetBodyId: out.first,
+      port: llmTextOutPort,
+    );
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PaintScope(
+          tokens: PaintTokens.dark(),
+          child: Scaffold(
+            body: CanvasViewport(
+              store: store,
+              kitApi: kitApi,
+              agentController: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const Key('llm-kit-run-button'))),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final body = store.document.objectById(llm.last)!;
+    expect(body.props['prompt'], 'hello');
+    expect(body.props['reply'], 'Echo: hello');
+  });
+
+  testWidgets('the LLM header play button does not run without a sink', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-400, 0),
+    );
+    kitApi.updateProps(text.last, {'content': 'hello'});
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: llm.last,
+    );
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PaintScope(
+          tokens: PaintTokens.dark(),
+          child: Scaffold(
+            body: CanvasViewport(
+              store: store,
+              kitApi: kitApi,
+              agentController: controller,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const Key('llm-kit-run-button'))),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final body = store.document.objectById(llm.last)!;
+    expect(body.props['prompt'], '');
+    expect(body.props['reply'], '');
   });
 }

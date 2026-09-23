@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "harness.conversation",
   "displayName": "Conversation",
-  "description": "Earlier user and assistant turns. Cable the output into an LLM Conversation port.",
+  "description": "Earlier user and assistant turns. Cable an LLM Conversation port into In; the LLM reads these turns and writes each new exchange here.",
   "capabilities": [],
   "objects": [
     {

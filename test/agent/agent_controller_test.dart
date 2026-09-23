@@ -15,6 +15,7 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/providers/vanilla_responses.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
+import 'package:skapie/tools/world/kits.dart';
 
 void main() {
   late KitApi kitApi;
@@ -118,10 +119,13 @@ void main() {
       expect(kitApi.store.document.objects, isEmpty);
 
       final ids = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+      sinkLlm(kitApi, ids.last);
       await controller.sendUser('hello', targetBodyId: ids.last);
       expect(controller.session.messages, hasLength(1));
       final bodies = kitApi.store.document.objects.where(
-        (object) => object.props['skapieRole'] == 'body',
+        (object) =>
+            object.props['skapieRole'] == 'body' &&
+            object.props['skapieKit'] == harnessLlmKitId,
       );
       expect(bodies, hasLength(1));
       expect(bodies.single.props['skapieKit'], harnessLlmKitId);
@@ -166,6 +170,7 @@ void main() {
           model: 'settings-model',
         ),
       );
+      sinkLlm(kitApi, ids.last);
       await controller.sendUser('hello', targetBodyId: ids.last);
       final body = kitApi.store.document.objectById(ids.last)!;
       expect(body.props['model'], 'deepseek-v4-flash');
@@ -211,6 +216,7 @@ void main() {
       );
       kitApi.instantiate(harnessToolsKitId, origin: const Offset(400, 240));
       final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+      sinkLlm(kitApi, llmIds.last);
       await expectLater(
         controller.sendUser('hello', targetBodyId: llmIds.last),
         throwsA(isA<AgentHttpException>()),
@@ -291,6 +297,7 @@ void main() {
         toolObjectId: toolIds.first,
         llmBodyId: llmIds.last,
       );
+      sinkLlm(kitApi, llmIds.last);
 
       await controller.sendUser('kits', targetBodyId: llmIds.last);
 
@@ -410,4 +417,156 @@ void main() {
     );
     expect(controller.vanilla, isA<VanillaResponsesClient>());
   });
+
+  test(
+    'a run marks the cables that were read, then the output write',
+    () async {
+      final controller = AgentController(
+        kitApi: kitApi,
+        session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+        runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      );
+      final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+      final text = kitApi.instantiate(
+        boardTextKitId,
+        origin: const Offset(-400, 0),
+      );
+      final context = kitApi.instantiate(
+        boardTextKitId,
+        origin: const Offset(-400, 200),
+      );
+      kitApi.updateProps(text.last, {'content': 'hello'});
+      kitApi.updateProps(context.last, {'content': 'be brief'});
+      connectTextToLlm(
+        kitApi: kitApi,
+        textObjectId: text.first,
+        llmBodyId: llm.last,
+      );
+      connectTextToLlm(
+        kitApi: kitApi,
+        textObjectId: context.first,
+        llmBodyId: llm.last,
+        port: llmContextPort,
+      );
+      sinkLlm(kitApi, llm.last);
+      final seen = <Set<String>>[];
+      controller.addListener(() {
+        if (controller.seedPorts.isNotEmpty) {
+          seen.add(Set.of(controller.seedPorts));
+        }
+      });
+
+      await controller.sendUser('hello', targetBodyId: llm.last);
+
+      expect(seen, isNotEmpty);
+      expect(seen.first, {llmInputPort, llmContextPort});
+      expect(controller.seedPorts, isEmpty);
+      expect(controller.runningBodyId, isNull);
+      expect(controller.outputBodyId, llm.last);
+      expect(controller.outputPulse, 1);
+    },
+  );
+
+  test('a tool call still pulses after it finishes in the same turn', () async {
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    controller.session = AgentSession(
+      model: ScriptedAgentModel([
+        const AgentModelReply(
+          content: '',
+          toolCalls: [
+            AgentToolCall(id: 'c1', name: 'list_kits', argumentsJson: '{}'),
+          ],
+        ),
+        const AgentModelReply(content: 'listed'),
+      ]),
+      kitApi: kitApi,
+      includeTools: true,
+    );
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final tool = kitApi.instantiate(
+      worldToolKitId('list_kits'),
+      origin: const Offset(-400, 0),
+    );
+    attachToolKit(
+      kitApi: kitApi,
+      toolObjectId: tool.first,
+      llmBodyId: llm.last,
+    );
+    sinkLlm(kitApi, llm.last);
+
+    await controller.sendUser('kits', targetBodyId: llm.last);
+
+    expect(controller.activeToolFrameId, isNull);
+    expect(controller.toolPulse, 1);
+    expect(controller.toolPulseFrameId, tool.first);
+    expect(controller.toolPulseBodyId, llm.last);
+  });
+
+  test('sendUser does not run without Output or Conversation', () async {
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    await controller.sendUser('hello', targetBodyId: llm.last);
+    expect(kitApi.store.document.objectById(llm.last)!.props['prompt'], '');
+
+    final conversation = kitApi.instantiate(
+      harnessConversationKitId,
+      origin: const Offset(0, 400),
+    );
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: conversation.first,
+      llmBodyId: llm.last,
+      port: llmConversationPort,
+    );
+    await controller.sendUser('hello', targetBodyId: llm.last);
+    expect(
+      kitApi.store.document.objectById(llm.last)!.props['reply'],
+      'Echo: hello',
+    );
+  });
+
+  test('LLM Output does not write into a Conversation kit', () async {
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final conversation = kitApi.instantiate(
+      harnessConversationKitId,
+      origin: const Offset(400, 0),
+    );
+    sinkLlm(kitApi, llm.last);
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: llm.last,
+      targetBodyId: conversation.first,
+      port: llmTextOutPort,
+    );
+
+    await controller.sendUser('hello', targetBodyId: llm.last);
+
+    expect(
+      conversationTurnsOf(kitApi.store.document.objectById(conversation.last)!),
+      isEmpty,
+    );
+  });
+}
+
+void sinkLlm(KitApi kitApi, String llmBodyId) {
+  final text = kitApi.instantiate(boardTextKitId, origin: const Offset(800, 0));
+  connectLlmOutput(
+    kitApi: kitApi,
+    sourceBodyId: llmBodyId,
+    targetBodyId: text.first,
+    port: llmTextOutPort,
+  );
 }

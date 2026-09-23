@@ -2,15 +2,19 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/cable_activity.dart';
 import 'package:skapie/canvas/cable_layer.dart';
 import 'package:skapie/canvas/canvas_bounds.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_grid_painter.dart';
 import 'package:skapie/canvas/hit_test.dart';
 import 'package:skapie/canvas/kit_ports.dart';
+import 'package:skapie/app/conversation_kit_viewer.dart';
 import 'package:skapie/app/text_kit_editor.dart';
 import 'package:skapie/canvas/scene_object_layer.dart';
 import 'package:skapie/canvas/selection_controller.dart';
@@ -47,7 +51,8 @@ class CanvasViewport extends StatefulWidget {
   State<CanvasViewport> createState() => CanvasViewportState();
 }
 
-class CanvasViewportState extends State<CanvasViewport> {
+class CanvasViewportState extends State<CanvasViewport>
+    with SingleTickerProviderStateMixin {
   late CanvasCamera _camera = _cameraFrom(widget.store.document.camera);
   int? _dragPointer;
   Offset? _lastDrag;
@@ -59,6 +64,7 @@ class CanvasViewportState extends State<CanvasViewport> {
   final _inlineFocus = FocusNode();
   String? _inlineEditId;
   final _cableMotion = CableMotion();
+  final _activityGlow = ActivityGlow();
   final _retractions = <RetractingCable>[];
   CableHover? _cableHover;
   KitPort? _portHover;
@@ -74,6 +80,9 @@ class CanvasViewportState extends State<CanvasViewport> {
   Offset? _cableCursor;
   Duration? _lastTapStamp;
   String? _lastTapId;
+  late final Ticker _outputTicker;
+  int _seenOutputPulse = 0;
+  String? _writingBodyId;
 
   Size _viewportSize = Size.zero;
 
@@ -110,6 +119,17 @@ class CanvasViewportState extends State<CanvasViewport> {
   @override
   void initState() {
     super.initState();
+    _seenOutputPulse = widget.agentController?.outputPulse ?? 0;
+    _outputTicker = createTicker((elapsed) {
+      if (elapsed < outputActivityHold) {
+        return;
+      }
+      _outputTicker.stop();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _writingBodyId = null);
+    });
     widget.store.addListener(_onStore);
     widget.selection.addListener(_onSelection);
     widget.agentController?.addListener(_onAgent);
@@ -142,12 +162,26 @@ class CanvasViewportState extends State<CanvasViewport> {
     _inlineController.dispose();
     _focus.dispose();
     _cableMotion.dispose();
+    _activityGlow.dispose();
+    _outputTicker
+      ..stop()
+      ..dispose();
     super.dispose();
   }
 
   void _onSelection() => setState(() {});
 
-  void _onAgent() => setState(() {});
+  void _onAgent() {
+    final pulse = widget.agentController?.outputPulse ?? 0;
+    if (pulse != _seenOutputPulse) {
+      _seenOutputPulse = pulse;
+      _writingBodyId = widget.agentController?.outputBodyId;
+      _outputTicker
+        ..stop()
+        ..start();
+    }
+    setState(() {});
+  }
 
   void _onStore() {
     widget.selection.syncToDocument(widget.store.document);
@@ -281,11 +315,11 @@ class CanvasViewportState extends State<CanvasViewport> {
     _lastTapId = hit.id;
     _lastTapStamp = event.timeStamp;
     if (isDouble) {
-      final textBody = _textKitBody(hit);
-      if (textBody != null) {
+      final previewBody = _previewKitBody(hit);
+      if (previewBody != null) {
         widget.selection.cancelMove();
         _dragKind = _DragKind.none;
-        _openTextKit(textBody);
+        _openPreviewKit(previewBody);
         return;
       }
       final edit = _inlineEditTarget(hit);
@@ -378,7 +412,7 @@ class CanvasViewportState extends State<CanvasViewport> {
       return;
     }
     final prompt = llmCableInput(widget.store.document, body.id).trim();
-    if (prompt.isEmpty) {
+    if (prompt.isEmpty || !llmRunHasSink(widget.store.document, body.id)) {
       return;
     }
     controller.sendUser(prompt, targetBodyId: body.id).catchError((_) {});
@@ -694,8 +728,9 @@ class CanvasViewportState extends State<CanvasViewport> {
     widget.selection.syncToDocument(widget.store.document);
   }
 
-  SceneObject? _textKitBody(SceneObject hit) {
-    if (kitIdOf(hit) != boardTextKitId) {
+  SceneObject? _previewKitBody(SceneObject hit) {
+    final kitId = kitIdOf(hit);
+    if (kitId != boardTextKitId && kitId != harnessConversationKitId) {
       return null;
     }
     if (hit.props[skapieRoleProp] == 'body') {
@@ -704,14 +739,27 @@ class CanvasViewportState extends State<CanvasViewport> {
     if (hit.props[skapieRoleProp] != 'frame') {
       return null;
     }
-    return textKitBody(widget.store.document, hit);
+    return kitId == harnessConversationKitId
+        ? conversationBody(widget.store.document, hit)
+        : textKitBody(widget.store.document, hit);
   }
 
-  void _openTextKit(SceneObject body) {
+  void _openPreviewKit(SceneObject body) {
     final frame = kitFrameForSelection(
       document: widget.store.document,
       selectedId: body.id,
     );
+    if (kitIdOf(body) == harnessConversationKitId) {
+      showConversationKitViewer(
+        context: context,
+        kitApi: widget.kitApi,
+        bodyId: body.id,
+        title: frame == null
+            ? 'Conversation'
+            : kitDisplayName(widget.store.document, frame),
+      );
+      return;
+    }
     showTextKitEditor(
       context: context,
       kitApi: widget.kitApi,
@@ -880,6 +928,16 @@ class CanvasViewportState extends State<CanvasViewport> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
+        final controller = widget.agentController;
+        final activity = CableActivity(
+          runningBodyId: controller?.runningBodyId,
+          seedPorts: controller?.seedPorts ?? const {},
+          activeToolFrameId: controller?.activeToolFrameId,
+          toolPulse: controller?.toolPulse ?? 0,
+          toolPulseFrameId: controller?.toolPulseFrameId,
+          toolPulseBodyId: controller?.toolPulseBodyId,
+          writingBodyId: _writingBodyId,
+        );
         if (size != _viewportSize) {
           _viewportSize = size;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -985,9 +1043,8 @@ class CanvasViewportState extends State<CanvasViewport> {
                       resizeFrameId: _resizeFrameId,
                       resizeHeight: _resizeHeight,
                       paintDrag: false,
-                      runningBodyId: widget.agentController?.runningBodyId,
-                      activeToolFrameId:
-                          widget.agentController?.activeToolFrameId,
+                      activity: activity,
+                      glow: _activityGlow,
                       motion: _cableMotion,
                       retractions: _retractions,
                       onRetractionDone: _endRetraction,
@@ -1000,7 +1057,8 @@ class CanvasViewportState extends State<CanvasViewport> {
                       selectedId: widget.selection.selectedId,
                       previewDelta: widget.selection.previewDelta,
                       previewIds: _previewIds,
-                      runningBodyId: widget.agentController?.runningBodyId,
+                      activity: activity,
+                      glow: _activityGlow,
                       resizeFrameId: _resizeFrameId,
                       resizeHeight: _resizeHeight,
                     ),

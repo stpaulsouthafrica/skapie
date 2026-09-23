@@ -58,9 +58,24 @@ class AgentController extends ChangeNotifier {
   AgentHttpDiagnostic? lastDiagnostic;
   List<AgentModelInfo> catalogModels = const [];
 
-  /// Body receiving the in-flight Run. Cables that feed it can pulse.
+  /// Body receiving the in-flight Run.
   String? runningBodyId;
+
+  /// Ports read for [runningBodyId]: input, context, conversation.
+  Set<String> seedPorts = const {};
+  DateTime? _runStartedAt;
+
+  /// Tool frame executing a call. Null when no call is in flight.
   String? activeToolFrameId;
+
+  /// Last tool start. The cable layer plays this even if the call already ended.
+  int toolPulse = 0;
+  String? toolPulseFrameId;
+  String? toolPulseBodyId;
+
+  /// Increments when a reply is written. The viewport plays one output flash.
+  int outputPulse = 0;
+  String? outputBodyId;
   final Map<String, List<AgentToolActivity>> _toolActivities = {};
 
   List<AgentToolActivity> toolActivitiesFor(String bodyId) =>
@@ -138,12 +153,17 @@ class AgentController extends ChangeNotifier {
     if (prompt.isEmpty || bodyId.isEmpty) {
       return;
     }
+    if (!llmRunHasSink(kitApi.store.document, bodyId)) {
+      return;
+    }
     final target = kitApi.store.document.objectById(bodyId);
     if (target == null) {
       return;
     }
     runningBodyId = bodyId;
+    _runStartedAt = DateTime.now();
     activeToolFrameId = null;
+    seedPorts = _seedPortsFor(bodyId);
     _toolActivities[bodyId] = [];
     notifyListeners();
     try {
@@ -151,8 +171,27 @@ class AgentController extends ChangeNotifier {
     } finally {
       runningBodyId = null;
       activeToolFrameId = null;
+      seedPorts = const {};
       notifyListeners();
     }
+  }
+
+  Set<String> _seedPortsFor(String bodyId) {
+    final document = kitApi.store.document;
+    final ports = <String>{};
+    if (llmCableInput(document, bodyId).trim().isNotEmpty) {
+      ports.add(llmInputPort);
+    }
+    if (llmContextText(document, bodyId).trim().isNotEmpty) {
+      ports.add(llmContextPort);
+    }
+    return Set.unmodifiable(ports);
+  }
+
+  void _showOutput(String bodyId) {
+    outputBodyId = bodyId;
+    outputPulse++;
+    notifyListeners();
   }
 
   Future<void> _completeSend({
@@ -276,6 +315,7 @@ class AgentController extends ChangeNotifier {
       llmBodyId: bodyId,
       text: failure == null ? (reply ?? '') : failure.toString(),
     );
+    _showOutput(bodyId);
     if (failure == null) {
       _appendConversation(
         bodyId: bodyId,
@@ -305,6 +345,12 @@ class AgentController extends ChangeNotifier {
         bodyId,
         event.call.name,
       );
+      final frameId = activeToolFrameId;
+      if (frameId != null) {
+        toolPulseFrameId = frameId;
+        toolPulseBodyId = bodyId;
+        toolPulse++;
+      }
       _markToolUsed(activeToolFrameId);
       notifyListeners();
     } else if (event is AgentToolFinished) {
@@ -356,6 +402,8 @@ class AgentController extends ChangeNotifier {
         bodyId: body.id,
         userText: userText,
         assistantText: assistantText,
+        userAt: _runStartedAt,
+        assistantAt: DateTime.now(),
       );
     }
   }

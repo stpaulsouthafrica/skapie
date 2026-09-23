@@ -1,12 +1,19 @@
 /// One earlier turn the model should treat as its own conversation.
 class ConversationTurn {
-  const ConversationTurn({required this.role, required this.content});
+  const ConversationTurn({required this.role, required this.content, this.at});
 
   /// `user` or `assistant`.
   final String role;
   final String content;
 
-  Map<String, Object?> toJson() => {'role': role, 'content': content};
+  /// When the turn happened. Display only; not part of equality or requests.
+  final DateTime? at;
+
+  Map<String, Object?> toJson() => {
+    'role': role,
+    'content': content,
+    if (at != null) 'at': at!.toUtc().toIso8601String(),
+  };
 
   @override
   bool operator ==(Object other) {
@@ -33,7 +40,13 @@ List<ConversationTurn> conversationTurnsFrom(Object? raw) {
     if ((role != 'user' && role != 'assistant') || content.trim().isEmpty) {
       continue;
     }
-    turns.add(ConversationTurn(role: role, content: content));
+    turns.add(
+      ConversationTurn(
+        role: role,
+        content: content,
+        at: DateTime.tryParse(item['at']?.toString() ?? ''),
+      ),
+    );
   }
   return turns;
 }

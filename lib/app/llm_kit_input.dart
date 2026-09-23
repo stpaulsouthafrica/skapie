@@ -122,7 +122,9 @@ class _LlmKitInputState extends State<LlmKitInput> {
 
   Future<void> _submit() async {
     final prompt = _cableInput;
-    if (prompt.isEmpty || _busy) {
+    if (prompt.isEmpty ||
+        !llmRunHasSink(widget.kitApi.store.document, widget.body.id) ||
+        _busy) {
       return;
     }
     setState(() => _busy = true);
@@ -141,6 +143,11 @@ class _LlmKitInputState extends State<LlmKitInput> {
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
     final needsInput = _cableInput.isEmpty;
+    final needsSink = !llmRunHasSink(
+      widget.kitApi.store.document,
+      widget.body.id,
+    );
+    final blocked = needsInput || needsSink || _busy;
     final choices = _choices;
     final selected = _selectedModel;
     return Column(
@@ -180,13 +187,21 @@ class _LlmKitInputState extends State<LlmKitInput> {
               'Needs input',
               style: TextStyle(color: tokens.muted, fontSize: 11),
             ),
+          )
+        else if (needsSink)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Needs Output or Conversation',
+              style: TextStyle(color: tokens.muted, fontSize: 11),
+            ),
           ),
         const SizedBox(height: 8),
         KeyedSubtree(
           key: const Key('llm-kit-run'),
           child: PaintButton(
             label: _busy ? 'Running' : 'Run',
-            onPressed: needsInput || _busy ? null : _submit,
+            onPressed: blocked ? null : _submit,
           ),
         ),
         const SizedBox(height: 8),

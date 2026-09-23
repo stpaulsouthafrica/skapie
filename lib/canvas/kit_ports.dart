@@ -17,6 +17,7 @@ enum KitPortKind {
   textIn,
   textOut,
   toolOut,
+  conversationIn,
   conversationOut,
   repositoryOut,
   toolRepository,
@@ -57,6 +58,7 @@ bool kitPortIsOutput(KitPortKind kind) {
       kind == KitPortKind.toolOut ||
       kind == KitPortKind.conversationOut ||
       kind == KitPortKind.repositoryOut ||
+      kind == KitPortKind.llmConversation ||
       kind == KitPortKind.llmOutput;
 }
 
@@ -64,7 +66,7 @@ bool kitPortAccepts(KitPortKind source, KitPortKind target) {
   return switch (source) {
     KitPortKind.textOut =>
       target == KitPortKind.llmInput || target == KitPortKind.llmContext,
-    KitPortKind.conversationOut => target == KitPortKind.llmConversation,
+    KitPortKind.llmConversation => target == KitPortKind.conversationIn,
     KitPortKind.repositoryOut => target == KitPortKind.toolRepository,
     KitPortKind.toolOut => target == KitPortKind.llmTools,
     KitPortKind.llmOutput =>
@@ -75,7 +77,7 @@ bool kitPortAccepts(KitPortKind source, KitPortKind target) {
   };
 }
 
-/// Input, Context, Conversation, Tools, and Output.
+/// Input, Context, and Tools on the left; Conversation and Output on the right.
 const int llmRegionCount = 5;
 
 const double llmPortRowHeight = 22;
@@ -109,9 +111,22 @@ double llmRegionLabelCenter(double frameHeight, int index) {
 }
 
 /// Play control in the LLM title bar, in world space.
+const double llmRunButtonRight = 4;
+const double llmRunButtonSlot = 28;
+
+Offset llmRunButtonCenter(SceneObject frame) {
+  return Offset(
+    frame.x + frame.width - llmRunButtonRight - llmRunButtonSlot / 2,
+    frame.y + kitBarWorld / 2,
+  );
+}
+
 bool llmRunButtonContains(SceneObject frame, Offset world) {
-  final center = Offset(frame.x + frame.width - 15, frame.y + 16);
-  return Rect.fromCenter(center: center, width: 22, height: 22).contains(world);
+  return Rect.fromCenter(
+    center: llmRunButtonCenter(frame),
+    width: llmRunButtonSlot,
+    height: kitBarWorld,
+  ).contains(world);
 }
 
 bool llmResizeHandleContains(SceneObject frame, Offset world) {
@@ -169,10 +184,10 @@ Offset llmInputCenter(SceneObject frame) => _llmPort(frame, 0, right: false);
 
 Offset llmContextCenter(SceneObject frame) => _llmPort(frame, 1, right: false);
 
-Offset llmConversationCenter(SceneObject frame) =>
-    _llmPort(frame, 2, right: false);
+Offset llmToolsCenter(SceneObject frame) => _llmPort(frame, 2, right: false);
 
-Offset llmToolsCenter(SceneObject frame) => _llmPort(frame, 3, right: false);
+Offset llmConversationCenter(SceneObject frame) =>
+    _llmPort(frame, 3, right: true);
 
 Offset llmOutputCenter(SceneObject frame) => _llmPort(frame, 4, right: true);
 
@@ -226,6 +241,14 @@ List<KitPort> kitPorts(
         ),
       );
     } else if (kitId == harnessConversationKitId) {
+      ports.add(
+        KitPort(
+          frameId: object.id,
+          kind: KitPortKind.conversationIn,
+          center: textInputCenter(object),
+          peerId: object.id,
+        ),
+      );
       ports.add(
         KitPort(
           frameId: object.id,
@@ -428,11 +451,11 @@ List<SceneCable> sceneCables(
           id: '${frame.id}|${link.id}',
           ownerId: frame.id,
           port: link.port,
-          sourceId: frame.id,
-          targetFrameId: target.id,
-          from: textOutputCenter(h(frame)),
-          to: llmConversationCenter(h(target)),
-          color: kitAccentColor(target),
+          sourceId: target.id,
+          targetFrameId: frame.id,
+          from: llmConversationCenter(h(target)),
+          to: textInputCenter(h(frame)),
+          color: kitAccentColor(frame),
           targetBodyId: link.to,
           affectsRun: true,
         ),
@@ -713,6 +736,12 @@ int llmConnectionCount(
   };
 }
 
+/// A run needs a place to write: Output or Conversation.
+bool llmRunHasSink(SceneDocument document, String llmBodyId) {
+  return llmConnectionCount(document, llmBodyId, KitPortKind.llmOutput) > 0 ||
+      llmConnectionCount(document, llmBodyId, KitPortKind.llmConversation) > 0;
+}
+
 int _linksTo(SceneDocument document, String bodyId, String port) {
   var count = 0;
   for (final object in document.objects) {
@@ -751,11 +780,11 @@ void connectKitPorts({
     return;
   }
   switch (output.kind) {
-    case KitPortKind.conversationOut:
+    case KitPortKind.llmConversation:
       addKitLink(
         kitApi: kitApi,
-        objectId: output.frameId,
-        to: input.peerId,
+        objectId: input.frameId,
+        to: output.peerId,
         port: llmConversationPort,
       );
     case KitPortKind.repositoryOut:

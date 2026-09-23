@@ -14,7 +14,10 @@ class PaintedCable {
     this.flash,
     this.flashAlpha = 1,
     this.arrival = 0,
+    this.rest = 0,
     this.flow,
+    this.flashTowardSource = false,
+    this.arrivalAtStart = false,
     this.exitsRight = true,
     this.entersFromLeft = true,
   });
@@ -37,8 +40,17 @@ class PaintedCable {
   /// Soft light sitting on the destination after the flash arrives.
   final double arrival;
 
+  /// Resting glow along the cable after a one-shot flash, 0 to 1.
+  final double rest;
+
   /// Looping pulse while this cable is feeding a run, 0 to 1.
   final double? flow;
+
+  /// Activity flash travels from [to] back toward [from].
+  final bool flashTowardSource;
+
+  /// The arrival bloom sits on [from] instead of [to].
+  final bool arrivalAtStart;
 
   /// A right-edge port leaves toward +x. A left-edge port leaves toward -x.
   final bool exitsRight;
@@ -89,11 +101,10 @@ void paintCables(Canvas canvas, List<PaintedCable> cables, double zoom) {
     }
     final start = cable.drawStart.clamp(0.0, 1.0);
     final draw = cable.draw.clamp(0.0, 1.0);
-    if (draw - start > 0.004) {
-      final shown = metric.extractPath(
-        metric.length * start,
-        metric.length * draw,
-      );
+    final shown = draw - start > 0.004
+        ? metric.extractPath(metric.length * start, metric.length * draw)
+        : null;
+    if (shown != null) {
       canvas.drawPath(
         shown,
         Paint()
@@ -122,10 +133,31 @@ void paintCables(Canvas canvas, List<PaintedCable> cables, double zoom) {
         zoom,
         alpha: cable.flashAlpha,
         wide: false,
+        towardEnd: !cable.flashTowardSource,
       );
     }
     if (cable.arrival > 0.01) {
-      _settle(canvas, cable.to, cable.color, zoom, cable.arrival);
+      _settle(
+        canvas,
+        cable.arrivalAtStart ? cable.from : cable.to,
+        cable.color,
+        zoom,
+        cable.arrival,
+      );
+    }
+    if (cable.rest > 0.01 && shown != null) {
+      final strength = cable.rest.clamp(0.0, 1.0);
+      canvas.drawPath(
+        shown,
+        Paint()
+          ..color = cable.color.withValues(alpha: 0.16 * strength)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4.2 * zoom
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = ui.MaskFilter.blur(ui.BlurStyle.normal, 7 * zoom),
+      );
+      _settle(canvas, cable.from, cable.color, zoom, 0.5 * strength);
+      _settle(canvas, cable.to, cable.color, zoom, 0.5 * strength);
     }
     final flow = cable.flow;
     if (flow != null) {
@@ -142,12 +174,25 @@ void _streak(
   double zoom, {
   required double alpha,
   required bool wide,
+  bool towardEnd = true,
 }) {
   final dist = metric.length * t.clamp(0.0, 1.0);
   final trail = wide
       ? (metric.length * 0.16).clamp(18.0 * zoom, 90.0 * zoom)
       : (metric.length * 0.1).clamp(14.0 * zoom, 64.0 * zoom);
-  final extracted = metric.extractPath((dist - trail).clamp(0.0, dist), dist);
+  final double start;
+  final double end;
+  if (towardEnd) {
+    start = (dist - trail).clamp(0.0, dist);
+    end = dist;
+  } else {
+    start = dist;
+    end = (dist + trail).clamp(dist, metric.length);
+  }
+  if (end - start < 0.5) {
+    return;
+  }
+  final extracted = metric.extractPath(start, end);
   canvas.drawPath(
     extracted,
     Paint()
