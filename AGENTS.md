@@ -4,7 +4,7 @@ On every turn, name the layer first: KIT PACKAGE (`kits/<id>/`) or HOST/core (`l
 
 ## Kit package work
 When the request is a feature, fix, update, or improvement to a kit package:
-- Implement it in `kits/<id>/` (usually `kit.json` and package assets).
+- Implement it in `kits/<id>/` (`kit.json`).
 - Do not extend the core for kit-specific look, ports, defaults, or composition.
 - No new `if (kitId == …)` special cases in canvas/inspector for that kit.
 - Prove it: list the `kits/` files changed, confirm no unnecessary `lib/` edits, and say how a user could edit the same thing on disk.
