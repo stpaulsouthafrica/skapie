@@ -153,16 +153,10 @@ class SceneObjectLayer extends StatelessWidget {
     );
     final accent = kitAccentColor(frame);
     final hairline = kitAccentHairline(accent);
-    const rows = <(KitPortKind, String, Key)>[
-      (KitPortKind.llmInput, 'Input', Key('llm-kit-input-region')),
-      (KitPortKind.llmContext, 'Context', Key('llm-kit-context-region')),
-      (KitPortKind.llmTools, 'Tools', Key('llm-kit-tools-region')),
-      (
-        KitPortKind.llmConversation,
-        'Conversation',
-        Key('llm-kit-conversation-region'),
-      ),
-      (KitPortKind.llmOutput, 'Output', Key('llm-kit-output-region')),
+    final rows = [
+      for (final spec in kitPortSpecsFor(frame))
+        if (spec.placement.anchor == PortAnchor.row)
+          (spec.kind, spec.label, Key('llm-kit-${spec.id}-region')),
     ];
     return Stack(
       children: [
@@ -206,13 +200,13 @@ class SceneObjectLayer extends StatelessWidget {
                           zoom: zoom,
                           status: status,
                           output: _portLabel(
-                            'Output',
+                            rows[index].$2,
                             llmConnectionCount(
                               document,
                               body?.id,
-                              KitPortKind.llmOutput,
+                              rows[index].$1,
                             ),
-                            many: true,
+                            many: llmPortAcceptsMany(rows[index].$1),
                           ),
                         )
                       : _portRow(

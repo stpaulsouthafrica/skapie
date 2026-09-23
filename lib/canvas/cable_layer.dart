@@ -576,35 +576,17 @@ class _CableLayerState extends State<CableLayer>
     if (hit == null || !kitPortsConnect(sourceKind, hit.kind)) {
       return null;
     }
-    if (sourceKind == KitPortKind.llmOutput) {
-      final sourcePort = kitPorts(widget.document)
-          .where(
-            (port) =>
-                port.frameId == source.id && port.kind == KitPortKind.llmOutput,
-          )
-          .firstOrNull;
-      if (sourcePort != null && sourcePort.peerId == hit.peerId) {
-        return null;
-      }
+    final sourcePort = kitPorts(widget.document)
+        .where((port) => port.frameId == source.id && port.kind == sourceKind)
+        .firstOrNull;
+    if (sourcePort != null && sourcePort.peerId == hit.peerId) {
+      return null;
     }
     return hit;
   }
 
   Offset _center(SceneObject frame, KitPortKind kind) {
-    return switch (kind) {
-      KitPortKind.textIn ||
-      KitPortKind.conversationIn => textInputCenter(frame),
-      KitPortKind.textOut ||
-      KitPortKind.conversationOut ||
-      KitPortKind.repositoryOut => textOutputCenter(frame),
-      KitPortKind.toolOut => toolOutputCenter(frame),
-      KitPortKind.toolRepository => toolRepositoryCenter(frame),
-      KitPortKind.llmInput => llmInputCenter(frame),
-      KitPortKind.llmContext => llmContextCenter(frame),
-      KitPortKind.llmConversation => llmConversationCenter(frame),
-      KitPortKind.llmTools => llmToolsCenter(frame),
-      KitPortKind.llmOutput => llmOutputCenter(frame),
-    };
+    return kitPortCenter(frame, kitPortSpecOf(kind));
   }
 
   Offset _shown(Offset center, String id) {

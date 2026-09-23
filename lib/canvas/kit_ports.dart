@@ -11,22 +11,10 @@ import 'package:skapie/registry/builtin_types.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
 
-export 'package:skapie/canvas/kit_links.dart';
+import 'package:skapie/canvas/kit_port_descriptor.dart';
 
-enum KitPortKind {
-  textIn,
-  textOut,
-  toolOut,
-  conversationIn,
-  conversationOut,
-  repositoryOut,
-  toolRepository,
-  llmInput,
-  llmContext,
-  llmConversation,
-  llmTools,
-  llmOutput,
-}
+export 'package:skapie/canvas/kit_links.dart';
+export 'package:skapie/canvas/kit_port_descriptor.dart';
 
 class KitPort {
   const KitPort({
@@ -40,8 +28,10 @@ class KitPort {
   final KitPortKind kind;
   final Offset center;
 
-  /// Text or tool frame id for an output. LLM body id for an LLM port.
+  /// Frame id, or body id for ports whose descriptor peer is the body.
   final String peerId;
+
+  KitPortSpec get spec => kitPortSpecOf(kind);
 }
 
 const double kitPortHitRadius = 10;
@@ -53,28 +43,12 @@ const double kitLabelSize = 11;
 /// Text output sits on the right edge, lined up with the bottom Output label.
 const double textOutputInset = 18;
 
-bool kitPortIsOutput(KitPortKind kind) {
-  return kind == KitPortKind.textOut ||
-      kind == KitPortKind.toolOut ||
-      kind == KitPortKind.conversationOut ||
-      kind == KitPortKind.repositoryOut ||
-      kind == KitPortKind.llmConversation ||
-      kind == KitPortKind.llmOutput;
-}
+bool kitPortIsOutput(KitPortKind kind) => kitPortSpecOf(kind).isOutput;
 
 bool kitPortAccepts(KitPortKind source, KitPortKind target) {
-  return switch (source) {
-    KitPortKind.textOut =>
-      target == KitPortKind.llmInput || target == KitPortKind.llmContext,
-    KitPortKind.llmConversation => target == KitPortKind.conversationIn,
-    KitPortKind.repositoryOut => target == KitPortKind.toolRepository,
-    KitPortKind.toolOut => target == KitPortKind.llmTools,
-    KitPortKind.llmOutput =>
-      target == KitPortKind.llmInput ||
-          target == KitPortKind.llmContext ||
-          target == KitPortKind.textIn,
-    _ => false,
-  };
+  final from = kitPortSpecOf(source);
+  final to = kitPortSpecOf(target);
+  return from.isOutput && !to.isOutput && to.takes(from.value);
 }
 
 /// Input, Context, and Tools on the left; Conversation and Output on the right.
@@ -139,11 +113,7 @@ bool llmResizeHandleContains(SceneObject frame, Offset world) {
 }
 
 bool llmPortAcceptsMany(KitPortKind kind) {
-  return kind == KitPortKind.llmInput ||
-      kind == KitPortKind.llmContext ||
-      kind == KitPortKind.llmConversation ||
-      kind == KitPortKind.llmTools ||
-      kind == KitPortKind.llmOutput;
+  return kitPortSpecOf(kind).multiplicity == PortMultiplicity.many;
 }
 
 bool kitPortsConnect(KitPortKind a, KitPortKind b) {
@@ -180,23 +150,34 @@ Offset toolOutputCenter(SceneObject frame) =>
 Offset toolRepositoryCenter(SceneObject frame) =>
     toolPortCenter(frame, right: false);
 
-Offset llmInputCenter(SceneObject frame) => _llmPort(frame, 0, right: false);
+/// World position of [spec] on [frame].
+Offset kitPortCenter(SceneObject frame, KitPortSpec spec) {
+  final right = spec.placement.side == PortSide.right;
+  return switch (spec.placement.anchor) {
+    PortAnchor.footer =>
+      right ? textOutputCenter(frame) : textInputCenter(frame),
+    PortAnchor.middle => toolPortCenter(frame, right: right),
+    PortAnchor.row => Offset(
+      right ? frame.x + frame.width : frame.x,
+      frame.y + llmRegionLabelCenter(frame.height, spec.placement.row),
+    ),
+  };
+}
 
-Offset llmContextCenter(SceneObject frame) => _llmPort(frame, 1, right: false);
+Offset llmInputCenter(SceneObject frame) =>
+    kitPortCenter(frame, kitPortSpecOf(KitPortKind.llmInput));
 
-Offset llmToolsCenter(SceneObject frame) => _llmPort(frame, 2, right: false);
+Offset llmContextCenter(SceneObject frame) =>
+    kitPortCenter(frame, kitPortSpecOf(KitPortKind.llmContext));
+
+Offset llmToolsCenter(SceneObject frame) =>
+    kitPortCenter(frame, kitPortSpecOf(KitPortKind.llmTools));
 
 Offset llmConversationCenter(SceneObject frame) =>
-    _llmPort(frame, 3, right: true);
+    kitPortCenter(frame, kitPortSpecOf(KitPortKind.llmConversation));
 
-Offset llmOutputCenter(SceneObject frame) => _llmPort(frame, 4, right: true);
-
-Offset _llmPort(SceneObject frame, int index, {required bool right}) {
-  return Offset(
-    right ? frame.x + frame.width : frame.x,
-    frame.y + llmRegionLabelCenter(frame.height, index),
-  );
-}
+Offset llmOutputCenter(SceneObject frame) =>
+    kitPortCenter(frame, kitPortSpecOf(KitPortKind.llmOutput));
 
 SceneObject _withResize(
   SceneObject frame,
@@ -222,106 +203,26 @@ List<KitPort> kitPorts(
     if (object.props[skapieRoleProp] != 'frame') {
       continue;
     }
-    final kitId = kitIdOf(object);
-    if (kitId == boardTextKitId) {
-      ports.add(
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.textIn,
-          center: textInputCenter(object),
-          peerId: object.id,
-        ),
-      );
-      ports.add(
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.textOut,
-          center: textOutputCenter(object),
-          peerId: object.id,
-        ),
-      );
-    } else if (kitId == harnessConversationKitId) {
-      ports.add(
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.conversationIn,
-          center: textInputCenter(object),
-          peerId: object.id,
-        ),
-      );
-      ports.add(
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.conversationOut,
-          center: textOutputCenter(object),
-          peerId: object.id,
-        ),
-      );
-    } else if (kitId == codingRepositoryKitId) {
-      ports.add(
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.repositoryOut,
-          center: textOutputCenter(object),
-          peerId: object.id,
-        ),
-      );
-    } else if (kitId != null && kitId.startsWith('tools.')) {
-      if (object.props['requiresRepository'] == true) {
-        ports.add(
-          KitPort(
-            frameId: object.id,
-            kind: KitPortKind.toolRepository,
-            center: toolRepositoryCenter(object),
-            peerId: object.id,
-          ),
-        );
-      }
-      ports.add(
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.toolOut,
-          center: toolOutputCenter(object),
-          peerId: object.id,
-        ),
-      );
-    } else if (kitId == harnessLlmKitId) {
-      final body = _llmBody(document, object);
-      if (body == null) {
+    final specs = kitPortSpecsFor(object);
+    if (specs.isEmpty) {
+      continue;
+    }
+    final bodyId = specs.any((spec) => spec.peer == PortPeer.body)
+        ? _kitBody(document, listed)?.id
+        : null;
+    for (final spec in specs) {
+      final peerId = spec.peer == PortPeer.body ? bodyId : object.id;
+      if (peerId == null) {
         continue;
       }
-      ports.addAll([
+      ports.add(
         KitPort(
           frameId: object.id,
-          kind: KitPortKind.llmInput,
-          center: llmInputCenter(object),
-          peerId: body.id,
+          kind: spec.kind,
+          center: kitPortCenter(object, spec),
+          peerId: peerId,
         ),
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.llmContext,
-          center: llmContextCenter(object),
-          peerId: body.id,
-        ),
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.llmConversation,
-          center: llmConversationCenter(object),
-          peerId: body.id,
-        ),
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.llmTools,
-          center: llmToolsCenter(object),
-          peerId: body.id,
-        ),
-        KitPort(
-          frameId: object.id,
-          kind: KitPortKind.llmOutput,
-          center: llmOutputCenter(object),
-          peerId: body.id,
-        ),
-      ]);
+      );
     }
   }
   return ports;
@@ -353,6 +254,10 @@ class SceneCable {
     required this.color,
     required this.targetBodyId,
     required this.affectsRun,
+    this.fromKind,
+    this.toKind,
+    this.fromPeerId,
+    this.toPeerId,
   });
 
   final String id;
@@ -371,6 +276,11 @@ class SceneCable {
 
   /// Input, context, conversation, and tools change the run.
   final bool affectsRun;
+
+  final KitPortKind? fromKind;
+  final KitPortKind? toKind;
+  final String? fromPeerId;
+  final String? toPeerId;
 }
 
 List<SceneCable> sceneCables(
@@ -378,184 +288,96 @@ List<SceneCable> sceneCables(
   String? resizeFrameId,
   double? resizeHeight,
 }) {
-  SceneObject h(SceneObject frame) =>
-      _withResize(frame, resizeFrameId, resizeHeight);
+  final ports = kitPorts(
+    document,
+    resizeFrameId: resizeFrameId,
+    resizeHeight: resizeHeight,
+  );
+  final byFrame = <String, List<KitPort>>{};
+  for (final port in ports) {
+    byFrame.putIfAbsent(port.frameId, () => []).add(port);
+  }
   final cables = <SceneCable>[];
-  for (final frame in repositoryFrames(document)) {
-    for (final link in kitLinksOf(frame)) {
-      if (link.port != repositoryPort) {
+  for (final entry in byFrame.entries) {
+    final peers = {for (final port in entry.value) port.peerId};
+    for (final peerId in peers) {
+      final owner = document.objectById(peerId);
+      if (owner == null) {
         continue;
       }
-      final target = document.objectById(link.to);
-      if (target == null || target.props['requiresRepository'] != true) {
-        continue;
-      }
-      cables.add(
-        SceneCable(
-          id: '${frame.id}|${link.id}',
-          ownerId: frame.id,
-          port: link.port,
-          sourceId: frame.id,
-          targetFrameId: target.id,
-          from: textOutputCenter(h(frame)),
-          to: toolRepositoryCenter(h(target)),
-          color: kitAccentColor(target),
-          targetBodyId: target.id,
-          affectsRun: true,
-        ),
-      );
-    }
-  }
-  for (final frame in textFrames(document)) {
-    for (final link in kitLinksOf(frame)) {
-      if (link.port != llmInputPort && link.port != llmContextPort) {
-        continue;
-      }
-      final target = kitFrameForSelection(
-        document: document,
-        selectedId: link.to,
-      );
-      if (target == null) {
-        continue;
-      }
-      cables.add(
-        SceneCable(
-          id: '${frame.id}|${link.id}',
-          ownerId: frame.id,
-          port: link.port,
-          sourceId: frame.id,
-          targetFrameId: target.id,
-          from: textOutputCenter(h(frame)),
-          to: _llmPortFor(h(target), link.port),
-          color: kitAccentColor(target),
-          targetBodyId: link.to,
-          affectsRun: true,
-        ),
-      );
-    }
-  }
-  for (final frame in conversationFrames(document)) {
-    for (final link in kitLinksOf(frame)) {
-      if (link.port != llmConversationPort) {
-        continue;
-      }
-      final target = kitFrameForSelection(
-        document: document,
-        selectedId: link.to,
-      );
-      if (target == null) {
-        continue;
-      }
-      cables.add(
-        SceneCable(
-          id: '${frame.id}|${link.id}',
-          ownerId: frame.id,
-          port: link.port,
-          sourceId: target.id,
-          targetFrameId: frame.id,
-          from: llmConversationCenter(h(target)),
-          to: textInputCenter(h(frame)),
-          color: kitAccentColor(frame),
-          targetBodyId: link.to,
-          affectsRun: true,
-        ),
-      );
-    }
-  }
-  for (final frame in toolFrames(document)) {
-    for (final link in kitLinksOf(frame)) {
-      if (link.port != llmToolsPort) {
-        continue;
-      }
-      final target = kitFrameForSelection(
-        document: document,
-        selectedId: link.to,
-      );
-      if (target == null) {
-        continue;
-      }
-      cables.add(
-        SceneCable(
-          id: '${frame.id}|${link.id}',
-          ownerId: frame.id,
-          port: link.port,
-          sourceId: frame.id,
-          targetFrameId: target.id,
-          from: toolOutputCenter(h(frame)),
-          to: llmToolsCenter(h(target)),
-          color: kitAccentColor(target),
-          targetBodyId: link.to,
-          affectsRun: true,
-        ),
-      );
-    }
-  }
-  for (final body in llmBodies(document)) {
-    final source = kitFrameForSelection(
-      document: document,
-      selectedId: body.id,
-    );
-    if (source == null) {
-      continue;
-    }
-    for (final link in kitLinksOf(body)) {
-      if (link.port == llmTextOutPort) {
-        final target = document.objectById(link.to);
-        if (target == null || kitIdOf(target) != boardTextKitId) {
-          continue;
-        }
-        cables.add(
-          SceneCable(
-            id: '${body.id}|${link.id}',
-            ownerId: body.id,
-            port: link.port,
-            sourceId: source.id,
-            targetFrameId: target.id,
-            from: llmOutputCenter(h(source)),
-            to: textInputCenter(h(target)),
-            color: kitAccentColor(target),
-            targetBodyId: link.to,
-            affectsRun: false,
-          ),
+      final ownerPorts = [
+        for (final port in entry.value)
+          if (port.peerId == peerId) port,
+      ];
+      for (final link in kitLinksOf(owner)) {
+        final target = kitFrameForSelection(
+          document: document,
+          selectedId: link.to,
         );
-        continue;
+        final cable = target == null
+            ? null
+            : _cableFor(
+                document: document,
+                link: link,
+                ownerPorts: ownerPorts,
+                targetPorts: byFrame[target.id] ?? const [],
+              );
+        if (cable != null) {
+          cables.add(cable);
+        }
       }
-      if (link.port != llmInputPort && link.port != llmContextPort) {
-        continue;
-      }
-      final target = kitFrameForSelection(
-        document: document,
-        selectedId: link.to,
-      );
-      if (target == null) {
-        continue;
-      }
-      cables.add(
-        SceneCable(
-          id: '${body.id}|${link.id}',
-          ownerId: body.id,
-          port: link.port,
-          sourceId: source.id,
-          targetFrameId: target.id,
-          from: llmOutputCenter(h(source)),
-          to: _llmPortFor(h(target), link.port),
-          color: kitAccentColor(target),
-          targetBodyId: link.to,
-          affectsRun: true,
-        ),
-      );
     }
   }
   return cables;
 }
 
-Offset _llmPortFor(SceneObject frame, String port) {
-  return switch (port) {
-    llmContextPort => llmContextCenter(frame),
-    llmConversationPort => llmConversationCenter(frame),
-    llmToolsPort => llmToolsCenter(frame),
-    _ => llmInputCenter(frame),
-  };
+/// The descriptor pair a stored link names, drawn output → input.
+SceneCable? _cableFor({
+  required SceneDocument document,
+  required KitLink link,
+  required List<KitPort> ownerPorts,
+  required List<KitPort> targetPorts,
+}) {
+  for (final mine in ownerPorts) {
+    for (final theirs in targetPorts) {
+      if (theirs.peerId != link.to) {
+        continue;
+      }
+      final ownsAsSource =
+          mine.spec.isOutput && theirs.spec.linkOwner == PortLinkOwner.source;
+      final ownsAsTarget =
+          !mine.spec.isOutput && mine.spec.linkOwner == PortLinkOwner.target;
+      if (!ownsAsSource && !ownsAsTarget) {
+        continue;
+      }
+      final output = ownsAsSource ? mine : theirs;
+      final input = ownsAsSource ? theirs : mine;
+      if (input.spec.storedPort != link.port ||
+          !kitPortAccepts(output.kind, input.kind)) {
+        continue;
+      }
+      final inputFrame = document.objectById(input.frameId);
+      return SceneCable(
+        id: '${mine.peerId}|${link.id}',
+        ownerId: mine.peerId,
+        port: link.port,
+        sourceId: output.frameId,
+        targetFrameId: input.frameId,
+        from: output.center,
+        to: input.center,
+        color: inputFrame == null
+            ? kitSwatches.first
+            : kitAccentColor(inputFrame),
+        targetBodyId: link.to,
+        affectsRun: input.spec.affectsRun,
+        fromKind: output.kind,
+        toKind: input.kind,
+        fromPeerId: output.peerId,
+        toPeerId: input.peerId,
+      );
+    }
+  }
+  return null;
 }
 
 void disconnectSceneCable({required KitApi kitApi, required SceneCable cable}) {
@@ -719,50 +541,32 @@ int llmConnectionCount(
   String? bodyId,
   KitPortKind kind,
 ) {
-  if (bodyId == null || bodyId.isEmpty) {
+  return kitPortConnectionCount(document, bodyId, kind);
+}
+
+/// Cables meeting the [kind] port whose peer is [peerId].
+int kitPortConnectionCount(
+  SceneDocument document,
+  String? peerId,
+  KitPortKind kind,
+) {
+  if (peerId == null || peerId.isEmpty) {
     return 0;
   }
-  return switch (kind) {
-    KitPortKind.llmInput => _linksTo(document, bodyId, llmInputPort),
-    KitPortKind.llmContext => _linksTo(document, bodyId, llmContextPort),
-    KitPortKind.llmConversation => _linksTo(
-      document,
-      bodyId,
-      llmConversationPort,
-    ),
-    KitPortKind.llmTools => _linksTo(document, bodyId, llmToolsPort),
-    KitPortKind.llmOutput => _outputLinks(document, bodyId),
-    _ => 0,
-  };
+  var count = 0;
+  for (final cable in sceneCables(document)) {
+    if ((cable.fromKind == kind && cable.fromPeerId == peerId) ||
+        (cable.toKind == kind && cable.toPeerId == peerId)) {
+      count++;
+    }
+  }
+  return count;
 }
 
 /// A run needs a place to write: Output or Conversation.
 bool llmRunHasSink(SceneDocument document, String llmBodyId) {
   return llmConnectionCount(document, llmBodyId, KitPortKind.llmOutput) > 0 ||
       llmConnectionCount(document, llmBodyId, KitPortKind.llmConversation) > 0;
-}
-
-int _linksTo(SceneDocument document, String bodyId, String port) {
-  var count = 0;
-  for (final object in document.objects) {
-    if (object.props[skapieRoleProp] != 'frame') {
-      continue;
-    }
-    if (kitHasLink(object, to: bodyId, port: port)) {
-      count++;
-    }
-  }
-  return count;
-}
-
-int _outputLinks(SceneDocument document, String bodyId) {
-  var count = 0;
-  for (final cable in sceneCables(document)) {
-    if (cable.ownerId == bodyId) {
-      count++;
-    }
-  }
-  return count;
 }
 
 /// Store a cable no matter which end the drag started from.
@@ -779,48 +583,26 @@ void connectKitPorts({
   if (output.peerId.isNotEmpty && output.peerId == input.peerId) {
     return;
   }
-  switch (output.kind) {
-    case KitPortKind.llmConversation:
-      addKitLink(
-        kitApi: kitApi,
-        objectId: input.frameId,
-        to: output.peerId,
-        port: llmConversationPort,
-      );
-    case KitPortKind.repositoryOut:
-      connectRepositoryToTool(
-        kitApi: kitApi,
-        repositoryFrameId: output.frameId,
-        toolFrameId: input.peerId,
-      );
-    case KitPortKind.llmOutput:
-      connectLlmOutput(
-        kitApi: kitApi,
-        sourceBodyId: output.peerId,
-        targetBodyId: input.peerId,
-        port: switch (input.kind) {
-          KitPortKind.llmContext => llmContextPort,
-          KitPortKind.textIn => llmTextOutPort,
-          _ => llmInputPort,
-        },
-      );
-    case KitPortKind.toolOut:
-      attachToolKit(
-        kitApi: kitApi,
-        toolObjectId: output.frameId,
-        llmBodyId: input.peerId,
-      );
-    case KitPortKind.textOut:
-      connectTextToLlm(
-        kitApi: kitApi,
-        textObjectId: output.frameId,
-        llmBodyId: input.peerId,
-        port: input.kind == KitPortKind.llmContext
-            ? llmContextPort
-            : llmInputPort,
-      );
-    default:
-      break;
+  final spec = input.spec;
+  final owner = spec.linkOwner == PortLinkOwner.source ? output : input;
+  final other = identical(owner, output) ? input : output;
+  if (spec.multiplicity == PortMultiplicity.one) {
+    for (final cable in sceneCables(kitApi.store.document)) {
+      if (cable.toKind == input.kind &&
+          cable.toPeerId == input.peerId &&
+          cable.ownerId != owner.peerId) {
+        disconnectSceneCable(kitApi: kitApi, cable: cable);
+      }
+    }
+  }
+  addKitLink(
+    kitApi: kitApi,
+    objectId: owner.peerId,
+    to: other.peerId,
+    port: spec.storedPort,
+  );
+  if (spec.value == PortValue.tool) {
+    refreshLlmToolsChrome(kitApi: kitApi, llmBodyId: input.peerId);
   }
 }
 
@@ -866,7 +648,7 @@ void fitPlacedLlmKits(KitApi kitApi) {
       kitApi.updateFrame(id: frame.id, height: llmFrameHeight);
     }
     final current = kitApi.store.document.objectById(frame.id) ?? frame;
-    final body = _llmBody(kitApi.store.document, current);
+    final body = _kitBody(kitApi.store.document, current);
     final room = current.height - 24;
     if (body != null && body.height + 0.5 < room) {
       kitApi.updateFrame(
@@ -952,12 +734,13 @@ TextKitSummary textKitSummary(String content) {
   return TextKitSummary(firstLine: lines.first, moreLines: lines.length - 1);
 }
 
-SceneObject? _llmBody(SceneDocument document, SceneObject frame) {
+SceneObject? _kitBody(SceneDocument document, SceneObject frame) {
+  final kitId = kitIdOf(frame);
   for (final object in document.objects) {
-    if (!isLlmKitObject(object) || object.props[skapieRoleProp] != 'body') {
+    if (kitIdOf(object) != kitId || object.props[skapieRoleProp] != 'body') {
       continue;
     }
-    if (llmBodyBelongsToFrame(object, frame)) {
+    if (kitChildBelongsToFrame(object, frame)) {
       return object;
     }
   }
