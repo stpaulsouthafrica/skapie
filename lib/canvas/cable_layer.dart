@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:skapie/canvas/board_validation.dart';
 import 'package:skapie/canvas/cable_activity.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -14,6 +15,51 @@ import 'package:skapie/scene/scene.dart';
 const double _travelSeconds = cableFlashTravelSeconds;
 const double _settleSeconds = 0.52;
 const double _fadeSeconds = cableGlowFadeSeconds;
+
+/// How a cable that just appeared should be drawn.
+///
+/// A drag already showed the whole stroke, so the flash leaves from the
+/// port the pointer started on. A cable that was not dragged grows out of
+/// the output.
+class ConnectArrival {
+  const ConnectArrival({required this.grow, required this.towardSource});
+
+  /// The stroke reveals from the output. False when a drag already drew it.
+  final bool grow;
+
+  /// The flash runs from the input back toward the output.
+  final bool towardSource;
+
+  double draw(double eased) => grow ? eased.clamp(0.0, 1.0) : 1;
+
+  double flash(double eased) {
+    final t = eased.clamp(0.0, 1.0);
+    return towardSource ? 1 - t : t;
+  }
+}
+
+/// [dragFrameId] is the frame the pointer started on, kept from the drag
+/// that ended as this cable was stored.
+ConnectArrival connectArrival({
+  required bool sawDrag,
+  required String? dragFrameId,
+  required String sourceId,
+  required String targetFrameId,
+}) {
+  final fromSource = sawDrag && dragFrameId != null && dragFrameId == sourceId;
+  final fromTarget =
+      sawDrag &&
+      dragFrameId != null &&
+      dragFrameId == targetFrameId &&
+      dragFrameId != sourceId;
+  if (fromTarget) {
+    return const ConnectArrival(grow: false, towardSource: true);
+  }
+  if (fromSource) {
+    return const ConnectArrival(grow: false, towardSource: false);
+  }
+  return const ConnectArrival(grow: true, towardSource: false);
+}
 
 class CableLayer extends StatefulWidget {
   const CableLayer({
@@ -35,6 +81,8 @@ class CableLayer extends StatefulWidget {
     this.motion,
     this.retractions = const [],
     this.onRetractionDone,
+    this.validation = BoardValidation.empty,
+    this.invalidColor = const Color(0xFFB85C5C),
   });
 
   final CanvasCamera camera;
@@ -55,6 +103,10 @@ class CableLayer extends StatefulWidget {
   final List<RetractingCable> retractions;
   final ValueChanged<RetractingCable>? onRetractionDone;
 
+  /// Marked cables are drawn dashed in [invalidColor], never as live.
+  final BoardValidation validation;
+  final Color invalidColor;
+
   @override
   State<CableLayer> createState() => _CableLayerState();
 }
@@ -71,6 +123,7 @@ class _CableLayerState extends State<CableLayer>
   final _acts = <String, _Act>{};
   final _fading = <_Act>[];
   var _seenToolPulse = 0;
+  var _seenToolResultPulse = 0;
 
   @override
   void initState() {
@@ -124,6 +177,8 @@ class _CableLayerState extends State<CableLayer>
     }
     final painted = <PaintedCable>[
       for (final cable in scene) _paintOf(cable),
+      if (!widget.previewOnly)
+        for (final cable in widget.validation.extraCables) _paintOf(cable),
       ..._retracts(),
       ..._drag(),
     ];
@@ -151,8 +206,13 @@ class _CableLayerState extends State<CableLayer>
       if (_known.contains(cable.id) || _arrivals.containsKey(cable.id)) {
         continue;
       }
-      final grewFromDrag = fromDrag && cable.sourceId == dragSource;
-      _arrivals[cable.id] = _Arrival(_clock, grow: !grewFromDrag);
+      final plan = connectArrival(
+        sawDrag: fromDrag,
+        dragFrameId: dragSource,
+        sourceId: cable.sourceId,
+        targetFrameId: cable.targetFrameId,
+      );
+      _arrivals[cable.id] = _Arrival(_clock, plan);
       widget.motion?.hold(cable.id);
     }
     _known = ids;
@@ -188,7 +248,8 @@ class _CableLayerState extends State<CableLayer>
   _Pose _pose(_Arrival arrival, double elapsed) {
     final travel = (elapsed / _travelSeconds).clamp(0.0, 1.0);
     final eased = 1 - math.pow(1 - travel, 3).toDouble();
-    final draw = arrival.grow ? eased : 1.0;
+    final draw = arrival.plan.draw(eased);
+    final head = arrival.plan.flash(eased);
     final intoSettle = elapsed <= _travelSeconds
         ? 0.0
         : ((elapsed - _travelSeconds) / _settleSeconds).clamp(0.0, 1.0);
@@ -205,11 +266,12 @@ class _CableLayerState extends State<CableLayer>
         : (intoSettle / 0.5).clamp(0.0, 1.0);
     return _Pose(
       draw: draw,
-      flash: flashAlpha > 0.01 ? eased : null,
+      flash: flashAlpha > 0.01 ? head : null,
       flashAlpha: flashAlpha,
       arrival: bloom,
       shown: shown,
       glow: bloom * shown,
+      towardSource: arrival.plan.towardSource,
     );
   }
 
@@ -221,6 +283,17 @@ class _CableLayerState extends State<CableLayer>
   }
 
   PaintedCable _paintOf(SceneCable cable) {
+    final mark = widget.validation.markOf(cable.id);
+    if (mark != null) {
+      return PaintedCable(
+        from: _screen(_shown(cable.from, cable.sourceId)),
+        to: _screen(_shown(cable.to, cable.targetFrameId)),
+        color: widget.invalidColor,
+        invalid: true,
+        danglingStart: mark.dangling == CableDangling.start,
+        danglingEnd: mark.dangling == CableDangling.end,
+      );
+    }
     final arrival = _arrivals[cable.id];
     final pose = arrival == null
         ? null
@@ -235,25 +308,44 @@ class _CableLayerState extends State<CableLayer>
       flashAlpha: pose?.flashAlpha ?? live?.alpha ?? 1,
       arrival: pose?.arrival ?? 0,
       rest: live?.rest ?? 0,
-      flashTowardSource: pose == null && (live?.towardSource ?? false),
-      arrivalAtStart: pose == null && (live?.towardSource ?? false),
+      flashTowardSource: pose?.towardSource ?? (live?.towardSource ?? false),
+      arrivalAtStart: pose?.towardSource ?? (live?.towardSource ?? false),
     );
   }
 
   _LiveFlash? _liveOf(SceneCable cable) {
-    final act = _actFor(cable.id);
-    if (act == null) {
-      return null;
+    _LiveFlash? rest;
+    for (final act in [..._acts.values, ..._fading]) {
+      if (!act.cableIds.contains(cable.id)) {
+        continue;
+      }
+      final flash = _flashOf(act, cable);
+      if (flash == null) {
+        continue;
+      }
+      if (flash.head != null) {
+        return flash;
+      }
+      rest ??= flash;
     }
+    return rest;
+  }
+
+  _LiveFlash? _flashOf(_Act act, SceneCable cable) {
     final now = _clock;
     final elapsed = now - act.born;
+    if (elapsed < 0) {
+      return null;
+    }
     final sinceFade = act.released ? now - act.fadeAt : null;
     if (sinceFade != null && sinceFade >= _fadeSeconds) {
       return null;
     }
     final envelope = cableGlowEnvelope(elapsed: elapsed, sinceFade: sinceFade);
     final towardSource = act.towardSource.contains(cable.id);
-    if (act.kind == _ActKind.tool && (sinceFade == null || sinceFade < 0)) {
+    final sequencing =
+        act.kind == _ActKind.tool || act.kind == _ActKind.toolResult;
+    if (sequencing && elapsed >= 0 && (sinceFade == null || sinceFade < 0)) {
       final index = act.cableIds.indexOf(cable.id);
       final active = toolFlashIndex(
         elapsed: elapsed,
@@ -266,15 +358,14 @@ class _CableLayerState extends State<CableLayer>
         elapsed: elapsed,
         count: act.cableIds.length,
       );
-      final eased = 1 - math.pow(1 - travel, 3).toDouble();
       return _LiveFlash(
-        head: towardSource ? 1 - eased : eased,
+        head: toolFlashHead(travel: travel, towardSource: towardSource),
         alpha: travel < 0.07 ? travel / 0.07 : 1,
         rest: 0.42 * envelope,
         towardSource: towardSource,
       );
     }
-    if (act.kind != _ActKind.tool &&
+    if (!sequencing &&
         elapsed < _travelSeconds &&
         (sinceFade == null || sinceFade < 0)) {
       final travel = elapsed / _travelSeconds;
@@ -285,21 +376,7 @@ class _CableLayerState extends State<CableLayer>
         rest: 0.55 * envelope,
       );
     }
-    return _LiveFlash(rest: 0.62 * envelope);
-  }
-
-  _Act? _actFor(String cableId) {
-    for (final act in _acts.values) {
-      if (act.cableIds.contains(cableId)) {
-        return act;
-      }
-    }
-    for (final act in _fading) {
-      if (act.cableIds.contains(cableId)) {
-        return act;
-      }
-    }
-    return null;
+    return _LiveFlash(rest: 0.62 * envelope, towardSource: towardSource);
   }
 
   void _syncActs(List<SceneCable> cables) {
@@ -329,12 +406,20 @@ class _CableLayerState extends State<CableLayer>
     if (activity.toolPulse != _seenToolPulse) {
       _seenToolPulse = activity.toolPulse;
     }
+    final resultPulsed =
+        activity.toolResultPulse != _seenToolResultPulse &&
+        activity.toolResultFrameId != null &&
+        activity.toolResultBodyId != null;
+    if (activity.toolResultPulse != _seenToolResultPulse) {
+      _seenToolResultPulse = activity.toolResultPulse;
+    }
     final tool = liveTool ?? (pulsed ? activity.toolPulseFrameId : null);
     final toolBody = liveTool != null
         ? activity.runningBodyId
         : (pulsed ? activity.toolPulseBodyId : null);
+    final requestToken = tool == null ? null : 'tool:$tool';
     want(
-      tool == null || toolBody == null ? null : 'tool:$tool',
+      requestToken == null || toolBody == null ? null : requestToken,
       _ActKind.tool,
       cablesForToolCall(
         cables: cables,
@@ -342,6 +427,33 @@ class _CableLayerState extends State<CableLayer>
         llmBodyId: toolBody ?? '',
       ),
     );
+    if (liveTool == null && requestToken != null) {
+      final act = _acts[requestToken];
+      if (act != null) {
+        _release(act);
+      }
+    }
+    final resultTool = resultPulsed ? activity.toolResultFrameId : null;
+    final resultBody = resultPulsed ? activity.toolResultBodyId : null;
+    if (resultTool != null && resultBody != null) {
+      final request = _acts['tool:$resultTool'];
+      if (request != null && !request.released) {
+        _release(request);
+      }
+      _spawnToolResult(
+        token: 'tool-res:$resultTool',
+        members: cablesForToolCall(
+          cables: cables,
+          toolFrameId: resultTool,
+          llmBodyId: resultBody,
+          returning: true,
+        ),
+        born: request != null && request.fadeAt > _clock
+            ? request.fadeAt
+            : _clock,
+        desired: desired,
+      );
+    }
     final writing = activity.writingBodyId;
     want(writing == null ? null : 'out:$writing', _ActKind.output, [
       for (final cable in cables)
@@ -383,8 +495,9 @@ class _CableLayerState extends State<CableLayer>
     };
     final towardSource = {
       for (final cable in members)
-        if (kind == _ActKind.tool ||
-            cableActivityTowardSource(cable, widget.activity))
+        if (kind != _ActKind.toolResult &&
+            (kind == _ActKind.tool ||
+                cableActivityTowardSource(cable, widget.activity)))
           cable.id,
     };
     final existing = _acts[token];
@@ -432,11 +545,37 @@ class _CableLayerState extends State<CableLayer>
     act.fadeAt = activityFadeAt(
       born: act.born,
       now: now,
-      cycle: act.kind == _ActKind.tool
+      cycle: act.kind == _ActKind.tool || act.kind == _ActKind.toolResult
           ? count * _travelSeconds
           : _travelSeconds,
-      finishCycle: act.kind == _ActKind.tool,
+      finishCycle: act.kind == _ActKind.tool || act.kind == _ActKind.toolResult,
     );
+  }
+
+  void _spawnToolResult({
+    required String token,
+    required List<SceneCable> members,
+    required double born,
+    required Set<String> desired,
+  }) {
+    if (members.isEmpty) {
+      return;
+    }
+    desired.add(token);
+    if (_acts.containsKey(token)) {
+      return;
+    }
+    final act = _Act(
+      kind: _ActKind.toolResult,
+      cableIds: [for (final cable in members) cable.id],
+      frames: {
+        for (final cable in members) ...[cable.sourceId, cable.targetFrameId],
+      },
+      towardSource: const {},
+      born: born,
+    );
+    _acts[token] = act;
+    _release(act);
   }
 
   void _publishGlow({required bool notify}) {
@@ -528,7 +667,7 @@ class _CableLayerState extends State<CableLayer>
     if (act.released) {
       return _clock < act.fadeAt + _fadeSeconds;
     }
-    if (act.kind == _ActKind.tool) {
+    if (act.kind == _ActKind.tool || act.kind == _ActKind.toolResult) {
       return true;
     }
     if (act.kind == _ActKind.run) {
@@ -552,19 +691,28 @@ class _CableLayerState extends State<CableLayer>
       return const [];
     }
     final snapped = _snap(kind, cursor, frame);
-    final target = snapped == null
+    final refused = snapped == null
+        ? cableDragRefusal(widget.document, frame.id, kind, cursor)
+        : null;
+    final landing = snapped ?? refused?.port;
+    final target = landing == null
         ? null
-        : widget.document.objectById(snapped.frameId);
+        : widget.document.objectById(landing.frameId);
     final fromIsRight = kitPortIsOutput(kind);
-    final toIsRight = snapped == null
+    final toIsRight = landing == null
         ? !fromIsRight
-        : kitPortIsOutput(snapped.kind);
+        : kitPortIsOutput(landing.kind);
     return [
       PaintedCable(
         from: _screen(_shown(_center(frame, kind), frame.id)),
-        to: _screen(snapped?.center ?? cursor),
-        color: target == null ? kitAccentColor(frame) : kitAccentColor(target),
+        to: _screen(landing?.center ?? cursor),
+        color: refused != null
+            ? widget.invalidColor
+            : target == null
+            ? kitAccentColor(frame)
+            : kitAccentColor(target),
         preview: true,
+        invalid: refused != null,
         exitsRight: fromIsRight,
         entersFromLeft: !toIsRight,
       ),
@@ -641,7 +789,7 @@ class _CablePainter extends CustomPainter {
   }
 }
 
-enum _ActKind { seed, tool, output, run }
+enum _ActKind { seed, tool, toolResult, output, run }
 
 class _Act {
   _Act({
@@ -676,10 +824,10 @@ class _LiveFlash {
 }
 
 class _Arrival {
-  const _Arrival(this.start, {required this.grow});
+  const _Arrival(this.start, this.plan);
 
   final double start;
-  final bool grow;
+  final ConnectArrival plan;
 }
 
 class _Pose {
@@ -690,6 +838,7 @@ class _Pose {
     required this.arrival,
     required this.shown,
     required this.glow,
+    required this.towardSource,
   });
 
   final double draw;
@@ -698,4 +847,5 @@ class _Pose {
   final double arrival;
   final double shown;
   final double glow;
+  final bool towardSource;
 }

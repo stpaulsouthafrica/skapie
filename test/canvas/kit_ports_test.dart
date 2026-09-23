@@ -606,9 +606,39 @@ void main() {
     );
     expect(members.map((cable) => cable.port), [llmToolsPort, repositoryPort]);
     expect(
+      cablesForToolCall(
+        cables: sceneCables(kitApi.store.document),
+        toolFrameId: tool.first,
+        llmBodyId: llm.last,
+        returning: true,
+      ).map((cable) => cable.port),
+      [repositoryPort, llmToolsPort],
+    );
+    expect(
       toolFrameIdForName(kitApi.store.document, llm.last, 'repo_list_files'),
       tool.first,
     );
+    final request = CableActivity(
+      runningBodyId: llm.last,
+      activeToolFrameId: tool.first,
+    );
+    final result = CableActivity(
+      toolResultPulse: 1,
+      toolResultFrameId: tool.first,
+      toolResultBodyId: llm.last,
+    );
+    final toolsCable = members.first;
+    final repoCable = members.last;
+    expect(cableActivityTowardSource(toolsCable, request), isTrue);
+    expect(cableCarriesActivity(toolsCable, request), isTrue);
+    expect(cableActivityTowardSource(toolsCable, result), isFalse);
+    expect(cableCarriesActivity(toolsCable, result), isTrue);
+    expect(cableActivityTowardSource(repoCable, result), isFalse);
+    expect(cableCarriesActivity(repoCable, result), isTrue);
+    expect(toolFlashHead(travel: 0, towardSource: true), closeTo(1, 0.001));
+    expect(toolFlashHead(travel: 1, towardSource: true), closeTo(0, 0.001));
+    expect(toolFlashHead(travel: 0, towardSource: false), closeTo(0, 0.001));
+    expect(toolFlashHead(travel: 1, towardSource: false), closeTo(1, 0.001));
   });
 
   test('a run needs Output or Conversation', () {

@@ -20,6 +20,9 @@ class PaintedCable {
     this.arrivalAtStart = false,
     this.exitsRight = true,
     this.entersFromLeft = true,
+    this.invalid = false,
+    this.danglingStart = false,
+    this.danglingEnd = false,
   });
 
   final Offset from;
@@ -57,6 +60,13 @@ class PaintedCable {
 
   /// A left-edge port is approached from the left. A right-edge port from the right.
   final bool entersFromLeft;
+
+  /// Dashed, in [color], with no flash. Nothing flows along it.
+  final bool invalid;
+
+  /// This end has nothing to plug into; it gets a cross.
+  final bool danglingStart;
+  final bool danglingEnd;
 }
 
 Path cableCurve(
@@ -97,6 +107,10 @@ void paintCables(Canvas canvas, List<PaintedCable> cables, double zoom) {
     }
     final metric = metrics.first;
     if (metric.length <= 0) {
+      continue;
+    }
+    if (cable.invalid) {
+      _invalid(canvas, cable, metric, zoom);
       continue;
     }
     final start = cable.drawStart.clamp(0.0, 1.0);
@@ -163,6 +177,44 @@ void paintCables(Canvas canvas, List<PaintedCable> cables, double zoom) {
     if (flow != null) {
       _streak(canvas, metric, flow, cable.color, zoom, alpha: 0.72, wide: true);
     }
+  }
+}
+
+void _invalid(
+  Canvas canvas,
+  PaintedCable cable,
+  ui.PathMetric metric,
+  double zoom,
+) {
+  final dash = 6.0 * zoom;
+  final gap = 4.0 * zoom;
+  final stroke = Paint()
+    ..color = cable.color.withValues(alpha: cable.preview ? 0.8 : 0.95)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.4 * zoom
+    ..strokeCap = StrokeCap.round;
+  for (var at = 0.0; at < metric.length; at += dash + gap) {
+    final end = (at + dash).clamp(0.0, metric.length);
+    canvas.drawPath(metric.extractPath(at, end), stroke);
+  }
+  final cross = 4.0 * zoom;
+  for (final (dangling, at) in [
+    (cable.danglingStart, cable.from),
+    (cable.danglingEnd, cable.to),
+  ]) {
+    if (!dangling) {
+      continue;
+    }
+    canvas.drawLine(
+      at + Offset(-cross, -cross),
+      at + Offset(cross, cross),
+      stroke,
+    );
+    canvas.drawLine(
+      at + Offset(-cross, cross),
+      at + Offset(cross, -cross),
+      stroke,
+    );
   }
 }
 

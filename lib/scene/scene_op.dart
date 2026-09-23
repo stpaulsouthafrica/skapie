@@ -121,6 +121,22 @@ final class UpdateObjectProps extends SceneOp {
   }
 }
 
+/// Several ops as one undo step.
+final class SceneBatch extends SceneOp {
+  const SceneBatch(this.ops);
+
+  final List<SceneOp> ops;
+
+  @override
+  SceneDocument apply(SceneDocument document) {
+    var next = document;
+    for (final op in ops) {
+      next = op.apply(next);
+    }
+    return next;
+  }
+}
+
 final class SetObjectLocked extends SceneOp {
   const SetObjectLocked({required this.id, required this.locked});
 

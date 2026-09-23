@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_models_catalog.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/board_validation.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/paint/paint.dart';
@@ -120,11 +121,13 @@ class _LlmKitInputState extends State<LlmKitInput> {
   String get _cableInput =>
       llmCableInput(widget.kitApi.store.document, widget.body.id).trim();
 
+  List<BoardIssue> get _blockers => validateBoard(
+    widget.kitApi.store.document,
+  ).runBlockers(widget.body.id);
+
   Future<void> _submit() async {
     final prompt = _cableInput;
-    if (prompt.isEmpty ||
-        !llmRunHasSink(widget.kitApi.store.document, widget.body.id) ||
-        _busy) {
+    if (_blockers.isNotEmpty || _busy) {
       return;
     }
     setState(() => _busy = true);
@@ -142,12 +145,8 @@ class _LlmKitInputState extends State<LlmKitInput> {
   @override
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
-    final needsInput = _cableInput.isEmpty;
-    final needsSink = !llmRunHasSink(
-      widget.kitApi.store.document,
-      widget.body.id,
-    );
-    final blocked = needsInput || needsSink || _busy;
+    final blockers = _blockers;
+    final blocked = blockers.isNotEmpty || _busy;
     final choices = _choices;
     final selected = _selectedModel;
     return Column(
@@ -180,20 +179,13 @@ class _LlmKitInputState extends State<LlmKitInput> {
             onChanged: _busy ? null : _onModel,
           ),
         ),
-        if (needsInput)
+        for (final (index, issue) in blockers.indexed)
           Padding(
+            key: ValueKey('llm-kit-run-blocker-$index'),
             padding: const EdgeInsets.only(top: 8),
             child: Text(
-              'Needs input',
-              style: TextStyle(color: tokens.muted, fontSize: 11),
-            ),
-          )
-        else if (needsSink)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              'Needs Output or Conversation',
-              style: TextStyle(color: tokens.muted, fontSize: 11),
+              issue.message,
+              style: TextStyle(color: tokens.danger, fontSize: 11),
             ),
           ),
         const SizedBox(height: 8),

@@ -414,6 +414,21 @@ class KitApi {
     store.apply(SetObjectLocked(id: id, locked: locked));
   }
 
+  /// Patch several objects as one undo step.
+  void updatePropsMany(Map<String, Map<String, Object?>> patches) {
+    store.apply(
+      SceneBatch([
+        for (final entry in patches.entries)
+          UpdateObjectProps(entry.key, entry.value),
+      ]),
+    );
+  }
+
+  /// Remove several objects as one undo step.
+  void removeObjects(List<String> ids) {
+    store.apply(SceneBatch([for (final id in ids) RemoveObject(id)]));
+  }
+
   void registerKit(KitRecipe recipe) {
     if (_kits.containsKey(recipe.id)) {
       throw StateError('Duplicate kit id: ${recipe.id}');

@@ -161,9 +161,7 @@ void removeKitSelection({required KitApi kitApi, required String selectedId}) {
       targets.add(attached);
     }
   }
-  for (final member in members.reversed) {
-    kitApi.removeObject(member.id);
-  }
+  kitApi.removeObjects([for (final member in members.reversed) member.id]);
   for (final target in targets) {
     if (kitApi.store.document.objectById(target) != null) {
       refreshLlmToolsChrome(kitApi: kitApi, llmBodyId: target);

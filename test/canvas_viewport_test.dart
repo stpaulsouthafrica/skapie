@@ -6,6 +6,8 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/canvas/board_validation.dart';
+import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -726,5 +728,163 @@ void main() {
     final body = store.document.objectById(llm.last)!;
     expect(body.props['prompt'], '');
     expect(body.props['reply'], '');
+    expect(
+      find.text("Can't run LLM: Needs Output or Conversation"),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Run with an empty Input opens the board issues for that LLM', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final reply = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(500, 0),
+    );
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: llm.last,
+      targetBodyId: reply.first,
+      port: llmTextOutPort,
+    );
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(
+            store: store,
+            kitApi: kitApi,
+            agentController: controller,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('board-issues-button')), findsOneWidget);
+    expect(find.text('1 issue blocks Run'), findsOneWidget);
+    await tester.tapAt(
+      tester.getCenter(find.byKey(const Key('llm-kit-run-button'))),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('board-run-notice')), findsOneWidget);
+    expect(find.text("Can't run LLM: Needs input"), findsOneWidget);
+    expect(find.byKey(const Key('board-issues-panel')), findsOneWidget);
+    expect(find.byKey(const Key('board-issue-row')), findsOneWidget);
+    expect(store.document.objectById(llm.last)!.props['prompt'], '');
+  });
+
+  testWidgets('Text Out over LLM Tools shows why and does not connect', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-420, -60),
+    );
+    kitApi.instantiate(harnessLlmKitId, origin: const Offset(40, -100));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(store: store, kitApi: kitApi),
+        ),
+      ),
+    );
+    final state = tester.state<CanvasViewportState>(
+      find.byType(CanvasViewport),
+    );
+    final viewport = find.byType(CanvasViewport);
+    final size = tester.getSize(viewport);
+    final ports = kitPorts(store.document);
+    Offset screen(KitPortKind kind) =>
+        tester.getTopLeft(viewport) +
+        worldToScreen(
+          ports.firstWhere((port) => port.kind == kind).center,
+          size,
+          state.camera,
+        );
+
+    final gesture = await tester.startGesture(
+      screen(KitPortKind.textOut),
+      kind: PointerDeviceKind.mouse,
+    );
+    await gesture.moveTo(screen(KitPortKind.llmTools));
+    await tester.pump();
+    expect(find.text('Tools takes Tool, not Text'), findsOneWidget);
+    await gesture.up();
+    await tester.pump();
+
+    expect(kitLinksOf(store.document.objectById(text.first)!), isEmpty);
+    expect(
+      find.text('Not connected: Tools takes Tool, not Text'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a stale cable after a delete is drawn and can be cut', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-220, -60),
+    );
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(200, -40),
+    );
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: llm.last,
+    );
+    removeKitSelection(kitApi: kitApi, selectedId: llm.first);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(store: store, kitApi: kitApi),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('1 warning'), findsOneWidget);
+    final state = tester.state<CanvasViewportState>(
+      find.byType(CanvasViewport),
+    );
+    final viewport = find.byType(CanvasViewport);
+    final size = tester.getSize(viewport);
+    final stale = validateBoard(store.document).extraCables.single;
+    final from = worldToScreen(stale.from, size, state.camera);
+    final to = worldToScreen(stale.to, size, state.camera);
+    final metric = cableCurve(
+      from,
+      to,
+      state.camera.zoom,
+    ).computeMetrics().first;
+    final mid = metric.getTangentForOffset(metric.length / 2)!.position;
+    final global = tester.getTopLeft(viewport) + mid;
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: global);
+    await gesture.moveTo(global);
+    await tester.pump();
+    expect(find.byKey(const Key('cable-cut')), findsOneWidget);
+    await gesture.down(global);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(kitLinksOf(store.document.objectById(text.first)!), isEmpty);
+    expect(validateBoard(store.document).issues, isEmpty);
+    expect(find.byKey(const Key('board-issues-button')), findsNothing);
   });
 }

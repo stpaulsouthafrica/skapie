@@ -8,9 +8,6 @@
 
 **Implementation detail.**
 
-1. Introduce a small built-in port descriptor and move current kit-ID switches behind it. Keep the current scene link format readable while adding stable endpoint IDs only where migration requires them. Phase 13 can later publish this internal contract to user packages; do not design the full external schema now.
-   - **What this is.** One shared description of each port (id, direction, value type, multiplicity) so the canvas stops hard-coding kit IDs for every new kit.
-   - **How to test.** Open an existing board with LLM, Text, Conversation, Repository, and tool kits. Confirm every port row and cable still appear. Add one more Text → LLM Input cable. Confirm it connects the same way as before. In the diff, new port look-up should go through the descriptor, not a fresh kit-ID branch in canvas code.
 
 2. Validate type compatibility, multiplicity, missing required inputs, stale endpoints, and disconnected grants. Detect cycles only for connections whose value semantics would make them invalid; an unused visual loop need not trigger a generic graph engine. Make validation accessible from the board and Run button. A link can be drawn only when valid or explicitly marked invalid.
    - **What this is.** The board refuses or clearly marks bad cables before Run, including wrong types, too many inputs, dead ends, and grants that are no longer live.

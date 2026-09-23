@@ -504,6 +504,14 @@ void main() {
     expect(controller.toolPulse, 1);
     expect(controller.toolPulseFrameId, tool.first);
     expect(controller.toolPulseBodyId, llm.last);
+    expect(controller.toolResultPulse, 1);
+    expect(controller.toolResultFrameId, tool.first);
+    expect(controller.toolResultBodyId, llm.last);
+    final activity = controller.toolActivitiesFor(llm.last).single;
+    expect(activity.name, 'list_kits');
+    expect(activity.state, AgentToolActivityState.completed);
+    expect(activity.result, contains('"kits"'));
+    expect(activity.result, contains(harnessLlmKitId));
   });
 
   test('sendUser does not run without Output or Conversation', () async {
@@ -531,6 +539,26 @@ void main() {
       kitApi.store.document.objectById(llm.last)!.props['reply'],
       'Echo: hello',
     );
+  });
+
+  test('sendUser refuses a run whose read tool has no Repository', () async {
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    sinkLlm(kitApi, llm.last);
+    final tool = kitApi.instantiate(
+      worldToolKitId('repo_list_files'),
+      origin: const Offset(-400, 0),
+    );
+    attachToolKit(kitApi: kitApi, toolObjectId: tool.first, llmBodyId: llm.last);
+
+    await controller.sendUser('list files', targetBodyId: llm.last);
+
+    expect(kitApi.store.document.objectById(llm.last)!.props['prompt'], '');
+    expect(controller.runningBodyId, isNull);
   });
 
   test('LLM Output does not write into a Conversation kit', () async {

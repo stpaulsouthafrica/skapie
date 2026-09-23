@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/canvas/board_validation.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/agent/agent_models_catalog.dart';
 import 'package:skapie/agent/agent_prefs.dart';
@@ -72,6 +73,11 @@ class AgentController extends ChangeNotifier {
   int toolPulse = 0;
   String? toolPulseFrameId;
   String? toolPulseBodyId;
+
+  /// Last tool result. The cable layer flashes back toward the LLM.
+  int toolResultPulse = 0;
+  String? toolResultFrameId;
+  String? toolResultBodyId;
 
   /// Increments when a reply is written. The viewport plays one output flash.
   int outputPulse = 0;
@@ -153,7 +159,9 @@ class AgentController extends ChangeNotifier {
     if (prompt.isEmpty || bodyId.isEmpty) {
       return;
     }
-    if (!llmRunHasSink(kitApi.store.document, bodyId)) {
+    final blockers = validateBoard(kitApi.store.document)
+        .runBlockers(bodyId, inputSupplied: true);
+    if (blockers.isNotEmpty) {
       return;
     }
     final target = kitApi.store.document.objectById(bodyId);
@@ -369,6 +377,12 @@ class AgentController extends ChangeNotifier {
         );
       }
       _markToolUsed(activeToolFrameId);
+      final frameId = activeToolFrameId ?? toolPulseFrameId;
+      if (frameId != null) {
+        toolResultFrameId = frameId;
+        toolResultBodyId = bodyId;
+        toolResultPulse++;
+      }
       activeToolFrameId = null;
       notifyListeners();
     }

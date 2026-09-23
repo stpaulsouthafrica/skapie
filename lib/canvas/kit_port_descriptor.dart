@@ -23,7 +23,18 @@ enum PortDirection { input, output }
 
 /// What a cable carries. An output carries one value; an input lists the
 /// values it takes.
-enum PortValue { text, reply, conversation, transcript, tool, repository }
+enum PortValue {
+  text('Text'),
+  reply('Reply'),
+  conversation('Conversation'),
+  transcript('Transcript'),
+  tool('Tool'),
+  repository('Repository');
+
+  const PortValue(this.label);
+
+  final String label;
+}
 
 enum PortMultiplicity { one, many }
 
@@ -64,6 +75,10 @@ class KitPortSpec {
     this.linkOwner = PortLinkOwner.source,
     this.affectsRun = true,
     this.requiresProp,
+    this.requiredGroup,
+    this.requiredMessage,
+    this.liveProp,
+    this.liveMessage,
   });
 
   /// Stable endpoint id within the kit.
@@ -86,6 +101,15 @@ class KitPortSpec {
 
   /// The port exists only while this frame prop is `true`.
   final String? requiresProp;
+
+  /// Ports sharing a group need at least one cable between them.
+  final String? requiredGroup;
+  final String? requiredMessage;
+
+  /// Outputs only. What this port carries is live only while this frame prop
+  /// is non-empty.
+  final String? liveProp;
+  final String? liveMessage;
 
   bool get isOutput => direction == PortDirection.output;
   String get storedPort => linkPort ?? id;
@@ -145,6 +169,8 @@ const List<KitPortSpec> repositoryKitPorts = [
     direction: PortDirection.output,
     value: PortValue.repository,
     placement: PortPlacement.footer(PortSide.right),
+    liveProp: repositoryPathProp,
+    liveMessage: 'Repository has no folder',
   ),
 ];
 
@@ -158,6 +184,8 @@ const List<KitPortSpec> worldToolKitPorts = [
     placement: PortPlacement.middle(PortSide.left),
     multiplicity: PortMultiplicity.one,
     requiresProp: 'requiresRepository',
+    requiredGroup: repositoryPort,
+    requiredMessage: 'Repository grant missing',
   ),
   KitPortSpec(
     id: 'out',
@@ -169,6 +197,9 @@ const List<KitPortSpec> worldToolKitPorts = [
   ),
 ];
 
+const String _llmSink = 'sink';
+const String _llmSinkMessage = 'Needs Output or Conversation';
+
 const List<KitPortSpec> llmKitPorts = [
   KitPortSpec(
     id: llmInputPort,
@@ -179,6 +210,8 @@ const List<KitPortSpec> llmKitPorts = [
     accepts: {PortValue.text, PortValue.reply},
     placement: PortPlacement.row(0, PortSide.left),
     peer: PortPeer.body,
+    requiredGroup: llmInputPort,
+    requiredMessage: 'Needs input',
   ),
   KitPortSpec(
     id: llmContextPort,
@@ -207,6 +240,8 @@ const List<KitPortSpec> llmKitPorts = [
     value: PortValue.conversation,
     placement: PortPlacement.row(3, PortSide.right),
     peer: PortPeer.body,
+    requiredGroup: _llmSink,
+    requiredMessage: _llmSinkMessage,
   ),
   KitPortSpec(
     id: 'output',
@@ -216,6 +251,8 @@ const List<KitPortSpec> llmKitPorts = [
     value: PortValue.reply,
     placement: PortPlacement.row(4, PortSide.right),
     peer: PortPeer.body,
+    requiredGroup: _llmSink,
+    requiredMessage: _llmSinkMessage,
   ),
 ];
 
@@ -233,6 +270,26 @@ final Map<KitPortKind, KitPortSpec> _specsByKind = {
 };
 
 KitPortSpec kitPortSpecOf(KitPortKind kind) => _specsByKind[kind]!;
+
+List<KitPortSpec> get allKitPortSpecs => _specsByKind.values.toList();
+
+/// Why [a] and [b] cannot be cabled, or null when they can.
+String? kitPortRefusal(KitPortKind a, KitPortKind b) {
+  final first = kitPortSpecOf(a);
+  final second = kitPortSpecOf(b);
+  if (first.isOutput == second.isOutput) {
+    return 'Connect an output to an input';
+  }
+  final output = first.isOutput ? first : second;
+  final input = first.isOutput ? second : first;
+  if (input.takes(output.value)) {
+    return null;
+  }
+  final takes = (input.accepts.isEmpty ? {input.value} : input.accepts)
+      .map((value) => value.label)
+      .join(' or ');
+  return '${input.label} takes $takes, not ${output.value.label}';
+}
 
 /// Ports this kit frame shows right now.
 List<KitPortSpec> kitPortSpecsFor(SceneObject frame) {

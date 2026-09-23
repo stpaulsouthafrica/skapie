@@ -74,6 +74,15 @@ double toolFlashTravel({required double elapsed, required int count}) {
   return (along / cableFlashTravelSeconds).clamp(0.0, 1.0);
 }
 
+/// 0 is the cable's [SceneCable.from], 1 is [SceneCable.to].
+/// A request travels toward the source (1 → 0). A result travels toward the LLM (0 → 1).
+double toolFlashHead({required double travel, required bool towardSource}) {
+  final t = travel.clamp(0.0, 1.0);
+  final remaining = 1 - t;
+  final eased = 1 - remaining * remaining * remaining;
+  return towardSource ? 1 - eased : eased;
+}
+
 /// Per-frame glow the kit cards read. The cable layer publishes it.
 class ActivityGlow extends ChangeNotifier {
   Map<String, double> _levels = const {};
@@ -112,6 +121,9 @@ class CableActivity {
     this.toolPulse = 0,
     this.toolPulseFrameId,
     this.toolPulseBodyId,
+    this.toolResultPulse = 0,
+    this.toolResultFrameId,
+    this.toolResultBodyId,
     this.writingBodyId,
   });
 
@@ -130,6 +142,11 @@ class CableActivity {
   final int toolPulse;
   final String? toolPulseFrameId;
   final String? toolPulseBodyId;
+
+  /// Increments when a tool kit returns data for the next HTTP request.
+  final int toolResultPulse;
+  final String? toolResultFrameId;
+  final String? toolResultBodyId;
 
   /// LLM body currently writing its reply onto output cables.
   final String? writingBodyId;
@@ -152,19 +169,19 @@ bool cableCarriesActivity(SceneCable cable, CableActivity activity) {
   if (writing != null && cableWritesReply(cable, writing)) {
     return true;
   }
-  final tool = activity.activeToolFrameId;
-  final body = activity.runningBodyId;
-  if (tool != null && body != null) {
-    final toolCable =
-        cable.port == llmToolsPort &&
-        cable.sourceId == tool &&
-        cable.targetBodyId == body;
-    final repositoryCable =
-        cable.port == repositoryPort && cable.targetFrameId == tool;
-    if (toolCable || repositoryCable) {
-      return true;
-    }
+  if (_toolCallTouches(
+        cable,
+        activity.toolResultFrameId,
+        activity.toolResultBodyId,
+      ) ||
+      _toolCallTouches(
+        cable,
+        activity.activeToolFrameId,
+        activity.runningBodyId,
+      )) {
+    return true;
   }
+  final body = activity.runningBodyId;
   if (body != null &&
       activity.seedPorts.contains(cable.port) &&
       cable.targetBodyId == body) {
@@ -174,10 +191,12 @@ bool cableCarriesActivity(SceneCable cable, CableActivity activity) {
 }
 
 /// Tool calls travel from the LLM, through the tool kit, into the repository.
+/// The result travels back along the same cables.
 List<SceneCable> cablesForToolCall({
   required List<SceneCable> cables,
   required String toolFrameId,
   required String llmBodyId,
+  bool returning = false,
 }) {
   final tools = [
     for (final cable in cables)
@@ -191,14 +210,31 @@ List<SceneCable> cablesForToolCall({
       if (cable.port == repositoryPort && cable.targetFrameId == toolFrameId)
         cable,
   ]..sort((a, b) => a.id.compareTo(b.id));
-  return [...tools, ...repositories];
+  final members = [...tools, ...repositories];
+  if (!returning) {
+    return members;
+  }
+  return members.reversed.toList();
 }
 
-/// Tool calls travel from the LLM, through the tool kit, into the repository.
-/// That is the opposite direction from how those cables are drawn.
+/// Request flashes from the LLM toward the tool and repository.
+/// A result flash is the opposite direction and uses [toolFlashHead].
 bool cableActivityTowardSource(SceneCable cable, CableActivity activity) {
-  final tool = activity.activeToolFrameId ?? activity.toolPulseFrameId;
-  final body = activity.runningBodyId ?? activity.toolPulseBodyId;
+  if (_toolCallTouches(
+    cable,
+    activity.toolResultFrameId,
+    activity.toolResultBodyId,
+  )) {
+    return false;
+  }
+  return _toolCallTouches(
+    cable,
+    activity.activeToolFrameId ?? activity.toolPulseFrameId,
+    activity.runningBodyId ?? activity.toolPulseBodyId,
+  );
+}
+
+bool _toolCallTouches(SceneCable cable, String? tool, String? body) {
   if (tool == null || body == null) {
     return false;
   }

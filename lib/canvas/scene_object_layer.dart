@@ -25,6 +25,7 @@ class SceneObjectLayer extends StatelessWidget {
     this.glow,
     this.resizeFrameId,
     this.resizeHeight,
+    this.blockedRunBodyIds = const {},
   });
 
   final CanvasCamera camera;
@@ -38,6 +39,9 @@ class SceneObjectLayer extends StatelessWidget {
   final ActivityGlow? glow;
   final String? resizeFrameId;
   final double? resizeHeight;
+
+  /// LLM bodies with a board issue that stops Run. Their play is dimmed.
+  final Set<String> blockedRunBodyIds;
 
   @override
   Widget build(BuildContext context) {
@@ -172,6 +176,7 @@ class SceneObjectLayer extends StatelessWidget {
           iconKey: const Key('llm-kit-mark'),
           showRun: true,
           running: activity.runningBodyId == body?.id,
+          runBlocked: blockedRunBodyIds.contains(body?.id),
         ),
         Positioned(
           left: 16 * zoom,
@@ -431,6 +436,7 @@ class SceneObjectLayer extends StatelessWidget {
     Key? iconKey,
     bool showRun = false,
     bool running = false,
+    bool runBlocked = false,
   }) {
     final label =
         title ??
@@ -514,7 +520,9 @@ class SceneObjectLayer extends StatelessWidget {
                         key: const Key('llm-kit-run-button'),
                         running ? Icons.hourglass_top : Icons.play_arrow,
                         size: 16 * zoom,
-                        color: accent,
+                        color: runBlocked && !running
+                            ? tokens.muted.withValues(alpha: 0.45)
+                            : accent,
                       ),
                     ),
                   ),

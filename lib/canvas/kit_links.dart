@@ -213,7 +213,5 @@ void _writeLinks(
     outputToProp: '',
     outputPortProp: '',
   };
-  for (final member in members) {
-    kitApi.updateProps(member.id, props);
-  }
+  kitApi.updatePropsMany({for (final member in members) member.id: props});
 }

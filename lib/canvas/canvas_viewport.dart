@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/board_validation.dart';
 import 'package:skapie/canvas/cable_activity.dart';
 import 'package:skapie/canvas/cable_layer.dart';
 import 'package:skapie/canvas/canvas_bounds.dart';
@@ -83,6 +84,9 @@ class CanvasViewportState extends State<CanvasViewport>
   late final Ticker _outputTicker;
   int _seenOutputPulse = 0;
   String? _writingBodyId;
+  bool _issuesOpen = false;
+  String? _issuesForBody;
+  String? _runNotice;
 
   Size _viewportSize = Size.zero;
 
@@ -236,6 +240,9 @@ class CanvasViewportState extends State<CanvasViewport>
         !middle &&
         (event.buttons & kPrimaryButton) == 0) {
       return;
+    }
+    if (_runNotice != null) {
+      setState(() => _runNotice = null);
     }
     _dragPointer = event.pointer;
     _lastDrag = event.localPosition;
@@ -411,10 +418,18 @@ class CanvasViewportState extends State<CanvasViewport>
     if (body == null) {
       return;
     }
-    final prompt = llmCableInput(widget.store.document, body.id).trim();
-    if (prompt.isEmpty || !llmRunHasSink(widget.store.document, body.id)) {
+    final blockers = validateBoard(widget.store.document).runBlockers(body.id);
+    if (blockers.isNotEmpty) {
+      setState(() {
+        _runNotice =
+            "Can't run ${kitDisplayName(widget.store.document, frame)}: "
+            '${blockers.first.message}';
+        _issuesForBody = body.id;
+        _issuesOpen = true;
+      });
       return;
     }
+    final prompt = llmCableInput(widget.store.document, body.id).trim();
     controller.sendUser(prompt, targetBodyId: body.id).catchError((_) {});
   }
 
@@ -461,7 +476,10 @@ class CanvasViewportState extends State<CanvasViewport>
       return null;
     }
     return hitCable(
-      cables: sceneCables(widget.store.document),
+      cables: [
+        ...sceneCables(widget.store.document),
+        ...validateBoard(widget.store.document).extraCables,
+      ],
       screenPoint: local,
       worldEnds: (cable) => (
         from: _shownWorld(cable.from, cable.sourceId),
@@ -675,6 +693,16 @@ class CanvasViewportState extends State<CanvasViewport>
     final source = ports
         .where((port) => port.frameId == frameId && port.kind == sourceKind)
         .firstOrNull;
+    final refused = cableDragRefusal(
+      widget.store.document,
+      frameId,
+      sourceKind,
+      world,
+    );
+    if (refused != null) {
+      setState(() => _runNotice = 'Not connected: ${refused.reason}');
+      return;
+    }
     if (source == null ||
         target == null ||
         !kitPortsConnect(sourceKind, target.kind)) {
@@ -928,6 +956,12 @@ class CanvasViewportState extends State<CanvasViewport>
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
+        final tokens = PaintScope.of(context);
+        final validation = validateBoard(
+          widget.store.document,
+          resizeFrameId: _resizeFrameId,
+          resizeHeight: _resizeHeight,
+        );
         final controller = widget.agentController;
         final activity = CableActivity(
           runningBodyId: controller?.runningBodyId,
@@ -936,6 +970,9 @@ class CanvasViewportState extends State<CanvasViewport>
           toolPulse: controller?.toolPulse ?? 0,
           toolPulseFrameId: controller?.toolPulseFrameId,
           toolPulseBodyId: controller?.toolPulseBodyId,
+          toolResultPulse: controller?.toolResultPulse ?? 0,
+          toolResultFrameId: controller?.toolResultFrameId,
+          toolResultBodyId: controller?.toolResultBodyId,
           writingBodyId: _writingBodyId,
         );
         if (size != _viewportSize) {
@@ -947,7 +984,7 @@ class CanvasViewportState extends State<CanvasViewport>
           });
         }
 
-        return CallbackShortcuts(
+        final board = CallbackShortcuts(
           bindings: {
             const SingleActivator(LogicalKeyboardKey.digit0): resetCamera,
             const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
@@ -1048,6 +1085,8 @@ class CanvasViewportState extends State<CanvasViewport>
                       motion: _cableMotion,
                       retractions: _retractions,
                       onRetractionDone: _endRetraction,
+                      validation: validation,
+                      invalidColor: tokens.danger,
                     ),
                     SceneObjectLayer(
                       camera: _camera,
@@ -1061,6 +1100,7 @@ class CanvasViewportState extends State<CanvasViewport>
                       glow: _activityGlow,
                       resizeFrameId: _resizeFrameId,
                       resizeHeight: _resizeHeight,
+                      blockedRunBodyIds: blockedLlmBodies(validation),
                     ),
                     ?_toolDescription(size),
                     if (_cableFrameId != null && _cableCursor != null)
@@ -1072,7 +1112,9 @@ class CanvasViewportState extends State<CanvasViewport>
                         dragKind: _cableKind,
                         dragCursor: _cableCursor,
                         previewOnly: true,
+                        invalidColor: tokens.danger,
                       ),
+                    ?_cableRefusalLabel(size, tokens),
                     if (_selectedObject != null &&
                         !isKitObject(_selectedObject!))
                       SceneSelectionOverlay(
@@ -1120,7 +1162,194 @@ class CanvasViewportState extends State<CanvasViewport>
             ),
           ),
         );
+        final issues = _boardIssues(validation, tokens);
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            board,
+            if (issues != null) Positioned(left: 12, top: 12, child: issues),
+          ],
+        );
       },
+    );
+  }
+
+  Widget? _cableRefusalLabel(Size viewportSize, PaintTokens tokens) {
+    final frameId = _cableFrameId;
+    final kind = _cableKind;
+    final cursor = _cableCursor;
+    if (frameId == null || kind == null || cursor == null) {
+      return null;
+    }
+    final refused = cableDragRefusal(
+      widget.store.document,
+      frameId,
+      kind,
+      cursor,
+    );
+    if (refused == null) {
+      return null;
+    }
+    final at = worldToScreen(cursor, viewportSize, _camera);
+    return Positioned(
+      left: at.dx + 14,
+      top: at.dy + 14,
+      child: IgnorePointer(
+        child: _notice(tokens, refused.reason, key: const Key('cable-refusal')),
+      ),
+    );
+  }
+
+  Widget _notice(PaintTokens tokens, String text, {Key? key}) {
+    return DecoratedBox(
+      key: key,
+      decoration: BoxDecoration(
+        color: tokens.panel,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.danger.withValues(alpha: 0.7)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Text(text, style: TextStyle(color: tokens.ink, fontSize: 12)),
+      ),
+    );
+  }
+
+  /// Board-level list of issues. Run failures open it scoped to that LLM.
+  Widget? _boardIssues(BoardValidation validation, PaintTokens tokens) {
+    final all = validation.issues;
+    final focus = _issuesForBody;
+    final shown = focus == null ? all : validation.runBlockers(focus);
+    final notice = _runNotice;
+    if (all.isEmpty && notice == null) {
+      return null;
+    }
+    final errors = all
+        .where((issue) => issue.severity == BoardIssueSeverity.error)
+        .length;
+    final label = all.isEmpty
+        ? 'Board OK'
+        : errors > 0
+        ? '$errors ${errors == 1 ? 'issue blocks' : 'issues block'} Run'
+        : '${all.length} ${all.length == 1 ? 'warning' : 'warnings'}';
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 340),
+      child: Material(
+        color: Colors.transparent,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (notice != null) ...[
+              _notice(tokens, notice, key: const Key('board-run-notice')),
+              const SizedBox(height: 6),
+            ],
+            if (all.isNotEmpty)
+              InkWell(
+                key: const Key('board-issues-button'),
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => setState(() {
+                  _issuesOpen = !_issuesOpen || _issuesForBody != null;
+                  _issuesForBody = null;
+                }),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: tokens.panel,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: errors > 0 ? tokens.danger : tokens.hairline,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 14,
+                          color: errors > 0 ? tokens.danger : tokens.muted,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          label,
+                          style: TextStyle(color: tokens.ink, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (_issuesOpen && shown.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              DecoratedBox(
+                key: const Key('board-issues-panel'),
+                decoration: BoxDecoration(
+                  color: tokens.panel,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: tokens.hairline),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final issue in shown) _issueRow(issue, tokens),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _issueRow(BoardIssue issue, PaintTokens tokens) {
+    final frame = widget.store.document.objectById(issue.frameId);
+    final kit = frame == null
+        ? ''
+        : kitDisplayName(widget.store.document, frame);
+    final error = issue.severity == BoardIssueSeverity.error;
+    return InkWell(
+      key: const Key('board-issue-row'),
+      onTap: frame == null
+          ? null
+          : () => widget.selection.select(issue.frameId),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1),
+              child: Icon(
+                error ? Icons.block : Icons.warning_amber,
+                size: 13,
+                color: error ? tokens.danger : tokens.muted,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: issue.message),
+                    if (kit.isNotEmpty)
+                      TextSpan(
+                        text: '  $kit',
+                        style: TextStyle(color: tokens.muted),
+                      ),
+                  ],
+                ),
+                style: TextStyle(color: tokens.ink, fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
