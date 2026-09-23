@@ -56,12 +56,10 @@ class _LlmRequestInformationState extends State<LlmRequestInformation> {
   }
 
   String _text() {
-    final linked = llmCableInput(
+    final prompt = llmCableInput(
       widget.kitApi.store.document,
       widget.body.id,
     ).trim();
-    final typed = widget.body.props['prompt']?.toString().trim() ?? '';
-    final prompt = linked.isNotEmpty ? linked : typed;
     final document = widget.kitApi.store.document;
     final runtime = widget.controller.runtime;
     return formatLlmRequestPreview(

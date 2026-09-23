@@ -1,6 +1,6 @@
 # Scene document
 
-The scene document is the source of truth for what exists in the world. The canvas camera shows the world; it does not own widget state.
+The scene document is the source of truth for what exists in one board/world. The canvas camera shows that world; it does not own widget state. **New board** creates another scene document under `boards/board-N.json` beside the original `scene.json`; **Switch board** restores it. `active-board` records which board opens next. The board is the workspace.
 
 Scene items are **scene objects**. **Graph node** is reserved for a future cable/port graph and is not used here. See [glossary](glossary.md).
 

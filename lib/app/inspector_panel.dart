@@ -13,6 +13,24 @@ import 'package:skapie/registry/builtin_types.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
+import 'package:skapie/tools/repository/repository_permission.dart';
+
+/// Clock time for a tool's last invocation. A previous day includes the date.
+String formatToolLastUse(String raw, {DateTime? now}) {
+  final time = DateTime.tryParse(raw)?.toLocal();
+  if (time == null) {
+    return raw;
+  }
+  final clock =
+      '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  final today = now ?? DateTime.now();
+  if (time.year == today.year &&
+      time.month == today.month &&
+      time.day == today.day) {
+    return clock;
+  }
+  return '${time.month}/${time.day} $clock';
+}
 
 /// Thin inspector. Edits go through [KitApi] → [SceneStore.apply] only.
 class InspectorPanel extends StatefulWidget {
@@ -49,12 +67,19 @@ class _InspectorPanelState extends State<InspectorPanel> {
   final _label = TextEditingController();
   final _name = TextEditingController();
   final _nameFocus = FocusNode();
+  final _description = TextEditingController();
+  final _descriptionFocus = FocusNode();
+  RepositoryPermission get _repositoryPermission =>
+      widget.controller?.repositoryPermission ??
+      const SystemRepositoryPermission();
+  String? _repositoryError;
 
   @override
   void initState() {
     super.initState();
     widget.store.addListener(_onStore);
     widget.selection.addListener(_onSelection);
+    widget.controller?.addListener(_onAgent);
     _contentFocus.addListener(_onContentFocus);
     _bindObject(force: true);
   }
@@ -70,6 +95,10 @@ class _InspectorPanelState extends State<InspectorPanel> {
       oldWidget.selection.removeListener(_onSelection);
       widget.selection.addListener(_onSelection);
     }
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?.removeListener(_onAgent);
+      widget.controller?.addListener(_onAgent);
+    }
     _bindObject(force: true);
   }
 
@@ -78,6 +107,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
     _debounce?.cancel();
     widget.store.removeListener(_onStore);
     widget.selection.removeListener(_onSelection);
+    widget.controller?.removeListener(_onAgent);
     _contentFocus.removeListener(_onContentFocus);
     _x.dispose();
     _y.dispose();
@@ -89,6 +119,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
     _label.dispose();
     _name.dispose();
     _nameFocus.dispose();
+    _description.dispose();
+    _descriptionFocus.dispose();
     super.dispose();
   }
 
@@ -105,6 +137,12 @@ class _InspectorPanelState extends State<InspectorPanel> {
   void _onSelection() {
     _bindObject(force: true);
     setState(() {});
+  }
+
+  void _onAgent() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _onContentFocus() {
@@ -163,6 +201,11 @@ class _InspectorPanelState extends State<InspectorPanel> {
         kitDisplayName(widget.store.document, frame),
         skip: _nameFocus.hasFocus,
       );
+      _syncField(
+        _description,
+        _string(frame.props, 'description'),
+        skip: _descriptionFocus.hasFocus,
+      );
       return;
     }
     _boundId = object.id;
@@ -181,6 +224,11 @@ class _InspectorPanelState extends State<InspectorPanel> {
       _name,
       kitDisplayName(widget.store.document, frame),
       skip: !idChanged && _nameFocus.hasFocus,
+    );
+    _syncField(
+      _description,
+      _string(frame.props, 'description'),
+      skip: !idChanged && _descriptionFocus.hasFocus,
     );
   }
 
@@ -297,6 +345,37 @@ class _InspectorPanelState extends State<InspectorPanel> {
     widget.selection.syncToDocument(widget.store.document);
   }
 
+  Future<void> _chooseRepository(SceneObject frame) async {
+    try {
+      final path = await _repositoryPermission.chooseDirectory();
+      if (!mounted || path == null || path.isEmpty) {
+        return;
+      }
+      if (widget.store.document.objectById(frame.id) == null) {
+        return;
+      }
+      widget.kitApi.updateProps(frame.id, {repositoryPathProp: path});
+      final name = path.split('/').where((part) => part.isNotEmpty).last;
+      for (final member
+          in kitMembers(
+                document: widget.store.document,
+                selectedId: frame.id,
+              ) ??
+              const <SceneObject>[]) {
+        if (member.props[skapieRoleProp] == 'body') {
+          widget.kitApi.updateProps(member.id, {
+            'content': '$name\nRead-only repository',
+          });
+        }
+      }
+      setState(() => _repositoryError = null);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _repositoryError = '$error');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final object = _object;
@@ -312,6 +391,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
     final controller = widget.controller;
     final typeLabel = llmBody != null
         ? 'LLM'
+        : kitIdOf(object) == codingRepositoryKitId
+        ? 'Repository'
         : isWorldToolKit(object)
         ? kitNameStem(kitIdOf(object)!)
         : object.type;
@@ -347,39 +428,42 @@ class _InspectorPanelState extends State<InspectorPanel> {
                       else
                         _readOnly('Id', object.id),
                     ]),
-                    _section('Transform', [
-                      PaintHover(
-                        child: SwitchListTile(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Locked'),
-                          subtitle: const Text('Select and delete ok, no move'),
-                          value: object.locked,
-                          onChanged: (value) {
-                            widget.kitApi.setLocked(object.id, value);
+                    if (llmBody == null)
+                      _section('Transform', [
+                        PaintHover(
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Locked'),
+                            subtitle: const Text(
+                              'Select and delete ok, no move',
+                            ),
+                            value: object.locked,
+                            onChanged: (value) {
+                              widget.kitApi.setLocked(object.id, value);
+                            },
+                          ),
+                        ),
+                        _field(
+                          label: 'X',
+                          controller: _x,
+                          onSubmitted: (value) {
+                            final parsed = double.tryParse(value);
+                            if (parsed != null) {
+                              _applyFrame(x: parsed);
+                            }
                           },
                         ),
-                      ),
-                      _field(
-                        label: 'X',
-                        controller: _x,
-                        onSubmitted: (value) {
-                          final parsed = double.tryParse(value);
-                          if (parsed != null) {
-                            _applyFrame(x: parsed);
-                          }
-                        },
-                      ),
-                      _field(
-                        label: 'Y',
-                        controller: _y,
-                        onSubmitted: (value) {
-                          final parsed = double.tryParse(value);
-                          if (parsed != null) {
-                            _applyFrame(y: parsed);
-                          }
-                        },
-                      ),
-                    ]),
+                        _field(
+                          label: 'Y',
+                          controller: _y,
+                          onSubmitted: (value) {
+                            final parsed = double.tryParse(value);
+                            if (parsed != null) {
+                              _applyFrame(y: parsed);
+                            }
+                          },
+                        ),
+                      ]),
                     if (frame.type == boxTypeId || isKitObject(object))
                       _section('Appearance', [
                         if (isKitObject(object))
@@ -410,9 +494,51 @@ class _InspectorPanelState extends State<InspectorPanel> {
                         kitApi: widget.kitApi,
                         controller: controller,
                       ),
+                    if (llmBody != null && controller != null)
+                      _toolActivity(llmBody.id, controller),
+                    if (kitIdOf(object) == codingRepositoryKitId)
+                      _section('Repository', [
+                        Tooltip(
+                          message:
+                              frame.props[repositoryPathProp]?.toString() ??
+                              'No folder selected',
+                          child: _readOnly(
+                            'Folder',
+                            frame.props[repositoryPathProp]
+                                        ?.toString()
+                                        .trim()
+                                        .isNotEmpty ==
+                                    true
+                                ? frame.props[repositoryPathProp].toString()
+                                : 'Choose a folder',
+                          ),
+                        ),
+                        _readOnly('Permission', 'Read-only'),
+                        _readOnly(
+                          'Availability',
+                          (frame.props[repositoryPathProp]?.toString().trim() ??
+                                      '')
+                                  .isEmpty
+                              ? 'Folder not chosen'
+                              : 'Available',
+                        ),
+                        PaintButton(
+                          key: const Key('choose-repository'),
+                          label: 'Choose folder',
+                          onPressed: () => _chooseRepository(frame),
+                        ),
+                        if (_repositoryError != null)
+                          Text(
+                            _repositoryError!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                      ]),
                     if (llmBody == null &&
                         object.type != boxTypeId &&
-                        !isWorldToolKit(object))
+                        !isWorldToolKit(object) &&
+                        kitIdOf(object) != codingRepositoryKitId)
                       _section('Content', _typeFields(object)),
                     if (llmBody != null)
                       _section('Tools', [
@@ -424,12 +550,32 @@ class _InspectorPanelState extends State<InspectorPanel> {
                           return names.isEmpty ? 'none' : names.join(', ');
                         }()),
                       ]),
+                    if (isWorldToolKit(object) || isWorldToolKit(frame))
+                      _section('Description', [
+                        _field(
+                          key: const Key('tool-description'),
+                          label: 'Description',
+                          controller: _description,
+                          focusNode: _descriptionFocus,
+                          onChanged: (value) =>
+                              _applyProps({'description': value}, id: frame.id),
+                          onSubmitted: (value) => _applyProps(
+                            {'description': value},
+                            immediate: true,
+                            id: frame.id,
+                          ),
+                        ),
+                      ]),
                     if (isWorldToolKit(object) ||
                         kitIdOf(object) == boardTextKitId)
                       _section(
                         'Allowed connections',
                         _allowedConnections(object),
                       ),
+                    if (frame.props['requiresRepository'] == true)
+                      _section('Repository input', _repositoryInputs(frame)),
+                    if (kitIdOf(object) == codingRepositoryKitId)
+                      _section('In / Out', _repositoryOutputs(frame)),
                     if (kitIdOf(object) == harnessConversationKitId)
                       _section(
                         'Allowed connections',
@@ -502,6 +648,62 @@ class _InspectorPanelState extends State<InspectorPanel> {
     );
   }
 
+  Widget _toolActivity(String bodyId, AgentController controller) {
+    final activities = controller.toolActivitiesFor(bodyId);
+    final running = controller.runningBodyId == bodyId;
+    final tokens = PaintScope.of(context);
+    return _section('Run activity', [
+      ExpansionTile(
+        key: ValueKey('tool-activity-$bodyId'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        title: Text(
+          running && controller.activeToolFrameId != null
+              ? 'Using a tool · ${activities.length} call(s)'
+              : '${activities.length} tool call(s)',
+          style: TextStyle(color: tokens.ink, fontSize: 12),
+        ),
+        children: [
+          if (activities.isEmpty)
+            _readOnly(
+              '',
+              running
+                  ? 'Waiting for tool calls'
+                  : 'No tool calls in the last run',
+              hideLabel: true,
+            ),
+          for (final activity in activities)
+            ExpansionTile(
+              key: ValueKey('tool-call-${activity.callId}'),
+              tilePadding: EdgeInsets.zero,
+              title: Text(
+                activity.name,
+                style: TextStyle(color: tokens.ink, fontSize: 12),
+              ),
+              subtitle: Text(switch (activity.state) {
+                AgentToolActivityState.running => 'Running',
+                AgentToolActivityState.completed => 'Completed',
+                AgentToolActivityState.failed => 'Failed',
+              }, style: TextStyle(color: tokens.muted, fontSize: 11)),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SelectableText(
+                    'Arguments\n${activity.argumentsJson}\n\nResult\n${activity.result ?? 'Waiting'}',
+                    style: TextStyle(
+                      color: tokens.ink,
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    ]);
+  }
+
   List<Widget> _allowedConnections(SceneObject object) {
     final bodies = llmBodies(widget.store.document);
     if (bodies.isEmpty) {
@@ -560,6 +762,70 @@ class _InspectorPanelState extends State<InspectorPanel> {
         ),
       ],
     ];
+  }
+
+  List<Widget> _repositoryInputs(SceneObject toolFrame) {
+    final repositories = repositoryFrames(widget.store.document);
+    if (repositories.isEmpty) {
+      return [_readOnly('', 'Add a Repository kit', hideLabel: true)];
+    }
+    return [
+      for (final repository in repositories)
+        _connectionRow(
+          kit: repository,
+          keyId: 'repository-${repository.id}',
+          connected: kitHasLink(
+            repository,
+            to: toolFrame.id,
+            port: repositoryPort,
+          ),
+          onTap: () => _toggleRepository(repository.id, toolFrame.id),
+        ),
+    ];
+  }
+
+  List<Widget> _repositoryOutputs(SceneObject repositoryFrame) {
+    final tools = [
+      for (final frame in toolFrames(widget.store.document))
+        if (frame.props['requiresRepository'] == true) frame,
+    ];
+    if (tools.isEmpty) {
+      return [_readOnly('', 'Add a repository tool kit', hideLabel: true)];
+    }
+    return [
+      for (final tool in tools)
+        _connectionRow(
+          kit: tool,
+          keyId: 'repository-tool-${tool.id}',
+          connected: kitHasLink(
+            repositoryFrame,
+            to: tool.id,
+            port: repositoryPort,
+          ),
+          onTap: () => _toggleRepository(repositoryFrame.id, tool.id),
+        ),
+    ];
+  }
+
+  void _toggleRepository(String repositoryId, String toolId) {
+    final repository = widget.store.document.objectById(repositoryId);
+    if (repository == null) {
+      return;
+    }
+    if (kitHasLink(repository, to: toolId, port: repositoryPort)) {
+      removeKitLink(
+        kitApi: widget.kitApi,
+        objectId: repositoryId,
+        to: toolId,
+        port: repositoryPort,
+      );
+    } else {
+      connectRepositoryToTool(
+        kitApi: widget.kitApi,
+        repositoryFrameId: repositoryId,
+        toolFrameId: toolId,
+      );
+    }
   }
 
   void _toggleText({
@@ -626,9 +892,21 @@ class _InspectorPanelState extends State<InspectorPanel> {
             },
           ),
       _portHeading('Output'),
-      if (others.isEmpty)
+      if (texts.isEmpty && others.isEmpty)
         _readOnly('', 'None on the board', hideLabel: true)
-      else
+      else ...[
+        for (final text in texts)
+          _connectionRow(
+            kit: text,
+            keyId: 'output-text-${text.id}',
+            connected: kitHasLink(body, to: text.id, port: llmTextOutPort),
+            onTap: () => _toggleOutput(
+              sourceId: body.id,
+              targetId: text.id,
+              port: llmTextOutPort,
+              connected: kitHasLink(body, to: text.id, port: llmTextOutPort),
+            ),
+          ),
         for (final other in others) ...[
           _connectionRow(
             kit: other,
@@ -655,6 +933,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
             ),
           ),
         ],
+      ],
     ];
   }
 
@@ -757,6 +1036,70 @@ class _InspectorPanelState extends State<InspectorPanel> {
     );
   }
 
+  List<String> _connectionFacts(SceneObject frame) {
+    final document = widget.store.document;
+    final facts = <String>[];
+    final toolName = _memberText(frame, 'toolName');
+    final display = kitDisplayName(document, frame);
+    if (toolName.isNotEmpty && toolName != display) {
+      facts.add(toolName);
+    }
+    if (frame.props['requiresRepository'] == true) {
+      final repository = _linkedRepository(frame);
+      facts.add(
+        repository == null
+            ? 'No repository'
+            : kitDisplayName(document, repository),
+      );
+      facts.add('Read-only');
+      facts.add(_repositoryAvailability(repository));
+    } else if (isWorldToolKit(frame)) {
+      facts.add('Available');
+    }
+    if (kitIdOf(frame) == codingRepositoryKitId) {
+      facts.add('Read-only');
+      facts.add(_repositoryAvailability(frame));
+    }
+    final last = frame.props[toolLastUsedProp]?.toString().trim() ?? '';
+    if (last.isNotEmpty) {
+      facts.add('Last use ${formatToolLastUse(last)}');
+    }
+    return facts;
+  }
+
+  String _memberText(SceneObject frame, String prop) {
+    for (final object in widget.store.document.objects) {
+      if (!kitChildBelongsToFrame(object, frame)) {
+        continue;
+      }
+      final value = object.props[prop]?.toString().trim() ?? '';
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return frame.props[prop]?.toString().trim() ?? '';
+  }
+
+  SceneObject? _linkedRepository(SceneObject toolFrame) {
+    for (final repository in repositoryFrames(widget.store.document)) {
+      if (kitHasLink(repository, to: toolFrame.id, port: repositoryPort)) {
+        return repository;
+      }
+    }
+    return null;
+  }
+
+  String _repositoryAvailability(SceneObject? repository) {
+    final path = repository?.props[repositoryPathProp]?.toString().trim() ?? '';
+    if (repository == null) {
+      return 'Needs repository';
+    }
+    if (path.isEmpty) {
+      return 'Folder not chosen';
+    }
+    return 'Available';
+  }
+
   Widget _portHeading(String label) {
     final tokens = PaintScope.of(context);
     return Padding(
@@ -784,6 +1127,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
         ) ??
         kit;
     final name = kitDisplayName(widget.store.document, kit);
+    final facts = _connectionFacts(frame);
     final color = kitAccentColor(frame);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -812,15 +1156,28 @@ class _InspectorPanelState extends State<InspectorPanel> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        if (facts.isNotEmpty)
+                          Text(
+                            facts.join(' · '),
+                            key: ValueKey(
+                              'connection-facts-${keyId ?? kit.id}',
+                            ),
+                            style: TextStyle(color: tokens.muted, fontSize: 11),
+                          ),
+                      ],
                     ),
                   ),
                   if (detail != null) ...[

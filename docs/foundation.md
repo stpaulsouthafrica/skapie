@@ -6,9 +6,9 @@ These rules bind every phase. If a change fights them, the change is wrong.
 
 Scene data changes only through `SceneStore.apply(SceneOp)`. Widgets, kits, and the agent must not poke document fields. The Kit API wraps these ops; it does not bypass them. Live camera pan/zoom is canvas state; `noteCamera` only snapshots it for save.
 
-## Scene is the source of truth
+## Scene is the source of truth for the board
 
-The scene document is what is real. The canvas, inspector, and any agent memory are views or proposals. Reload from scene and the UI must reconstruct. Selection (`selectedId`) is **UI state only** — not a scene field and not persisted. Camera pan limits read those objects and clamp viewport state only — they never mutate the scene.
+The scene document is what is real about the board arrangement. The canvas and inspector are views; an agent's proposal does not change the scene until an authorized scene op applies. Reload from scene and the board UI must reconstruct. Run events, repository files, and native grants have their own sources of truth; do not copy them into scene props. Selection (`selectedId`) is **UI state only** — not a scene field and not persisted. Camera pan limits read those objects and clamp viewport state only — they never mutate the scene.
 
 Vocabulary: scene items are **scene objects**. **Graph node** is reserved for a future cable/port graph. Full table: [glossary](glossary.md).
 
@@ -26,7 +26,7 @@ README, this file, and `docs/` describe what the tree actually does. No APIs, fo
 
 ## Acceptance before next phase
 
-Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1** is post-core settings UX (Connect → fetch models). **10.2** is cosmetic paint only. **10.2.1** is harness-as-kits. **10.3.1** is the OpenCode Go providers catalog and three vanilla surfaces. **10.4** is the command palette and selection-scoped LLM typing. **10.5** is providers vanilla hygiene plus compound LLM Input/Output regions. **Specialized LLM kit UX** added palette arrows, inspector typing, inline text edit, and `harness.llm` as a specialized kit. **10.6** is per-file world tools plus spawnable `tools.*` kits attached to an LLM. **10.5.1** is cleanup: palette hover, solid LLM compound, inspector-hosted model/input. **10.7** (current) is luxury kit chrome, irreducible compounds, and inspector polish. Tools architecture is unchanged.
+Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter analyze` clean, `flutter test` green, and the phase’s stated UX/behavior checks. The 10-phase core completed at Phase 10. **10.1–10.7** added settings, paint, board harness, provider surfaces, command palette, specialized LLM UX, world tool grants, and kit chrome. **Phase 11.0** starts the coding-agent direction with independent boards, a Repository kit, individual read-only repository tools, and visible run activity. See the [Phase 11 roadmap](phase_11_roadmap.md).
 
 ## Phase 1 gate — done
 
@@ -96,7 +96,7 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 - Prefs at Application Support `skapie/agent_prefs.json` restore provider, model, and key. Never in `scene.json`.
 - Chat chip Fake vs `{preset} · {model}`; empty-state suggested prompts. Overlay still does not reflow the canvas.
 
-The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, visible sub-agent kits, personal coding-agent kit) stay out of scope.
+The **10-phase core is complete.** Phase 11 begins the coding-agent direction through manually connected kits. Streaming, Pi/MCP, sandboxed kit workers, and visible sub-agents remain later arcs.
 
 ## Phase 10.1 gate — done
 
@@ -172,13 +172,13 @@ The **10-phase core is complete.** Later arcs (streaming, Pi/MCP, sandbox kits, 
 - Inspector hosts provider/model, prompt input, read-only output/error, Needs input, Run, and attached Tools. No bottom `LlmKitInput` bar. `tools.*` attach/detach stay in the inspector.
 - `flutter analyze` clean; `flutter test` green.
 
-## Phase 10.7 gate (current)
+## Phase 10.7 gate — done
 
 - Default kit/card chrome is panel gray (`#161618`) plus champagne/accent hairline. Custom fill only after Inspector sets it. LLM radius ~22; tool grants ~16.
 - Any `skapieKit` instance (at least `harness.llm` and `tools.*`) selects, drags, and deletes as one compound. Delete never orphans child text. Tool-grant delete refreshes LLM Tools chrome.
 - Inspector: hairline separators, hover wash on controls, one renameable kit id (`LLM`, then `LLM (2)`). Ten color swatches. The chosen swatch sets outline, rules, and shading. The card interior stays panel gray at 85% opacity. Model/Input/Output/Run stay inspector-hosted. Attach to LLM uses that kit's name and color.
 - `flutter analyze` clean; `flutter test` green.
 
-## Dream goal (not scheduled)
+## Coding-agent direction
 
-Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The 10-phase core (session + kit tools + overlay chat + settings) is **not** that. Planted seam: `capabilities: []` in `kit.json`.
+The [Phase 11–20 roadmap](phase_11_roadmap.md) schedules a manually assembled coding agent before multi-agent compositions and user-authored executable runners. Phase 11 uses host-owned runners with explicit board grants. The `capabilities: []` field in `kit.json` remains an inert seam until a later, reviewed contract gives it meaning.

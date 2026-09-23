@@ -119,6 +119,54 @@ bool llmBodyBelongsToFrame(SceneObject body, SceneObject frame) {
 
 const String llmKitEmptyContent = 'Input\n\nOutput\n\nTools: none';
 
+const String llmRunStatusProp = 'runStatus';
+
+enum LlmRunStatus {
+  ready,
+  running,
+  waitingForReview,
+  completed,
+  failed,
+  cancelled,
+}
+
+String llmRunStatusLabel(LlmRunStatus status) {
+  return switch (status) {
+    LlmRunStatus.ready => 'Ready',
+    LlmRunStatus.running => 'Running',
+    LlmRunStatus.waitingForReview => 'Waiting for review',
+    LlmRunStatus.completed => 'Completed',
+    LlmRunStatus.failed => 'Failed',
+    LlmRunStatus.cancelled => 'Cancelled',
+  };
+}
+
+LlmRunStatus llmRunStatusOf(SceneObject? body, {required bool running}) {
+  if (running) {
+    return LlmRunStatus.running;
+  }
+  final stored = switch (body?.props[llmRunStatusProp]?.toString()) {
+    'waitingForReview' => LlmRunStatus.waitingForReview,
+    'completed' => LlmRunStatus.completed,
+    'failed' => LlmRunStatus.failed,
+    'cancelled' => LlmRunStatus.cancelled,
+    'ready' => LlmRunStatus.ready,
+    _ => null,
+  };
+  if (stored != null) {
+    return stored;
+  }
+  final error = body?.props['error']?.toString().trim() ?? '';
+  if (error.isNotEmpty) {
+    return LlmRunStatus.failed;
+  }
+  final reply = body?.props['reply']?.toString().trim() ?? '';
+  if (reply.isNotEmpty) {
+    return LlmRunStatus.completed;
+  }
+  return LlmRunStatus.ready;
+}
+
 void setLlmKitPrompt({
   required KitApi kitApi,
   required String bodyId,
@@ -233,6 +281,9 @@ void publishLlmKit({
     'model': model ?? '',
     'provider': provider ?? '',
     'surface': seat ?? '',
+    llmRunStatusProp: (error?.trim().isNotEmpty ?? false)
+        ? 'failed'
+        : 'completed',
     'content': formatLlmKitContent(
       prompt: prompt,
       reply: reply,

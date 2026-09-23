@@ -4,6 +4,8 @@ import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/repository/repository_permission.dart';
+import 'package:skapie/tools/repository/repository_tools.dart';
 
 bool isWorldToolKit(SceneObject object) {
   final id = object.props[skapieKitProp]?.toString() ?? '';
@@ -80,6 +82,8 @@ List<String> attachedToolNames({
 List<AgentTool> worldToolsForLlm({
   required KitApi kitApi,
   required String llmBodyId,
+  RepositoryPermission repositoryPermission =
+      const SystemRepositoryPermission(),
 }) {
   final byName = {for (final tool in createWorldTools(kitApi)) tool.name: tool};
   final tools = <AgentTool>[];
@@ -95,7 +99,19 @@ List<AgentTool> worldToolsForLlm({
     if (name.isEmpty) {
       continue;
     }
-    final tool = byName[name];
+    final frame = kitFrameForSelection(
+      document: kitApi.store.document,
+      selectedId: object.id,
+    );
+    final tool =
+        byName[name] ??
+        repositoryToolForName(
+          name,
+          repositoryPath: frame == null
+              ? ''
+              : repositoryPathForTool(kitApi.store.document, frame.id),
+          permission: repositoryPermission,
+        );
     if (tool == null) {
       kitApi.updateProps(object.id, {
         'error': 'Unknown tool: $name',
@@ -108,6 +124,40 @@ List<AgentTool> worldToolsForLlm({
     }
   }
   return tools;
+}
+
+String repositoryPathForTool(SceneDocument document, String toolFrameId) {
+  for (final object in document.objects) {
+    if (object.props[skapieRoleProp] != 'frame' ||
+        kitIdOf(object) != codingRepositoryKitId ||
+        !kitHasLink(object, to: toolFrameId, port: repositoryPort)) {
+      continue;
+    }
+    return object.props[repositoryPathProp]?.toString().trim() ?? '';
+  }
+  return '';
+}
+
+String? toolFrameIdForName(
+  SceneDocument document,
+  String llmBodyId,
+  String toolName,
+) {
+  for (final frame in document.objects) {
+    if (frame.props[skapieRoleProp] != 'frame' ||
+        !isWorldToolKit(frame) ||
+        !kitHasLink(frame, to: llmBodyId, port: llmToolsPort)) {
+      continue;
+    }
+    for (final member
+        in kitMembers(document: document, selectedId: frame.id) ??
+            const <SceneObject>[]) {
+      if (member.props['toolName']?.toString() == toolName) {
+        return frame.id;
+      }
+    }
+  }
+  return null;
 }
 
 void refreshLlmToolsChrome({

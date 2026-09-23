@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/paint/cables/cable_hit.dart';
+import 'package:skapie/paint/cables/cable_painter.dart';
 
 void main() {
   const cable = SceneCable(
@@ -57,5 +58,31 @@ void main() {
     final midLeft = cableRetractSpan(towardEnd: false, cut: 0.4, progress: 0.5);
     expect(midLeft.end, lessThan(0.4));
     expect(midLeft.end, greaterThan(0));
+  });
+
+  test('dragging from an input back to an output keeps the same curve', () {
+    const output = Offset(0, 40);
+    const input = Offset(200, 0);
+    final committed = cableCurve(output, input, 1);
+    final drag = cableCurve(
+      input,
+      output,
+      1,
+      exitsRight: false,
+      entersFromLeft: false,
+    );
+    final forward = committed.computeMetrics().single;
+    final reverse = drag.computeMetrics().single;
+    expect(reverse.length, closeTo(forward.length, 0.01));
+    for (final t in [0.25, 0.5, 0.75]) {
+      final onCommit = forward
+          .getTangentForOffset(forward.length * t)!
+          .position;
+      final onDrag = reverse
+          .getTangentForOffset(reverse.length * (1 - t))!
+          .position;
+      expect(onDrag.dx, closeTo(onCommit.dx, 0.01));
+      expect(onDrag.dy, closeTo(onCommit.dy, 0.01));
+    }
   });
 }

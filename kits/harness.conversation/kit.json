@@ -10,7 +10,7 @@
       "x": 0,
       "y": 0,
       "width": 280,
-      "height": 180,
+      "height": 120,
       "props": {
         "skapieKit": "harness.conversation",
         "skapieRole": "frame"
@@ -19,9 +19,9 @@
     {
       "typeId": "text",
       "x": 12,
-      "y": 44,
+      "y": 40,
       "width": 256,
-      "height": 120,
+      "height": 48,
       "props": {
         "content": "",
         "fontSize": 13,

@@ -1,62 +1,42 @@
-# World tools
+# Tool kits
 
-A **world tool** is a named KitApi capability the model may call. It has two parts:
+A tool has a **host-owned runner** and a **visible grant kit** on the board. A `kit.json` file supplies the kit recipe and its `toolName`; it does not execute code. An LLM receives only tools whose grant kits are connected to its Tools port. With no connected grants, the LLM uses the vanilla completion path.
 
-1. **Runner** — one Dart file under [`lib/tools/world/`](../lib/tools/world/). This is the executable.
-2. **Grant** — one disk kit under `kits/tools.<name>/`. Spawning it onto the board is a visible permission, not the implementation.
+World runners in [`lib/tools/world/`](../lib/tools/world/) call `KitApi` to inspect or change the Skapie scene. Repository runners in [`lib/tools/repository/`](../lib/tools/repository/) read a user-chosen folder. These are different capabilities, even though both appear as individual `tools.*` kits.
 
-The kit package does **not** contain the runner. `kit.json` is chrome plus `toolName` and `attachedTo`. An LLM with no attached tool kits stays vanilla (no `tools` array). An LLM with attached tool kits runs the existing agent tool loop with **exactly those** tools.
+## Build a repository reader on the board
 
-There is no cable editor yet. Attach is a prop/API: `attachedTo` holds the LLM body id.
+1. Add an LLM, a Repository, and whichever repository tools are needed.
+2. Select Repository → **Choose folder**. On macOS, the app saves a read-only security-scoped bookmark. The board saves the selected path, but a path alone does not grant access.
+3. Cable Repository Output to the Repository input of each chosen tool. Each tool accepts one Repository source.
+4. Cable each tool Output to LLM Tools. A tool with no LLM cable is not offered to the model. A repository tool with no Repository cable returns an error if called.
+5. Connect Text to LLM Input and optionally Conversation to LLM Conversation. Run from the LLM inspector.
 
-## Runner vs grant
+The active tool's LLM and Repository cables pulse. The LLM inspector has a collapsible **Run activity** section with calls, arguments, results, and states from the latest run. This activity is in memory for now.
 
-| | Runner | Grant |
-|---|---|---|
-| Where | `lib/tools/world/<name>.dart` | `kits/tools.<name>/kit.json` |
-| What | `AgentTool` that calls `KitApi` | Scene objects you can spawn |
-| Props | — | `toolName`, `attachedTo`, `skapieKit: tools.<name>` |
-| Unknown `toolName` | — | Error on that kit; omitted from the tools array |
+Available repository grants:
 
-[`lib/tools/tool.dart`](../lib/tools/tool.dart) holds shared JSON-schema helpers. [`lib/tools/world/register.dart`](../lib/tools/world/register.dart) exports `createWorldTools(KitApi)`. `createKitAgentTools` remains a thin wrapper so the old session loop still compiles.
+| Kit id | Runner action |
+|---|---|
+| `tools.repo_list_files` | List up to 500 paths, excluding generated folders and likely secret filenames. |
+| `tools.repo_search_text` | Search text and return bounded path, line, and excerpt matches. |
+| `tools.repo_read_file` | Read up to 200 lines of one relative file. |
+| `tools.repo_git_status` | Read branch and working tree status. |
+| `tools.repo_git_diff` | Read a bounded working tree or staged diff. |
 
-Vanilla first Enter (no attached grants) still uses the HTTP kernel in [`lib/providers/`](../lib/providers/). Coding tools (read/write/bash) are not in this set.
+File paths are repository-relative. The host rejects traversal and symlink escape; generated folders and likely secret filenames are skipped. These guards reduce accidental disclosure but do not classify every sensitive file. The folder picker defines the repository scope.
 
-## World tool files and kit ids
+## World tool grants
 
-| Runner | Kit id | Description |
-|---|---|---|
-| [`list_kits.dart`](../lib/tools/world/list_kits.dart) | `tools.list_kits` | List registered kits. |
-| [`get_kit.dart`](../lib/tools/world/get_kit.dart) | `tools.get_kit` | Get one kit recipe by id. |
-| [`instantiate_kit.dart`](../lib/tools/world/instantiate_kit.dart) | `tools.instantiate_kit` | Instantiate a kit into the scene. |
-| [`add_object.dart`](../lib/tools/world/add_object.dart) | `tools.add_object` | Add one scene object. |
-| [`remove_object.dart`](../lib/tools/world/remove_object.dart) | `tools.remove_object` | Remove a scene object by id. |
-| [`update_frame.dart`](../lib/tools/world/update_frame.dart) | `tools.update_frame` | Patch a scene object frame. |
-| [`update_props.dart`](../lib/tools/world/update_props.dart) | `tools.update_props` | Shallow-merge props. Null values remove keys. |
-| [`set_locked.dart`](../lib/tools/world/set_locked.dart) | `tools.set_locked` | Set SceneObject.locked. |
-| [`save_kit.dart`](../lib/tools/world/save_kit.dart) | `tools.save_kit` | Write a kit package to disk and register it. |
-| [`reload_packages.dart`](../lib/tools/world/reload_packages.dart) | `tools.reload_packages` | Reload kit packages from disk. |
-| [`register_kit.dart`](../lib/tools/world/register_kit.dart) | `tools.register_kit` | Register an ephemeral in-memory kit. |
+World tools remain individual kits under `kits/tools.<name>/` and runners under `lib/tools/world/`:
 
-Palette: **Tool: list_kits** (and the rest) instantiates the grant. **Attach to LLM** / **Detach tool** set or clear `attachedTo`. Select an LLM, then a tool kit (or the reverse); both ids are remembered.
+| Tool | Action |
+|---|---|
+| `list_kits`, `get_kit` | Inspect registered kit recipes. |
+| `instantiate_kit`, `add_object`, `remove_object` | Change scene objects through `KitApi`. |
+| `update_frame`, `update_props`, `set_locked` | Edit scene objects through `KitApi`. |
+| `save_kit`, `reload_packages`, `register_kit` | Manage kit recipes and packages. |
 
-LLM chrome shows `Tools: none` or `Tools: list_kits, add_object`. `harness.tools` remains a stub roster and is not a grant.
+The palette offers **Tool: ...** entries. You can cable a tool's Output to the LLM's Tools port or use **Attach to LLM** / the inspector's Allowed connections list. Cutting a cable removes that connection. `harness.tools` remains a stub roster, not a grant. Unknown `toolName` is shown as an error on the kit and is omitted from the request.
 
-## Attach / Enter
-
-1. Spawn `harness.llm` and one or more `tools.*` kits.
-2. Palette **Attach to LLM** writes `attachedTo` on every object in that tool kit (KitApi `updateProps` only).
-3. Enter on that LLM:
-   - no attached grants, or only unknown names → vanilla completion
-   - attached known names → `AgentSession` tool loop with only those `AgentTool`s
-4. Detach clears `attachedTo` and refreshes the LLM Tools line.
-
-The Skapie canvas system prompt is **not** injected on this path. Empty system text only. Wiring `harness.system-prompt` onto the payload is still later.
-
-## Cleanup (10.5.1)
-
-Feel and chrome only. Palette hover, solid LLM compound, inspector-hosted model/input. Runner vs grant, `attachedTo`, and the vanilla vs tool-loop split are unchanged.
-
-## Chrome (10.7)
-
-Default kit fill is panel gray with a champagne/accent hairline. Specialized kits (`harness.llm` and `tools.*`) stay glued for select, drag, and delete. Inspector shows Fill on the kit frame. Tool runners and grant packages are unchanged.
+The runner list is registered in app code. A user can compose and save kit arrangements today; declaring a new `toolName` in `kit.json` does not install a runner. Typed ports and a user-facing capability contract are planned in the [Phase 11 roadmap](phase_11_roadmap.md).

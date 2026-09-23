@@ -11,6 +11,7 @@ import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/canvas_grid_painter.dart';
 import 'package:skapie/canvas/hit_test.dart';
 import 'package:skapie/canvas/kit_ports.dart';
+import 'package:skapie/app/text_kit_editor.dart';
 import 'package:skapie/canvas/scene_object_layer.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
@@ -21,7 +22,6 @@ import 'package:skapie/paint/cables/cable_motion.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
-import 'package:skapie/tools/attach.dart';
 
 /// Infinite canvas viewport: pan, zoom-toward-cursor, grid, origin, zoom HUD.
 class CanvasViewport extends StatefulWidget {
@@ -61,6 +61,14 @@ class CanvasViewportState extends State<CanvasViewport> {
   final _cableMotion = CableMotion();
   final _retractions = <RetractingCable>[];
   CableHover? _cableHover;
+  KitPort? _portHover;
+  String? _toolHoverId;
+  bool _resizeHover = false;
+  bool _runHover = false;
+  String? _resizeFrameId;
+  double? _resizeStartHeight;
+  double? _resizeStartWorldY;
+  double? _resizeHeight;
   String? _cableFrameId;
   KitPortKind? _cableKind;
   Offset? _cableCursor;
@@ -208,8 +216,32 @@ class CanvasViewportState extends State<CanvasViewport> {
       return;
     }
     final world = screenToWorld(event.localPosition, _viewportSize, _camera);
+    final runFrame = _runButtonAt(world);
+    if (runFrame != null) {
+      _dragPointer = null;
+      _lastDrag = null;
+      _dragKind = _DragKind.none;
+      _focus.requestFocus();
+      widget.selection.select(runFrame.id);
+      _runLlm(runFrame);
+      return;
+    }
+    final resizeFrame = _resizeFrameAt(world);
+    if (resizeFrame != null) {
+      _focus.requestFocus();
+      widget.selection.select(resizeFrame.id);
+      _dragKind = _DragKind.resize;
+      _resizeFrameId = resizeFrame.id;
+      _resizeStartHeight = resizeFrame.height;
+      _resizeStartWorldY = world.dy;
+      _resizeHeight = resizeFrame.height;
+      _cableHover = null;
+      _portHover = null;
+      setState(() {});
+      return;
+    }
     final port = hitKitPort(kitPorts(widget.store.document), world);
-    if (port != null && kitPortIsOutput(port.kind)) {
+    if (port != null) {
       _focus.requestFocus();
       widget.selection.select(port.frameId);
       _dragKind = _DragKind.cable;
@@ -249,6 +281,13 @@ class CanvasViewportState extends State<CanvasViewport> {
     _lastTapId = hit.id;
     _lastTapStamp = event.timeStamp;
     if (isDouble) {
+      final textBody = _textKitBody(hit);
+      if (textBody != null) {
+        widget.selection.cancelMove();
+        _dragKind = _DragKind.none;
+        _openTextKit(textBody);
+        return;
+      }
       final edit = _inlineEditTarget(hit);
       if (edit != null) {
         widget.selection.cancelMove();
@@ -269,19 +308,114 @@ class CanvasViewportState extends State<CanvasViewport> {
 
   void _onHover(PointerHoverEvent event) {
     if (_dragKind != _DragKind.none) {
-      if (_cableHover != null) {
-        setState(() => _cableHover = null);
+      if (_cableHover != null ||
+          _portHover != null ||
+          _toolHoverId != null ||
+          _resizeHover ||
+          _runHover) {
+        setState(() {
+          _cableHover = null;
+          _portHover = null;
+          _toolHoverId = null;
+          _resizeHover = false;
+          _runHover = false;
+        });
       }
       return;
     }
-    final next = _cableAt(event.localPosition);
+    final world = screenToWorld(event.localPosition, _viewportSize, _camera);
+    final runHover = _runButtonAt(world) != null;
+    final resize = runHover ? null : _resizeFrameAt(world);
+    final port = resize == null
+        ? hitKitPort(kitPorts(widget.store.document), world)
+        : null;
+    final toolId = _toolFrameAt(world)?.id;
+    final next = port == null && resize == null
+        ? _cableAt(event.localPosition)
+        : null;
     final same =
-        next?.cable.id == _cableHover?.cable.id &&
-        next?.screen == _cableHover?.screen;
+        _portHover?.frameId == port?.frameId &&
+        _portHover?.kind == port?.kind &&
+        _cableHover?.cable.id == next?.cable.id &&
+        _cableHover?.screen == next?.screen &&
+        _toolHoverId == toolId &&
+        _resizeHover == (resize != null) &&
+        _runHover == runHover;
     if (same) {
       return;
     }
-    setState(() => _cableHover = next);
+    setState(() {
+      _portHover = port;
+      _cableHover = next;
+      _toolHoverId = toolId;
+      _resizeHover = resize != null;
+      _runHover = runHover;
+    });
+  }
+
+  SceneObject? _runButtonAt(Offset world) {
+    for (final object in widget.store.document.objects) {
+      if (!isLlmKitObject(object) || object.props[skapieRoleProp] != 'frame') {
+        continue;
+      }
+      if (llmRunButtonContains(object, world)) {
+        return object;
+      }
+    }
+    return null;
+  }
+
+  void _runLlm(SceneObject frame) {
+    final controller = widget.agentController;
+    if (controller == null || controller.runningBodyId != null) {
+      return;
+    }
+    final body = llmKitBodyForSelection(
+      document: widget.store.document,
+      selectedId: frame.id,
+    );
+    if (body == null) {
+      return;
+    }
+    final prompt = llmCableInput(widget.store.document, body.id).trim();
+    if (prompt.isEmpty) {
+      return;
+    }
+    controller.sendUser(prompt, targetBodyId: body.id).catchError((_) {});
+  }
+
+  SceneObject? _resizeFrameAt(Offset world) {
+    for (final object in widget.store.document.objects) {
+      if (!isLlmKitObject(object) || object.props[skapieRoleProp] != 'frame') {
+        continue;
+      }
+      final height = object.id == _resizeFrameId && _resizeHeight != null
+          ? _resizeHeight!
+          : object.height;
+      final shown = object.copyWith(height: height);
+      if (llmResizeHandleContains(shown, world)) {
+        return object;
+      }
+    }
+    return null;
+  }
+
+  SceneObject? _toolFrameAt(Offset world) {
+    final hit = hitTestObjects(widget.store.document.objects, world);
+    if (hit == null) {
+      return null;
+    }
+    final frame =
+        kitFrameForSelection(
+          document: widget.store.document,
+          selectedId: hit.id,
+        ) ??
+        hit;
+    final kitId = kitIdOf(frame) ?? '';
+    if (!kitId.startsWith('tools.')) {
+      return null;
+    }
+    return frame;
   }
 
   CableHover? _cableAt(Offset local) {
@@ -355,6 +489,15 @@ class CanvasViewportState extends State<CanvasViewport> {
           _camera,
         );
       });
+      return;
+    }
+    if (_dragKind == _DragKind.resize &&
+        _resizeStartHeight != null &&
+        _resizeStartWorldY != null) {
+      final world = screenToWorld(event.localPosition, _viewportSize, _camera);
+      final next = (_resizeStartHeight! + (world.dy - _resizeStartWorldY!))
+          .clamp(llmFrameHeight, 720.0);
+      setState(() => _resizeHeight = next);
     }
   }
 
@@ -377,6 +520,8 @@ class CanvasViewportState extends State<CanvasViewport> {
     final kind = _dragKind;
     final cableFrame = _cableFrameId;
     final cableKind = _cableKind;
+    final resizeId = _resizeFrameId;
+    final resizeHeight = _resizeHeight;
     _dragPointer = null;
     _lastDrag = null;
     _moveWorldStart = null;
@@ -384,6 +529,17 @@ class CanvasViewportState extends State<CanvasViewport> {
     _cableFrameId = null;
     _cableKind = null;
     _cableCursor = null;
+    _resizeFrameId = null;
+    _resizeStartHeight = null;
+    _resizeStartWorldY = null;
+    _resizeHeight = null;
+    if (kind == _DragKind.resize) {
+      if (commitMove && resizeId != null && resizeHeight != null) {
+        _commitResize(resizeId, resizeHeight);
+      }
+      setState(() {});
+      return;
+    }
     if (kind == _DragKind.cable) {
       if (commitMove &&
           upLocal != null &&
@@ -421,59 +577,76 @@ class CanvasViewportState extends State<CanvasViewport> {
     }
   }
 
-  void _completeCable(String frameId, KitPortKind sourceKind, Offset upLocal) {
-    final world = screenToWorld(upLocal, _viewportSize, _camera);
-    final port = hitKitPort(kitPorts(widget.store.document), world);
-    if (port == null || !kitPortAccepts(sourceKind, port.kind)) {
-      return;
+  Widget? _toolDescription(Size viewportSize) {
+    final frame = widget.store.document.objectById(_toolHoverId ?? '');
+    final text = frame?.props['description']?.toString().trim() ?? '';
+    if (frame == null || text.isEmpty) {
+      return null;
     }
-    final source = widget.store.document.objectById(frameId);
-    if (source == null) {
-      return;
-    }
-    if (sourceKind == KitPortKind.conversationOut) {
-      addKitLink(
-        kitApi: widget.kitApi,
-        objectId: frameId,
-        to: port.peerId,
-        port: llmConversationPort,
-      );
-      return;
-    }
-    if (sourceKind == KitPortKind.llmOutput) {
-      final sourcePort = kitPorts(widget.store.document)
-          .where(
-            (item) =>
-                item.frameId == frameId && item.kind == KitPortKind.llmOutput,
-          )
-          .firstOrNull;
-      if (sourcePort == null || sourcePort.peerId == port.peerId) {
-        return;
-      }
-      connectLlmOutput(
-        kitApi: widget.kitApi,
-        sourceBodyId: sourcePort.peerId,
-        targetBodyId: port.peerId,
-        port: port.kind == KitPortKind.llmContext
-            ? llmContextPort
-            : llmInputPort,
-      );
-      return;
-    }
-    if (sourceKind == KitPortKind.toolOut) {
-      attachToolKit(
-        kitApi: widget.kitApi,
-        toolObjectId: frameId,
-        llmBodyId: port.peerId,
-      );
-      return;
-    }
-    connectTextToLlm(
-      kitApi: widget.kitApi,
-      textObjectId: frameId,
-      llmBodyId: port.peerId,
-      port: port.kind == KitPortKind.llmContext ? llmContextPort : llmInputPort,
+    final tokens = PaintScope.of(context);
+    final origin = worldToScreen(
+      Offset(frame.x, frame.y + frame.height),
+      viewportSize,
+      _camera,
     );
+    return Positioned(
+      left: origin.dx,
+      top: origin.dy + 8,
+      child: IgnorePointer(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 240),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: tokens.panel,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: tokens.hairline),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Text(
+                text,
+                key: const Key('tool-hover-description'),
+                style: TextStyle(color: tokens.ink, fontSize: 12, height: 1.3),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _commitResize(String frameId, double height) {
+    final frame = widget.store.document.objectById(frameId);
+    if (frame == null) {
+      return;
+    }
+    final body = llmKitBodyForSelection(
+      document: widget.store.document,
+      selectedId: frameId,
+    );
+    final bodyHeight = height - 24;
+    if (body != null && height < frame.height) {
+      widget.kitApi.updateFrame(id: body.id, height: bodyHeight);
+    }
+    widget.kitApi.updateFrame(id: frame.id, height: height);
+    if (body != null && height >= frame.height) {
+      widget.kitApi.updateFrame(id: body.id, height: bodyHeight);
+    }
+  }
+
+  void _completeCable(String frameId, KitPortKind sourceKind, Offset upLocal) {
+    final ports = kitPorts(widget.store.document);
+    final world = screenToWorld(upLocal, _viewportSize, _camera);
+    final target = hitKitPort(ports, world);
+    final source = ports
+        .where((port) => port.frameId == frameId && port.kind == sourceKind)
+        .firstOrNull;
+    if (source == null ||
+        target == null ||
+        !kitPortsConnect(sourceKind, target.kind)) {
+      return;
+    }
+    connectKitPorts(kitApi: widget.kitApi, from: source, to: target);
   }
 
   List<SceneObject> _moveMembers(SceneObject hit) {
@@ -521,12 +694,42 @@ class CanvasViewportState extends State<CanvasViewport> {
     widget.selection.syncToDocument(widget.store.document);
   }
 
+  SceneObject? _textKitBody(SceneObject hit) {
+    if (kitIdOf(hit) != boardTextKitId) {
+      return null;
+    }
+    if (hit.props[skapieRoleProp] == 'body') {
+      return hit;
+    }
+    if (hit.props[skapieRoleProp] != 'frame') {
+      return null;
+    }
+    return textKitBody(widget.store.document, hit);
+  }
+
+  void _openTextKit(SceneObject body) {
+    final frame = kitFrameForSelection(
+      document: widget.store.document,
+      selectedId: body.id,
+    );
+    showTextKitEditor(
+      context: context,
+      kitApi: widget.kitApi,
+      bodyId: body.id,
+      title: frame == null
+          ? 'Text'
+          : kitDisplayName(widget.store.document, frame),
+      content: body.props['content']?.toString() ?? '',
+    );
+  }
+
   bool _canInlineEdit(SceneObject object) {
     if (object.type != textTypeId) {
       return false;
     }
     if (isLlmKitObject(object) ||
-        kitIdOf(object) == harnessConversationKitId) {
+        kitIdOf(object) == harnessConversationKitId ||
+        kitIdOf(object) == boardTextKitId) {
       return false;
     }
     return object.props[skapieRoleProp] != 'grant';
@@ -729,13 +932,31 @@ class CanvasViewportState extends State<CanvasViewport> {
               onPointerPanZoomUpdate: _onPanZoomUpdate,
               onPointerPanZoomEnd: _onPanZoomEnd,
               child: MouseRegion(
-                cursor: _cableHover == null
-                    ? SystemMouseCursors.grab
-                    : SystemMouseCursors.click,
+                cursor: _dragKind == _DragKind.cable
+                    ? SystemMouseCursors.grabbing
+                    : _dragKind == _DragKind.resize || _resizeHover
+                    ? SystemMouseCursors.resizeUpDown
+                    : _runHover
+                    ? SystemMouseCursors.click
+                    : _portHover != null
+                    ? SystemMouseCursors.precise
+                    : _cableHover != null
+                    ? SystemMouseCursors.click
+                    : SystemMouseCursors.grab,
                 onHover: _onHover,
                 onExit: (_) {
-                  if (_cableHover != null) {
-                    setState(() => _cableHover = null);
+                  if (_cableHover != null ||
+                      _portHover != null ||
+                      _toolHoverId != null ||
+                      _resizeHover ||
+                      _runHover) {
+                    setState(() {
+                      _cableHover = null;
+                      _portHover = null;
+                      _toolHoverId = null;
+                      _resizeHover = false;
+                      _runHover = false;
+                    });
                   }
                 },
                 child: Stack(
@@ -761,8 +982,12 @@ class CanvasViewportState extends State<CanvasViewport> {
                       dragFrameId: _cableFrameId,
                       dragKind: _cableKind,
                       dragCursor: _cableCursor,
+                      resizeFrameId: _resizeFrameId,
+                      resizeHeight: _resizeHeight,
                       paintDrag: false,
                       runningBodyId: widget.agentController?.runningBodyId,
+                      activeToolFrameId:
+                          widget.agentController?.activeToolFrameId,
                       motion: _cableMotion,
                       retractions: _retractions,
                       onRetractionDone: _endRetraction,
@@ -775,8 +1000,11 @@ class CanvasViewportState extends State<CanvasViewport> {
                       selectedId: widget.selection.selectedId,
                       previewDelta: widget.selection.previewDelta,
                       previewIds: _previewIds,
-                      motion: _cableMotion,
+                      runningBodyId: widget.agentController?.runningBodyId,
+                      resizeFrameId: _resizeFrameId,
+                      resizeHeight: _resizeHeight,
                     ),
+                    ?_toolDescription(size),
                     if (_cableFrameId != null && _cableCursor != null)
                       CableLayer(
                         camera: _camera,
@@ -839,4 +1067,4 @@ class CanvasViewportState extends State<CanvasViewport> {
   }
 }
 
-enum _DragKind { none, pan, move, cable }
+enum _DragKind { none, pan, move, cable, resize }

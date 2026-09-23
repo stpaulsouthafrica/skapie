@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "coding.repository",
+  "displayName": "Repository",
+  "description": "A user-chosen read-only repository folder for coding tools.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 280,
+      "height": 130,
+      "props": {
+        "skapieKit": "coding.repository",
+        "skapieRole": "frame",
+        "repositoryPath": ""
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 44,
+      "width": 256,
+      "height": 56,
+      "props": {
+        "content": "Choose a repository in the inspector",
+        "fontSize": 13,
+        "skapieKit": "coding.repository",
+        "skapieRole": "body"
+      }
+    }
+  ]
+}

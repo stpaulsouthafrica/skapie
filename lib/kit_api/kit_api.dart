@@ -7,10 +7,14 @@ import 'package:skapie/tools/world/kits.dart';
 
 const String demoNoteCardKitId = 'demo.note-card';
 const String boardTextKitId = 'board.text';
+
+/// Header, two preview lines, a short gap, and the In / Out row.
+const double textFrameHeight = 120;
 const String boardBoxKitId = 'board.box';
 const String boardButtonKitId = 'board.button';
 const String harnessLlmKitId = 'harness.llm';
 const String harnessConversationKitId = 'harness.conversation';
+const String codingRepositoryKitId = 'coding.repository';
 const String harnessSystemPromptKitId = 'harness.system-prompt';
 const String harnessToolsKitId = 'harness.tools';
 const String skapieKitProp = 'skapieKit';
@@ -25,6 +29,14 @@ const String llmInputPort = 'input';
 const String llmContextPort = 'context';
 const String llmConversationPort = 'conversation';
 const String llmToolsPort = 'tools';
+
+/// LLM output cabled into a text kit. The text kit receives the reply.
+const String llmTextOutPort = 'text';
+
+/// When a tool kit was last invoked, as an ISO-8601 timestamp.
+const String toolLastUsedProp = 'lastUsedAt';
+const String repositoryPort = 'repository';
+const String repositoryPathProp = 'repositoryPath';
 const String kitNameProp = 'name';
 const String kitAccentProp = 'accent';
 const double kitRadius = 8;
@@ -80,15 +92,15 @@ const KitRecipe boardTextRecipe = KitRecipe(
       x: 0,
       y: 0,
       width: 280,
-      height: 150,
+      height: textFrameHeight,
       props: {skapieKitProp: boardTextKitId, skapieRoleProp: 'frame'},
     ),
     KitObjectSpec(
       typeId: textTypeId,
       x: 12,
-      y: 44,
+      y: 40,
       width: 256,
-      height: 90,
+      height: 48,
       props: {
         'content': 'Text',
         'fontSize': 16,
@@ -167,7 +179,7 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
       x: 0,
       y: 0,
       width: 320,
-      height: 320,
+      height: 200,
       props: {skapieKitProp: harnessLlmKitId, skapieRoleProp: 'frame'},
     ),
     KitObjectSpec(
@@ -175,7 +187,7 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
       x: 12,
       y: 12,
       width: 296,
-      height: 296,
+      height: 176,
       props: {
         'content': 'Input\n\nOutput\n\nTools: none',
         'fontSize': 14,
@@ -201,20 +213,52 @@ const KitRecipe harnessConversationRecipe = KitRecipe(
       x: 0,
       y: 0,
       width: 280,
-      height: 180,
+      height: textFrameHeight,
       props: {skapieKitProp: harnessConversationKitId, skapieRoleProp: 'frame'},
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 40,
+      width: 256,
+      height: 48,
+      props: {
+        'content': '',
+        'fontSize': 13,
+        'turns': <Object?>[],
+        skapieKitProp: harnessConversationKitId,
+        skapieRoleProp: 'body',
+      },
+    ),
+  ],
+);
+
+const KitRecipe codingRepositoryRecipe = KitRecipe(
+  id: codingRepositoryKitId,
+  displayName: 'Repository',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 280,
+      height: 130,
+      props: {
+        skapieKitProp: codingRepositoryKitId,
+        skapieRoleProp: 'frame',
+        repositoryPathProp: '',
+      },
     ),
     KitObjectSpec(
       typeId: textTypeId,
       x: 12,
       y: 44,
       width: 256,
-      height: 120,
+      height: 56,
       props: {
-        'content': '',
+        'content': 'Choose a repository in the inspector',
         'fontSize': 13,
-        'turns': <Object?>[],
-        skapieKitProp: harnessConversationKitId,
+        skapieKitProp: codingRepositoryKitId,
         skapieRoleProp: 'body',
       },
     ),
@@ -590,6 +634,7 @@ KitApi createAppKitApi({
   api.registerKit(boardButtonRecipe);
   api.registerKit(harnessLlmRecipe);
   api.registerKit(harnessConversationRecipe);
+  api.registerKit(codingRepositoryRecipe);
   api.registerKit(harnessSystemPromptRecipe);
   api.registerKit(harnessToolsRecipe);
   registerWorldToolKits(api);

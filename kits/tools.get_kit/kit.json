@@ -10,18 +10,19 @@
       "x": 0,
       "y": 0,
       "width": 200,
-      "height": 88,
+      "height": 64,
       "props": {
         "skapieKit": "tools.get_kit",
-        "skapieRole": "frame"
+        "skapieRole": "frame",
+        "description": "Get one kit recipe by id."
       }
     },
     {
       "typeId": "text",
       "x": 12,
-      "y": 16,
+      "y": 36,
       "width": 176,
-      "height": 56,
+      "height": 20,
       "props": {
         "content": "get_kit",
         "fontSize": 14,

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.repo_search_text",
+  "displayName": "repo_search_text",
+  "description": "Search text in the connected repository.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.repo_search_text",
+        "skapieRole": "frame",
+        "requiresRepository": true,
+        "description": "Search text in the connected repository."
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "repo_search_text",
+        "fontSize": 14,
+        "toolName": "repo_search_text",
+        "attachedTo": "",
+        "requiresRepository": true,
+        "skapieKit": "tools.repo_search_text",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

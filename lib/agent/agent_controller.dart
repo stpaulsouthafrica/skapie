@@ -11,6 +11,25 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 import 'package:skapie/tools/attach.dart';
+import 'package:skapie/tools/repository/repository_permission.dart';
+
+enum AgentToolActivityState { running, completed, failed }
+
+class AgentToolActivity {
+  const AgentToolActivity({
+    required this.callId,
+    required this.name,
+    required this.argumentsJson,
+    required this.state,
+    this.result,
+  });
+
+  final String callId;
+  final String name;
+  final String argumentsJson;
+  final AgentToolActivityState state;
+  final String? result;
+}
 
 /// Owns the replaceable [AgentSession] (later harness) and the vanilla on-ramp.
 class AgentController extends ChangeNotifier {
@@ -23,11 +42,13 @@ class AgentController extends ChangeNotifier {
     this.memoryApiKey,
     this.prefs,
     this.vanilla,
+    this.repositoryPermission = const SystemRepositoryPermission(),
   });
 
   final KitApi kitApi;
   final AgentPrefsStore? prefsStore;
   final AgentRuntimeSources sources;
+  final RepositoryPermission repositoryPermission;
 
   AgentSession session;
   ResolvedAgentRuntime runtime;
@@ -39,6 +60,11 @@ class AgentController extends ChangeNotifier {
 
   /// Body receiving the in-flight Run. Cables that feed it can pulse.
   String? runningBodyId;
+  String? activeToolFrameId;
+  final Map<String, List<AgentToolActivity>> _toolActivities = {};
+
+  List<AgentToolActivity> toolActivitiesFor(String bodyId) =>
+      List.unmodifiable(_toolActivities[bodyId] ?? const <AgentToolActivity>[]);
 
   String get statusChip => agentStatusChip(runtime);
 
@@ -117,11 +143,14 @@ class AgentController extends ChangeNotifier {
       return;
     }
     runningBodyId = bodyId;
+    activeToolFrameId = null;
+    _toolActivities[bodyId] = [];
     notifyListeners();
     try {
       await _completeSend(prompt: prompt, bodyId: bodyId);
     } finally {
       runningBodyId = null;
+      activeToolFrameId = null;
       notifyListeners();
     }
   }
@@ -142,7 +171,11 @@ class AgentController extends ChangeNotifier {
     final document = kitApi.store.document;
     final systemText = llmContextText(document, bodyId);
     final history = llmConversationHistory(document, bodyId);
-    final attached = worldToolsForLlm(kitApi: kitApi, llmBodyId: bodyId);
+    final attached = worldToolsForLlm(
+      kitApi: kitApi,
+      llmBodyId: bodyId,
+      repositoryPermission: repositoryPermission,
+    );
     Object? failure;
     StackTrace? failureTrace;
     String? reply;
@@ -164,7 +197,14 @@ class AgentController extends ChangeNotifier {
               ),
           ],
         );
-        await turn.sendUser(prompt);
+        final events = turn.events.listen(
+          (event) => _recordToolEvent(bodyId, event),
+        );
+        try {
+          await turn.sendUser(prompt);
+        } finally {
+          await events.cancel();
+        }
         reply = turn.messages
             .lastWhere((message) => message.role == AgentRole.assistant)
             .content;
@@ -231,6 +271,11 @@ class AgentController extends ChangeNotifier {
       diagnostic: lastDiagnostic,
       surface: kitSurface.isNotEmpty ? kitSurface : lastDiagnostic?.surface,
     );
+    writeLlmReplyToTextKits(
+      kitApi: kitApi,
+      llmBodyId: bodyId,
+      text: failure == null ? (reply ?? '') : failure.toString(),
+    );
     if (failure == null) {
       _appendConversation(
         bodyId: bodyId,
@@ -242,6 +287,54 @@ class AgentController extends ChangeNotifier {
     if (failure != null) {
       Error.throwWithStackTrace(failure, failureTrace ?? StackTrace.current);
     }
+  }
+
+  void _recordToolEvent(String bodyId, AgentEvent event) {
+    final activities = _toolActivities.putIfAbsent(bodyId, () => []);
+    if (event is AgentToolStarted) {
+      activities.add(
+        AgentToolActivity(
+          callId: event.call.id,
+          name: event.call.name,
+          argumentsJson: event.call.argumentsJson,
+          state: AgentToolActivityState.running,
+        ),
+      );
+      activeToolFrameId = toolFrameIdForName(
+        kitApi.store.document,
+        bodyId,
+        event.call.name,
+      );
+      _markToolUsed(activeToolFrameId);
+      notifyListeners();
+    } else if (event is AgentToolFinished) {
+      final index = activities.lastIndexWhere(
+        (activity) => activity.callId == event.call.id,
+      );
+      if (index >= 0) {
+        activities[index] = AgentToolActivity(
+          callId: event.call.id,
+          name: event.call.name,
+          argumentsJson: event.call.argumentsJson,
+          state: event.result.json['ok'] == false
+              ? AgentToolActivityState.failed
+              : AgentToolActivityState.completed,
+          result: event.result.content,
+        );
+      }
+      _markToolUsed(activeToolFrameId);
+      activeToolFrameId = null;
+      notifyListeners();
+    }
+  }
+
+  void _markToolUsed(String? frameId) {
+    if (frameId == null || frameId.isEmpty) {
+      return;
+    }
+    kitApi.updateProps(frameId, {
+      toolLastUsedProp: DateTime.now().toUtc().toIso8601String(),
+    });
   }
 
   void _appendConversation({

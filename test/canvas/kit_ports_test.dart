@@ -1,10 +1,15 @@
+import 'dart:ui';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/canvas/cable_layer.dart';
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/attach.dart';
 import 'package:skapie/tools/world/kits.dart';
 
 void main() {
@@ -24,8 +29,12 @@ void main() {
     final toolFrame = kitApi.store.document.objectById(tool.first)!;
     final ports = kitPorts(kitApi.store.document);
 
+    final incoming = ports.firstWhere(
+      (port) => port.kind == KitPortKind.textIn,
+    );
     final output = ports.firstWhere((port) => port.kind == KitPortKind.textOut);
     final input = ports.firstWhere((port) => port.kind == KitPortKind.llmInput);
+    expect(incoming.center, textInputCenter(textFrame));
     expect(output.center.dx, textFrame.x + textFrame.width);
     expect(output.center.dy, textFrame.y + textFrame.height - textOutputInset);
     expect(input.center.dx, llmFrame.x);
@@ -47,8 +56,11 @@ void main() {
     );
     expect(
       ports.firstWhere((port) => port.kind == KitPortKind.llmOutput).center.dy,
-      llmFrame.y + llmFrame.height - textOutputInset,
+      llmFrame.y + llmRegionLabelCenter(llmFrame.height, 4),
     );
+    expect(llmFrame.height, llmFrameHeight);
+    final toolPorts = ports.where((port) => port.frameId == toolFrame.id);
+    expect(toolPorts.single.center, toolOutputCenter(toolFrame));
     expect(
       ports.firstWhere((port) => port.frameId == toolFrame.id).center.dx,
       toolFrame.x + toolFrame.width,
@@ -57,8 +69,74 @@ void main() {
     expect(kitCornerRadius(llmFrame), kitRadius);
     expect(kitCornerRadius(textFrame), kitRadius);
 
+    final compact =
+        llmRegionLabelCenter(llmFrameHeight, 1) -
+        llmRegionLabelCenter(llmFrameHeight, 0);
+    final spread = llmRegionLabelCenter(400, 1) - llmRegionLabelCenter(400, 0);
+    expect(spread, greaterThan(compact));
+
     expect(hitKitPort(ports, output.center)?.kind, KitPortKind.textOut);
     expect(hitKitPort(ports, input.center + const Offset(40, 40)), isNull);
+  });
+
+  test('a text kit is only as tall as its two-line preview', () {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final ids = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
+    final frame = kitApi.store.document.objectById(ids.first)!;
+    expect(frame.height, textFrameHeight);
+    kitApi.updateFrame(id: frame.id, height: 150);
+    fitPlacedTextKits(kitApi);
+    expect(kitApi.store.document.objectById(frame.id)!.height, textFrameHeight);
+  });
+
+  test('output count ignores connections whose target was deleted', () {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(400, 0),
+    );
+    final kept = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
+    final removed = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(0, 200),
+    );
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: llm.last,
+      targetBodyId: kept.first,
+      port: llmTextOutPort,
+    );
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: llm.last,
+      targetBodyId: removed.first,
+      port: llmTextOutPort,
+    );
+    expect(
+      llmConnectionCount(
+        kitApi.store.document,
+        llm.last,
+        KitPortKind.llmOutput,
+      ),
+      2,
+    );
+    removeKitSelection(kitApi: kitApi, selectedId: removed.first);
+    expect(
+      llmConnectionCount(
+        kitApi.store.document,
+        llm.last,
+        KitPortKind.llmOutput,
+      ),
+      1,
+    );
+  });
+
+  test('a text kit summary keeps the first line and counts the rest', () {
+    expect(textKitSummary('').firstLine, isEmpty);
+    expect(textKitSummary('Hello').moreLabel, isEmpty);
+    expect(textKitSummary('Hello\nnext').moreLabel, '+1 Line');
+    expect(textKitSummary('Hello\n\n\n').moreLabel, '+3 Lines');
+    expect(textKitSummary('Hello\r\nnext').firstLine, 'Hello');
   });
 
   test('text cabled into Input becomes the LLM prompt', () {
@@ -163,6 +241,141 @@ void main() {
     expect(
       llmContextText(kitApi.store.document, llm.last),
       'Texting from space',
+    );
+  });
+
+  test('LLM output writes the reply into a cabled text kit', () {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(400, 0),
+    );
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(800, 0),
+    );
+    connectLlmOutput(
+      kitApi: kitApi,
+      sourceBodyId: llm.last,
+      targetBodyId: text.first,
+      port: llmTextOutPort,
+    );
+    expect(kitPortAccepts(KitPortKind.llmOutput, KitPortKind.textIn), isTrue);
+    final frame = kitApi.store.document.objectById(text.first)!;
+    final cable = sceneCables(kitApi.store.document)
+        .singleWhere((item) => item.port == llmTextOutPort);
+    expect(cable.to, textInputCenter(frame));
+
+    writeLlmReplyToTextKits(
+      kitApi: kitApi,
+      llmBodyId: llm.last,
+      text: 'Here are the files',
+    );
+    expect(textKitContent(kitApi.store.document, frame), 'Here are the files');
+  });
+
+  test('ports list connection counts and a drag can start on an input', () {
+    final kitApi = createAppKitApi(store: SceneStore());
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(400, 0),
+    );
+    final text = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
+    final first = kitApi.instantiate(
+      worldToolKitId('list_kits'),
+      origin: const Offset(0, 300),
+    );
+    final second = kitApi.instantiate(
+      worldToolKitId('list_kits'),
+      origin: const Offset(0, 420),
+    );
+    attachToolKit(
+      kitApi: kitApi,
+      toolObjectId: first.first,
+      llmBodyId: llm.last,
+    );
+    attachToolKit(
+      kitApi: kitApi,
+      toolObjectId: second.first,
+      llmBodyId: llm.last,
+    );
+    final document = kitApi.store.document;
+    expect(llmConnectionCount(document, llm.last, KitPortKind.llmTools), 2);
+    expect(llmPortAcceptsMany(KitPortKind.llmTools), isTrue);
+    expect(llmConnectionCount(document, llm.last, KitPortKind.llmInput), 0);
+
+    final ports = kitPorts(document);
+    connectKitPorts(
+      kitApi: kitApi,
+      from: ports.firstWhere((port) => port.kind == KitPortKind.llmInput),
+      to: ports.firstWhere((port) => port.kind == KitPortKind.textOut),
+    );
+    expect(
+      llmConnectionCount(kitApi.store.document, llm.last, KitPortKind.llmInput),
+      1,
+    );
+    expect(kitPortsConnect(KitPortKind.llmInput, KitPortKind.textOut), isTrue);
+    expect(
+      llmRunStatusOf(document.objectById(llm.last), running: false),
+      LlmRunStatus.ready,
+    );
+    expect(
+      llmRunStatusOf(document.objectById(llm.last), running: true),
+      LlmRunStatus.running,
+    );
+  });
+
+  test('a cable pulses only while its tool is being called', () {
+    final tool = SceneCable(
+      id: 'tool',
+      ownerId: 'tool-frame',
+      port: llmToolsPort,
+      sourceId: 'tool-frame',
+      targetFrameId: 'llm-frame',
+      from: Offset.zero,
+      to: const Offset(10, 0),
+      color: const Color(0xFF000000),
+      targetBodyId: 'llm-body',
+      affectsRun: true,
+    );
+    expect(
+      cableInvocationFlow(
+        cable: tool,
+        runningBodyId: 'llm-body',
+        activeToolFrameId: null,
+        clock: 0.2,
+      ),
+      isNull,
+    );
+    expect(
+      cableInvocationFlow(
+        cable: tool,
+        runningBodyId: 'llm-body',
+        activeToolFrameId: 'tool-frame',
+        clock: 0.2,
+      ),
+      isNotNull,
+    );
+    final input = SceneCable(
+      id: 'input',
+      ownerId: 'text',
+      port: llmInputPort,
+      sourceId: 'text',
+      targetFrameId: 'llm-frame',
+      from: Offset.zero,
+      to: const Offset(10, 0),
+      color: const Color(0xFF000000),
+      targetBodyId: 'llm-body',
+      affectsRun: true,
+    );
+    expect(
+      cableInvocationFlow(
+        cable: input,
+        runningBodyId: 'llm-body',
+        activeToolFrameId: 'tool-frame',
+        clock: 0.2,
+      ),
+      isNull,
     );
   });
 }

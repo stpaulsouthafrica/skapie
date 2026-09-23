@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.repo_git_status",
+  "displayName": "repo_git_status",
+  "description": "Read Git branch and working tree status.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.repo_git_status",
+        "skapieRole": "frame",
+        "requiresRepository": true,
+        "description": "Read Git branch and working tree status."
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "repo_git_status",
+        "fontSize": 14,
+        "toolName": "repo_git_status",
+        "attachedTo": "",
+        "requiresRepository": true,
+        "skapieKit": "tools.repo_git_status",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

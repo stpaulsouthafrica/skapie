@@ -15,6 +15,8 @@ class PaintedCable {
     this.flashAlpha = 1,
     this.arrival = 0,
     this.flow,
+    this.exitsRight = true,
+    this.entersFromLeft = true,
   });
 
   final Offset from;
@@ -37,19 +39,46 @@ class PaintedCable {
 
   /// Looping pulse while this cable is feeding a run, 0 to 1.
   final double? flow;
+
+  /// A right-edge port leaves toward +x. A left-edge port leaves toward -x.
+  final bool exitsRight;
+
+  /// A left-edge port is approached from the left. A right-edge port from the right.
+  final bool entersFromLeft;
 }
 
-Path cableCurve(Offset start, Offset end, double zoom) {
+Path cableCurve(
+  Offset start,
+  Offset end,
+  double zoom, {
+  bool exitsRight = true,
+  bool entersFromLeft = true,
+}) {
   final span = (end.dx - start.dx).abs();
   final bend = (span * 0.45).clamp(28.0 * zoom, 160.0 * zoom);
+  final leave = exitsRight ? bend : -bend;
+  final approach = entersFromLeft ? -bend : bend;
   return Path()
     ..moveTo(start.dx, start.dy)
-    ..cubicTo(start.dx + bend, start.dy, end.dx - bend, end.dy, end.dx, end.dy);
+    ..cubicTo(
+      start.dx + leave,
+      start.dy,
+      end.dx + approach,
+      end.dy,
+      end.dx,
+      end.dy,
+    );
 }
 
 void paintCables(Canvas canvas, List<PaintedCable> cables, double zoom) {
   for (final cable in cables) {
-    final path = cableCurve(cable.from, cable.to, zoom);
+    final path = cableCurve(
+      cable.from,
+      cable.to,
+      zoom,
+      exitsRight: cable.exitsRight,
+      entersFromLeft: cable.entersFromLeft,
+    );
     final metrics = path.computeMetrics().toList();
     if (metrics.isEmpty) {
       continue;

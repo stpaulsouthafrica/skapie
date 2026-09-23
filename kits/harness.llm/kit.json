@@ -10,7 +10,7 @@
       "x": 0,
       "y": 0,
       "width": 320,
-      "height": 320,
+      "height": 200,
       "props": {
         "skapieKit": "harness.llm",
         "skapieRole": "frame"
@@ -21,7 +21,7 @@
       "x": 12,
       "y": 12,
       "width": 296,
-      "height": 296,
+      "height": 176,
       "props": {
         "content": "Input\n\nOutput\n\nTools: none",
         "fontSize": 14,

@@ -151,6 +151,40 @@ void main() {
     expect(movedBody.y, closeTo(body.y, 0.001));
   });
 
+  testWidgets('hovering a tool shows its description', (tester) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    kitApi.instantiate('tools.list_kits', origin: Offset.zero);
+    final frame = store.document.objects.firstWhere(
+      (object) => object.props[skapieRoleProp] == 'frame',
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PaintScope(
+          tokens: PaintTokens.dark(),
+          child: Scaffold(
+            body: CanvasViewport(store: store, kitApi: kitApi),
+          ),
+        ),
+      ),
+    );
+    final state = tester.state<CanvasViewportState>(
+      find.byType(CanvasViewport),
+    );
+    final center = worldToScreen(
+      Offset(frame.x + frame.width / 2, frame.y + frame.height / 2),
+      tester.getSize(find.byType(CanvasViewport)),
+      state.camera,
+    );
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: center);
+    await gesture.moveTo(center);
+    await tester.pump();
+    expect(find.byKey(const Key('tool-hover-description')), findsOneWidget);
+    expect(find.text('List registered kits.'), findsOneWidget);
+    await gesture.removePointer();
+  });
+
   testWidgets('drag tools.list_kits moves frame and grant together', (
     tester,
   ) async {
@@ -416,7 +450,7 @@ void main() {
     expect(find.byKey(const Key('inline-text-edit')), findsNothing);
   });
 
-  testWidgets('double-click a text kit edits its text in place', (
+  testWidgets('double-click a text kit opens a full-screen editor', (
     tester,
   ) async {
     final store = SceneStore();
@@ -441,13 +475,14 @@ void main() {
     await tester.tapAt(center);
     await tester.pump();
 
-    expect(find.byKey(const Key('inline-text-edit')), findsOneWidget);
+    expect(find.byKey(const Key('text-kit-editor')), findsOneWidget);
+    expect(find.byKey(const Key('inline-text-edit')), findsNothing);
     await tester.enterText(
-      find.byKey(const Key('inline-text-edit')),
+      find.byKey(const Key('text-kit-editor-field')),
       'hello there',
     );
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
+    await tester.tap(find.byKey(const Key('text-kit-editor-close')));
+    await tester.pumpAndSettle();
 
     expect(
       store.document.objects

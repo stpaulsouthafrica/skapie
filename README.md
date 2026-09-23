@@ -2,7 +2,7 @@
 
 Skapie is a Flutter desktop app: a canvas over an infinite world, a scene document of scene objects, and kits (capability instances; kit packages live on disk under `kits/`). v1 does not generate arbitrary Dart widgets at runtime: an agent will edit scene data, and a registry renders known types.
 
-This repository is **Phase 10.7**: luxury kit chrome, irreducible compounds, inspector polish. World tools architecture from 10.6 is unchanged. Vanilla HTTP kernel under `lib/providers/`. No persistent chat bar. Streaming, Pi/MCP, sandbox kits, and living sub-agent kits are later arcs.
+This repository includes the first **Phase 11** coding slice: separate boards, a Repository kit, individual read-only repository tool kits, and visible tool activity. The board is the workspace; a coding agent can be assembled from the same small kits available to the user. See the [Phase 11 roadmap](docs/phase_11_roadmap.md).
 
 ## Run on macOS
 
@@ -22,7 +22,7 @@ You should get a window titled **Skapie Canvas** with a thin **Skapie** bar and 
 
 **Transforms:** screen origin is the viewport top-left (Flutter: +x right, +y down). World uses the same axes. World `(0,0)` is the **world origin**. The camera `offset` is the world point shown at the viewport center — not another name for the origin.
 
-**Save file:** absolute path under Application Support (`…/skapie/scene.json`) by default. Logged at startup. The top bar shows a short label; hover or **Copy path** for the full path. Not cwd-relative unless you explicitly enable project mode with an **absolute** `SKAPIE_PROJECT_ROOT`. See [`docs/scene.md`](docs/scene.md).
+**Boards:** the original `scene.json` is Main board. Use Space → **New board** to create another world, or **Switch board** to return. Additional board files live beside the main scene under `boards/`, with `active-board` recording the last board. The scene path is absolute under Application Support by default; project mode requires an **absolute** `SKAPIE_PROJECT_ROOT`. See [`docs/scene.md`](docs/scene.md).
 
 **Kits:** declarative packages under `kits/<id>/kit.json`. Startup loads them into `KitApi`. Default kits root is Application Support (`…/skapie/kits`) because a sandboxed macOS app cannot see the git repo. Point at the repo shelf with an **absolute** override:
 
@@ -41,7 +41,7 @@ flutter run -d macos \
 # or: --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
-**Agent:** No persistent chat bar. **Space** or **F3** opens a command palette. Select a compound LLM kit: **Input** is the prompt, Enter fills **Output** via vanilla. OpenCode Go models are routed from the curated catalog (`lib/providers/`) to `/chat/completions`, `/responses`, or `/messages`. System prompt and tools are separate stub kits; they do not silently attach. Cmd+, (or palette **Settings**) opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Keys are never committed and never written into the scene file. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`. See [`docs/providers.md`](docs/providers.md) and [`docs/agent.md`](docs/agent.md).
+**Agent:** No persistent chat bar. **Space** or **F3** opens a command palette. Select a compound LLM kit: **Input** is the prompt, Enter fills **Output**. Connect Text, Conversation, and individual tool kits to choose what the LLM sees. Add **Repository**, choose a folder in its inspector, and cable it to each repository tool kit. Cable those tools to the LLM's Tools input. The LLM inspector shows the last run's calls and results; the active tool's cables pulse. Cmd+, (or palette **Settings**) opens Connect → models → Apply. **Use Fake** switches back without a restart. No key → Fake Echo. Provider/model/thinking/key persist in Application Support `skapie/agent_prefs.json`. See [`docs/providers.md`](docs/providers.md), [`docs/agent.md`](docs/agent.md), and [`docs/tools.md`](docs/tools.md).
 
 ```bash
 # OpenCode Go (preferred for local testing)
@@ -108,6 +108,8 @@ Skapie is built phase by phase. **The 10-phase core is complete.** Phase 10.1 is
 
 **Phase 10.7 gate:** kit cards default to panel gray plus accent hairline; specialized kits select, drag, and delete as one; inspector fill, hover, separators, and pretty ids.
 
+**Phase 11.0 slice:** independent boards, Repository kit with macOS folder grant, individual read-only repository tools, visible tool calls and cable activity, and port-hover cursor feedback. [Roadmap and remaining gates](docs/phase_11_roadmap.md).
+
 ## Docs
 
 - [`docs/glossary.md`](docs/glossary.md) — canvas, world origin, scene object, kit, kit recipe, kit package, graph node
@@ -121,4 +123,4 @@ Skapie is built phase by phase. **The 10-phase core is complete.** Phase 10.1 is
 - [`docs/tools.md`](docs/tools.md) — world tool runners vs spawnable grants
 - [`docs/providers.md`](docs/providers.md) — OpenCode Go seating chart and surfaces
 - [`docs/paint.md`](docs/paint.md) — cosmetic identity: tokens, transient settings
-- **Dream goal / later arcs (not scheduled):** visible sub-agent kits, sandbox, personal coding-agent kit — the 10-phase core is not that
+- [`docs/phase_11_roadmap.md`](docs/phase_11_roadmap.md) — coding agent direction and gates

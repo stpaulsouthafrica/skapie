@@ -11,6 +11,9 @@ import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/kit_api/kit_path.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/canvas/kit_ports.dart';
+import 'package:skapie/tools/world/kits.dart';
+import 'package:skapie/scene/board_catalog.dart';
 
 const _scenePathDefine = String.fromEnvironment('SKAPIE_SCENE_PATH');
 const _useProjectScene = bool.fromEnvironment('SKAPIE_USE_PROJECT_SCENE');
@@ -23,11 +26,22 @@ const _agentModelDefine = String.fromEnvironment('SKAPIE_AGENT_MODEL');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final store = await bootstrapSceneStore();
+  var store = await bootstrapSceneStore();
+  final boardCatalog = BoardCatalog(store.persistence!.file);
+  final activeBoard = await boardCatalog.active();
+  if (activeBoard.file.absolute.path != store.sceneFilePath) {
+    store = SceneStore(persistence: SceneFilePersistence(activeBoard.file));
+    await store.load();
+  }
   final kitApi = await bootstrapKitApi(store: store);
   final agentController = await bootstrapAgentController(kitApi: kitApi);
   runApp(
-    SkapieApp(store: store, kitApi: kitApi, agentController: agentController),
+    SkapieApp(
+      store: store,
+      kitApi: kitApi,
+      agentController: agentController,
+      boardCatalog: boardCatalog,
+    ),
   );
 }
 
@@ -96,6 +110,9 @@ Future<KitApi> bootstrapKitApi({
   );
   api.log = (message) => debugPrint('Skapie: $message');
   await api.reloadPackages();
+  fitPlacedLlmKits(api);
+  fitPlacedToolKits(api);
+  fitPlacedTextKits(api);
   debugPrint('Skapie kit packages in memory: ${api.listKits().length}');
   return api;
 }

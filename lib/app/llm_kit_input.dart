@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_models_catalog.dart';
@@ -10,7 +8,8 @@ import 'package:skapie/paint/paint.dart';
 import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
 import 'package:skapie/scene/scene.dart';
 
-/// Inspector-hosted prompt, model, output, and run for a compound LLM kit.
+/// Inspector-hosted model and run for a compound LLM kit.
+/// The prompt is the text cabled into Input.
 class LlmKitInput extends StatefulWidget {
   const LlmKitInput({
     super.key,
@@ -28,17 +27,12 @@ class LlmKitInput extends StatefulWidget {
 }
 
 class _LlmKitInputState extends State<LlmKitInput> {
-  final _input = TextEditingController();
-  final _focus = FocusNode();
-  Timer? _debounce;
   var _busy = false;
-  String? _boundId;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onController);
-    _bind(force: true);
   }
 
   @override
@@ -48,19 +42,11 @@ class _LlmKitInputState extends State<LlmKitInput> {
       oldWidget.controller.removeListener(_onController);
       widget.controller.addListener(_onController);
     }
-    if (oldWidget.body.id != widget.body.id) {
-      _bind(force: true);
-    } else if (!_focus.hasFocus && !_busy) {
-      _bind(force: true);
-    }
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onController);
-    _debounce?.cancel();
-    _input.dispose();
-    _focus.dispose();
     super.dispose();
   }
 
@@ -68,35 +54,6 @@ class _LlmKitInputState extends State<LlmKitInput> {
     if (mounted) {
       setState(() {});
     }
-  }
-
-  void _bind({required bool force}) {
-    if (!force && _boundId == widget.body.id) {
-      return;
-    }
-    _boundId = widget.body.id;
-    final prompt = widget.body.props['prompt']?.toString() ?? '';
-    if (_input.text != prompt) {
-      _input.value = TextEditingValue(
-        text: prompt,
-        selection: TextSelection.collapsed(offset: prompt.length),
-      );
-    }
-  }
-
-  void _commitPrompt(String text) {
-    setLlmKitPrompt(
-      kitApi: widget.kitApi,
-      bodyId: widget.body.id,
-      prompt: text,
-    );
-  }
-
-  void _onChanged(String text) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 200), () {
-      _commitPrompt(text);
-    });
   }
 
   List<AgentModelInfo> get _choices {
@@ -121,18 +78,6 @@ class _LlmKitInputState extends State<LlmKitInput> {
     return null;
   }
 
-  String get _output {
-    final error = widget.body.props['error']?.toString().trim() ?? '';
-    if (error.isNotEmpty) {
-      return error;
-    }
-    final reply = widget.body.props['reply']?.toString().trim() ?? '';
-    if (reply.isNotEmpty) {
-      return reply;
-    }
-    return '-';
-  }
-
   void _onModel(String? id) {
     if (id == null) {
       return;
@@ -153,7 +98,7 @@ class _LlmKitInputState extends State<LlmKitInput> {
         : runtime.presetId;
     final surface =
         info.surface?.id ?? lookupOpenCodeGoModel(info.id)?.surface.id ?? '';
-    final prompt = widget.body.props['prompt']?.toString() ?? _input.text;
+    final prompt = _cableInput;
     widget.kitApi.updateProps(widget.body.id, {
       'provider': provider,
       'model': info.id,
@@ -175,19 +120,16 @@ class _LlmKitInputState extends State<LlmKitInput> {
   String get _cableInput =>
       llmCableInput(widget.kitApi.store.document, widget.body.id).trim();
 
-  Future<void> _submit(String text) async {
-    final linked = _cableInput;
-    final prompt = linked.isNotEmpty ? linked : text.trim();
+  Future<void> _submit() async {
+    final prompt = _cableInput;
     if (prompt.isEmpty || _busy) {
       return;
     }
-    _debounce?.cancel();
-    _commitPrompt(prompt);
     setState(() => _busy = true);
     try {
       await widget.controller.sendUser(prompt, targetBodyId: widget.body.id);
     } catch (_) {
-      // Failure is visible on the LLM kit.
+      // Failure is written onto a text kit cabled from Output.
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -198,8 +140,7 @@ class _LlmKitInputState extends State<LlmKitInput> {
   @override
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
-    final textTheme = Theme.of(context).textTheme;
-    final needsInput = _cableInput.isEmpty && _input.text.trim().isEmpty;
+    final needsInput = _cableInput.isEmpty;
     final choices = _choices;
     final selected = _selectedModel;
     return Column(
@@ -232,48 +173,20 @@ class _LlmKitInputState extends State<LlmKitInput> {
             onChanged: _busy ? null : _onModel,
           ),
         ),
-        const SizedBox(height: 8),
-        PaintTextField(
-          key: const Key('llm-kit-input'),
-          controller: _input,
-          focusNode: _focus,
-          hint: 'Input',
-          label: 'Input',
-          enabled: !_busy,
-          onChanged: _onChanged,
-          onSubmitted: _submit,
-        ),
-        if (_cableInput.isNotEmpty)
+        if (needsInput)
           Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              'Using connected text',
-              style: TextStyle(color: tokens.muted, fontSize: 11),
-            ),
-          )
-        else if (needsInput)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
+            padding: const EdgeInsets.only(top: 8),
             child: Text(
               'Needs input',
               style: TextStyle(color: tokens.muted, fontSize: 11),
             ),
           ),
         const SizedBox(height: 8),
-        Text('Output', style: textTheme.labelSmall),
-        Text(
-          _output,
-          key: const Key('llm-kit-output'),
-          maxLines: 8,
-          overflow: TextOverflow.ellipsis,
-          style: textTheme.bodySmall,
-        ),
-        const SizedBox(height: 8),
         KeyedSubtree(
           key: const Key('llm-kit-run'),
           child: PaintButton(
             label: _busy ? 'Running' : 'Run',
-            onPressed: _busy ? null : () => _submit(_input.text),
+            onPressed: needsInput || _busy ? null : _submit,
           ),
         ),
         const SizedBox(height: 8),

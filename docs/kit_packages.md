@@ -99,7 +99,7 @@ flutter run -d macos \
   --dart-define=SKAPIE_KITS_ROOT=/Users/you/Development/skapie/kits
 ```
 
-If the resolved folder is empty or unreadable, `createAppKitApi` still has the in-memory `demo.note-card` and harness kit fallbacks. After a successful disk load, **disk replaces memory** for that id ([`reloadPackages`](kit_api.md#reloadpackages)).
+If the resolved folder is empty or unreadable, `createAppKitApi` still has in-memory demo, board, harness, Repository, and tool-kit fallbacks. After a successful disk load, **disk replaces memory** for that id ([`reloadPackages`](kit_api.md#reloadpackages)).
 
 ## Load and save
 
@@ -113,7 +113,11 @@ Call these on `KitApi`, not `KitPackageStore` (store is internal + tests).
 
 **Conflict policy:** same id already in memory → disk wins (logged).
 
-## Dream goal (not scheduled)
+## Current capability boundary
+
+`coding.repository` and the `tools.repo_*` kits are ordinary package recipes. Their native folder permission and runners are implemented by the host app. A package with an unknown `toolName` does not become executable. See [tool kits](tools.md) and the [Phase 11 roadmap](phase_11_roadmap.md).
+
+## Later direction
 
 Visible sub-agent kits: a future direction where a kit can show living agent work on the canvas (status, tokens, input/output). That implies sandboxed kit runtimes and permissions later. The Phase 9 / 9.1 harness is **not** that. Planted seam: `capabilities: []` in `kit.json`.
 

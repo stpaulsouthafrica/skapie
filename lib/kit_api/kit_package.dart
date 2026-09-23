@@ -43,7 +43,7 @@ const Map<String, Object?> harnessLlmJson = {
       'x': 0,
       'y': 0,
       'width': 320,
-      'height': 320,
+      'height': 200,
       'props': {skapieKitProp: harnessLlmKitId, skapieRoleProp: 'frame'},
     },
     {
@@ -51,7 +51,7 @@ const Map<String, Object?> harnessLlmJson = {
       'x': 12,
       'y': 12,
       'width': 296,
-      'height': 296,
+      'height': 176,
       'props': {
         'content': 'Input\n\nOutput\n\nTools: none',
         'fontSize': 14,

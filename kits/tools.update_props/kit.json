@@ -10,18 +10,19 @@
       "x": 0,
       "y": 0,
       "width": 200,
-      "height": 88,
+      "height": 64,
       "props": {
         "skapieKit": "tools.update_props",
-        "skapieRole": "frame"
+        "skapieRole": "frame",
+        "description": "Shallow-merge props. Null values remove keys."
       }
     },
     {
       "typeId": "text",
       "x": 12,
-      "y": 16,
+      "y": 36,
       "width": 176,
-      "height": 56,
+      "height": 20,
       "props": {
         "content": "update_props",
         "fontSize": 14,

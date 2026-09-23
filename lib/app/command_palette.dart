@@ -22,6 +22,11 @@ const List<CommandAction> defaultCommandActions = [
     label: 'Add Conversation',
     icon: KitIconKind.conversation,
   ),
+  CommandAction(
+    id: 'add-repository',
+    label: 'Add Repository',
+    icon: KitIconKind.box,
+  ),
   CommandAction(id: 'add-text', label: 'Add Text', icon: KitIconKind.text),
   CommandAction(id: 'add-box', label: 'Add Box', icon: KitIconKind.box),
   CommandAction(

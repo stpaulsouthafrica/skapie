@@ -109,6 +109,19 @@ class AgentMessageAppended extends AgentEvent {
   final AgentMessage message;
 }
 
+class AgentToolStarted extends AgentEvent {
+  const AgentToolStarted(this.call);
+
+  final AgentToolCall call;
+}
+
+class AgentToolFinished extends AgentEvent {
+  const AgentToolFinished(this.call, this.result);
+
+  final AgentToolCall call;
+  final AgentToolResult result;
+}
+
 class AgentTurnFinished extends AgentEvent {
   const AgentTurnFinished();
 }
@@ -152,7 +165,7 @@ class AgentSession {
   late final AgentToolDispatcher _dispatcher;
   final List<AgentMessage> _messages;
   final StreamController<AgentEvent> _events =
-      StreamController<AgentEvent>.broadcast();
+      StreamController<AgentEvent>.broadcast(sync: true);
 
   List<AgentMessage> get messages => List.unmodifiable(_messages);
 
@@ -192,10 +205,12 @@ class AgentSession {
         _messages.add(assistant);
         _events.add(AgentMessageAppended(assistant));
         for (final call in calls) {
+          _events.add(AgentToolStarted(call));
           final result = await _dispatcher.dispatch(
             call.name,
             call.argumentsJson,
           );
+          _events.add(AgentToolFinished(call, result));
           final toolMessage = AgentMessage(
             role: AgentRole.tool,
             content: result.content,

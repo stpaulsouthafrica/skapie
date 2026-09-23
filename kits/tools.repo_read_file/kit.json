@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.repo_read_file",
+  "displayName": "repo_read_file",
+  "description": "Read a bounded range of a repository file.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.repo_read_file",
+        "skapieRole": "frame",
+        "requiresRepository": true,
+        "description": "Read a bounded range of a repository file."
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "repo_read_file",
+        "fontSize": 14,
+        "toolName": "repo_read_file",
+        "attachedTo": "",
+        "requiresRepository": true,
+        "skapieKit": "tools.repo_read_file",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

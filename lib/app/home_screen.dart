@@ -10,6 +10,7 @@ import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/scene/board_catalog.dart';
 import 'package:skapie/paint/kit_icon.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/tools/attach.dart';
@@ -21,12 +22,18 @@ class HomeScreen extends StatefulWidget {
     required this.registry,
     required this.kitApi,
     required this.agentController,
+    this.onNewBoard,
+    this.listBoards,
+    this.onOpenBoard,
   });
 
   final SceneStore store;
   final ObjectRegistry registry;
   final KitApi kitApi;
   final AgentController agentController;
+  final Future<void> Function()? onNewBoard;
+  final Future<List<BoardInfo>> Function()? listBoards;
+  final Future<void> Function(BoardInfo board)? onOpenBoard;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -129,6 +136,8 @@ class _HomeScreenState extends State<HomeScreen> {
             break;
           }
         }
+      } else if (value == codingRepositoryKitId) {
+        _selection.select(ids.first);
       } else if (value.startsWith('tools.')) {
         for (final id in ids) {
           final object = widget.store.document.objectById(id);
@@ -169,6 +178,18 @@ class _HomeScreenState extends State<HomeScreen> {
   List<CommandAction> _paletteActions() {
     return [
       ...defaultCommandActions,
+      if (widget.onNewBoard != null)
+        const CommandAction(
+          id: 'new-board',
+          label: 'New board',
+          icon: KitIconKind.box,
+        ),
+      if (widget.listBoards != null)
+        const CommandAction(
+          id: 'switch-board',
+          label: 'Switch board',
+          icon: KitIconKind.box,
+        ),
       for (final kit in widget.kitApi.listKits())
         if (kit.id.startsWith('tools.'))
           CommandAction(
@@ -194,10 +215,16 @@ class _HomeScreenState extends State<HomeScreen> {
     switch (action.id) {
       case 'settings':
         _openSettings();
+      case 'new-board':
+        _newBoard();
+      case 'switch-board':
+        _chooseBoard();
       case 'add-llm':
         _add(harnessLlmKitId);
       case 'add-conversation':
         _add(harnessConversationKitId);
+      case 'add-repository':
+        _add(codingRepositoryKitId);
       case 'add-box':
         _add(boardBoxKitId);
       case 'add-text':
@@ -215,6 +242,64 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _newBoard() async {
+    try {
+      await widget.onNewBoard?.call();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not create board: $error')),
+        );
+      }
+    }
+  }
+
+  Future<void> _chooseBoard() async {
+    final list = widget.listBoards;
+    if (list == null) {
+      return;
+    }
+    try {
+      final boards = await list();
+      if (!mounted) {
+        return;
+      }
+      final selected = await showDialog<BoardInfo>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Boards'),
+          content: SizedBox(
+            width: 360,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final board in boards)
+                  ListTile(
+                    title: Text(board.name),
+                    subtitle: Text(
+                      board.file.absolute.path,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => Navigator.pop(context, board),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (selected != null) {
+        await widget.onOpenBoard?.call(selected);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not open board: $error')));
+      }
+    }
+  }
+
   List<PopupMenuEntry<String>> _addMenuItems(BuildContext context) {
     return [
       const PopupMenuItem(value: boardBoxKitId, child: Text('Box')),
@@ -222,6 +307,10 @@ class _HomeScreenState extends State<HomeScreen> {
       const PopupMenuItem(
         value: harnessConversationKitId,
         child: Text('Conversation'),
+      ),
+      const PopupMenuItem(
+        value: codingRepositoryKitId,
+        child: Text('Repository'),
       ),
       const PopupMenuItem(value: boardButtonKitId, child: Text('Button')),
       for (final kit in widget.kitApi.listKits())

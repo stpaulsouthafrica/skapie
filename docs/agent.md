@@ -3,11 +3,11 @@
 The **world is the harness.** There is no persistent chat bar. Authoring is:
 
 1. **Space / F3 command palette** to search and add primitives and kits, or open Settings.
-2. **Selection typing** on a compound LLM kit: keystrokes edit that kit’s prompt; Enter runs vanilla onto that kit.
+2. **Selection typing** on a compound LLM kit: keystrokes edit that kit’s prompt; Enter runs that kit with its connected inputs and tools.
 
-**Principle kits** are dumb data/structure (Note, System prompt, Tools, and the LLM kit’s Input region). **Specialized kits** have irreducible behavior. `harness.llm` is specialized: title-bar chrome, per-kit model, Needs input, vanilla completion into Output. Frame and body move as one. No cables.
+**Principle kits** hold data or structure. **Specialized kits** have irreducible behavior. `harness.llm` is specialized: title-bar chrome, per-kit model, Needs input, and completion into Output. Frame and body move as one. Text, Conversation, Repository, and tool kits connect through visible cables.
 
-Completions/responses/messages clients live under `lib/providers/`. **System prompt** and **Tools** remain unwired stubs. The tool-loop `AgentSession` stays in `lib/agent/` until a later board wire. Wiring those stubs onto the HTTP payload is later.
+Completions/responses/messages clients live under `lib/providers/`. Text cabled to Context supplies a system message. Individual `tools.*` grants cabled to Tools activate the `AgentSession` tool loop. The `harness.system-prompt` and `harness.tools` packages remain legacy stubs; neither silently modifies a request.
 
 The **scene document** remains the source of truth. Mutations go `KitApi` → `SceneStore.apply`. The palette instantiates through KitApi. Selection typing updates prompt through KitApi. `AgentController.sendUser` writes reply/error onto a **targeted** LLM kit body. **Kit** / **kit recipe** / **kit package**: [glossary](glossary.md).
 
@@ -15,10 +15,10 @@ The **scene document** remains the source of truth. Mutations go `KitApi` → `S
 
 | Now | Later |
 |---|---|
-| Palette on-ramp; no global chat strip | Visible plugs / wires |
-| Specialized compound LLM kit: icon + per-kit model + Input/Output | Detach Input/Output into kits |
-| Vanilla HTTP kernel in `lib/providers/` | Inject system prompt + tools from board kits |
-| Agent folder keeps session/tool-loop code | Those capabilities become board kits |
+| Palette on-ramp; no global chat strip | Persistent run timeline |
+| Connected Text, Conversation, Repository, and tool kits | Typed port contract in kit packages |
+| Vanilla HTTP kernel plus connected-grant tool loop | Reviewed writes and bounded execution |
+| Agent folder keeps session/tool-loop code | User-extensible host capability contract |
 
 Living sub-agent kits (status, tokens, workers) remain a dream goal. These harness kits are static box + text first principles.
 
@@ -26,10 +26,10 @@ Living sub-agent kits (status, tokens, workers) remain a dream goal. These harne
 
 1. Settings supply the **pipe**: provider, base URL, API key, and the Connect catalog. No second credentials store.
 2. Palette **Add LLM** places a specialized `harness.llm` via KitApi near the view center.
-3. Select that kit. Inspector hosts **model** (catalog from Settings/Connect, or the OpenCode Go chart when nothing is connected) and **Input**. Enter or Run. Vanilla runs for **that kit’s** model/surface onto **Output** (Fake Echo offline). Empty Input shows **Needs input** and does not call the network.
+3. Select that kit. Inspector hosts **model** (catalog from Settings/Connect, or the OpenCode Go chart when nothing is connected) and **Input**. Enter or Run. With no connected tool kits, vanilla runs onto **Output** (Fake Echo offline). With tool kits, `AgentSession` sends only those tools and records their calls. Empty Input shows **Needs input** and does not call the network.
 4. `harness.system-prompt` and `harness.tools` can sit on the board. They do **not** change the vanilla payload.
 5. With nothing selected as an LLM kit, Space opens the palette. Typing does not talk to a hidden global agent.
-6. `AgentSession` is kept for a later wire. Selection Enter does not call `session.sendUser`.
+6. Repository read tools need a Repository cable and a folder chosen in its inspector. See [tool kits](tools.md).
 
 ```
 palette Add LLM
@@ -39,17 +39,8 @@ select LLM kit, type, Enter
   → updateProps prompt via KitApi
   → controller.sendUser(text, targetBodyId: body.id)
        Fake: reply = "Echo: …"
-       else vanilla surface client (completions / responses / messages)
+       else vanilla surface client or connected-grant tool loop
   → publishLlmKit onto that body
-```
-
-Later (not this phase) a wired harness could become:
-
-```
-session.sendUser(...)
-  → system message from a system-prompt kit
-  → tools from a tools kit
-  → tool loop → KitApi
 ```
 
 Default system prompt (`defaultAgentSystemPrompt`) still seeds **AgentSession** only. It is not in the vanilla payload.
@@ -125,15 +116,15 @@ No `tools` on this path. No `reasoning`. Context text, when a Context cable has 
 
 Timeouts (60s) and non-2xx throw `AgentHttpException`. `lastDiagnostic` records preset, model, surface, URL, status, truncated body, `tools=off`, `reasoning=off`. Never the API key.
 
-### Future wired harness payload (not first Enter)
+### Connected-grant payload
 
-`OpenAiCompatibleAgentModel` + `AgentSession.sendUser` still map the full session: system / user / assistant / tool messages, optional function `tools` with object JSON Schema, and OpenRouter-only `reasoning.effort`. Selection Enter does not take this path.
+`OpenAiCompatibleAgentModel` + `AgentSession.sendUser` map system / user / assistant / tool messages and function `tools` with object JSON Schema. Selection Enter takes this path when tool grants are connected; otherwise it uses the vanilla surface client.
 
 ## Command palette
 
 Space or F3 (canvas focused, not typing in a field) opens a transient paint panel in the upper third. Esc, click-away, or running an action closes it. Filter is case-insensitive substring (spaces/hyphens ignored). **Hover** and **Up/Down** (optional **Ctrl-N/P**) share one highlight index; **Enter** runs the highlight (same as click). Focus stays in Search; arrows do not move the caret between actions. Highlight clamps at the list ends and scrolls into view. The palette does **not** send chat.
 
-Actions: Add LLM, Add Text, Add Box, Add Button, Tool entries, Attach to LLM, Detach tool, Settings. Each row has a fixed icon. System prompt, debug rect, and note card are not offered.
+Actions: Add LLM, Add Text, Add Box, Add Button, Add Repository, Tool entries, New board, Switch board, Attach to LLM, Detach tool, Settings. Each row has a fixed icon. System prompt, debug rect, and note card are not offered.
 
 Empty world shows a muted `Space to add` hint. First LLM comes from **Add LLM**, then select and type.
 
@@ -141,9 +132,9 @@ Cmd+, still opens Agent settings (also listed in the palette). Add remains in th
 
 ## Selection typing (compound LLM)
 
-`harness.llm` is a **specialized** compound kit: panel card, accent hairline, title-bar chrome (diamond + LLM + model chip), stacked **Input** and **Output** regions, per-kit `provider` / `model` / `surface` props. Frame and body move and delete together. Labels live in visible `content`; props stay `prompt` vs `reply`/`error`. Not separate scene kits.
+`harness.llm` is a **specialized** compound kit: panel card, accent hairline, title-bar chrome (diamond + LLM + model chip), stacked Input, Context, Conversation, Tools, and Output regions, per-kit `provider` / `model` / `surface` props. Frame and body move and delete together. Those regions are port labels, with a connection count on ports that accept more than one cable, plus a status line. The reply is written onto text kits cabled from Output. Props stay `prompt` vs `reply`/`error` on the body. Not separate scene kits.
 
-When selection is an LLM kit frame or body, the inspector hosts the model picker, Input, read-only Output, Run, and attached Tools. Input binds to `prompt` via `KitApi.updateProps`. Enter or Run calls `sendUser` with that body’s id and the kit’s model/surface. Empty prompt shows **Needs input** and is a no-op. There is no bottom LLM bar. Other selection: Space is palette only; there is no global agent capture.
+When selection is an LLM kit frame or body, the inspector hosts the model picker, Input, Run, and attached Tools. Input binds to `prompt` via `KitApi.updateProps`. Enter or Run calls `sendUser` with that body’s id and the kit’s model/surface. Empty prompt shows **Needs input** and is a no-op. There is no bottom LLM bar. Other selection: Space is palette only; there is no global agent capture.
 
 `lib/agent/` is transitional runtime (controller, session, tool loop). Those capabilities become board kits later. Do not treat the agent folder as a chatbot.
 
@@ -151,7 +142,7 @@ When selection is an LLM kit frame or body, the inspector hosts the model picker
 
 | Kit id | Role this phase |
 |---|---|
-| `harness.llm` | Specialized compound: title-bar chrome, per-kit model, Needs input, Input region, Output region. Frame and body stay glued. Props: `prompt`, `reply`, `error`, `model`, `provider`, `surface`, plus visible `content`. Palette instantiates. Inspector Enter/Run publishes onto **that** body. |
+| `harness.llm` | Specialized compound: title-bar chrome, per-kit model, Needs input. Port rows show labels and connection counts, plus Ready, Running, Waiting for review, Completed, Failed, or Cancelled. Frame and body stay glued. Props: `prompt`, `reply`, `error`, `model`, `provider`, `surface`, `runStatus`. Palette instantiates. Inspector Enter/Run publishes the reply onto text kits cabled from Output. |
 | `harness.system-prompt` | Stub. Editable text. Reserved `attachedTo` prop (empty). Add from the palette. Does not inject. |
 | `harness.tools` | Stub. Lists current kit tool names as text. Reserved `attachedTo`. Does not attach `tools` to the vanilla request. |
 
@@ -168,15 +159,15 @@ Provider dropdown: `fake`, `opencode-go`, `openrouter`, `openai`. Paste API key 
 
 Unknown live ids stay in the list as disabled (`not in Skapie catalog yet`). They cannot be Applied.
 
-## Kit tools (9.1, later wire)
+## Kit tools
 
-Implemented from the [kit API tool table](kit_api.md#agent-tools-phase-91). The tools stub kit **shows** those names. Vanilla first Enter does not send them.
+Implemented from the [kit API tool table](kit_api.md#agent-tools-phase-91). The tools stub kit **shows** old names but does not grant them. Individual connected `tools.*` kits are sent in the LLM request; repository tools are described in [tool kits](tools.md).
 
 ## Fake vs HTTP
 
 - **Fake:** `Echo: <text>` locally. No network. Still publishes `harness.llm`. Session messages stay at the system prompt.
-- **Vanilla HTTP:** one user message. LLM kit shows reply or redacted error.
-- **Session HTTP:** still available via `session.sendUser` for tests and a later board wire.
+- **Vanilla HTTP:** one user message. The reply or redacted error is written into text kits cabled from Output.
+- **Session HTTP:** used for LLM turns with connected tool grants.
 
 ## Errors
 
@@ -203,10 +194,8 @@ macOS sandbox needs `com.apple.security.network.client` for outbound HTTP.
 
 ## Later arcs
 
-- Visible plugs (wires) so system prompt / tools / input kits compose onto the LLM kit
 - Detach Input/Output into separate kits
-- Cable/graph visualization
-- Wire system-prompt + tools kits into the HTTP payload
+- Typed port declarations and persistent run records
 - Streaming tokens
 - Pi / MCP / OAuth / Keychain
 - Sandbox kits / workers

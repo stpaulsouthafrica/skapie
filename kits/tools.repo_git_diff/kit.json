@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.repo_git_diff",
+  "displayName": "repo_git_diff",
+  "description": "Read a bounded Git diff.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.repo_git_diff",
+        "skapieRole": "frame",
+        "requiresRepository": true,
+        "description": "Read a bounded Git diff."
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "repo_git_diff",
+        "fontSize": 14,
+        "toolName": "repo_git_diff",
+        "attachedTo": "",
+        "requiresRepository": true,
+        "skapieKit": "tools.repo_git_diff",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

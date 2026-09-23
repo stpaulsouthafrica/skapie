@@ -154,6 +154,8 @@ void main() {
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 
@@ -197,8 +199,10 @@ void main() {
         of: find.byType(InspectorPanel),
         matching: find.byKey(const Key('llm-kit-input')),
       ),
-      findsOneWidget,
+      findsNothing,
     );
+    expect(find.text('Locked'), findsNothing);
+    expect(find.byKey(const Key('llm-kit-run-button')), findsOneWidget);
     expect(
       find.descendant(
         of: find.byType(InspectorPanel),
@@ -215,35 +219,52 @@ void main() {
     );
   });
 
-  testWidgets(
-    'selected LLM kit Enter runs vanilla onto that kit, not a global agent',
-    (tester) async {
-      final store = SceneStore();
-      final kitApi = createAppKitApi(store: store);
-      await pumpHome(tester, store: store, kitApi: kitApi);
+  testWidgets('selected LLM kit Run uses the cabled text, not a typed prompt', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    await pumpHome(tester, store: store, kitApi: kitApi);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.space);
-      await tester.pump();
-      await tester.tap(find.text('Add LLM'));
-      await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.tap(find.text('Add LLM'));
+    await tester.pump();
 
-      await tester.enterText(find.byKey(const Key('llm-kit-input')), 'hello');
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-400, 0),
+    );
+    kitApi.updateProps(text.last, {'content': 'hello'});
+    final bodyId = store.document.objects
+        .firstWhere(
+          (object) =>
+              object.props[skapieKitProp] == harnessLlmKitId &&
+              object.props[skapieRoleProp] == 'body',
+        )
+        .id;
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: bodyId,
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('llm-kit-run')));
+    await tester.tap(find.byKey(const Key('llm-kit-run')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
 
-      final body = store.document.objects.firstWhere(
-        (object) =>
-            object.props[skapieKitProp] == harnessLlmKitId &&
-            object.props[skapieRoleProp] == 'body',
-      );
-      expect(body.props['prompt'], 'hello');
-      expect(body.props['content'], contains('Echo: hello'));
-      expect(body.props['content'], contains('Input'));
-      expect(body.props['content'], contains('Output'));
-      expect(find.byKey(const Key('agent-chat-input')), findsNothing);
-    },
-  );
+    final body = store.document.objects.firstWhere(
+      (object) =>
+          object.props[skapieKitProp] == harnessLlmKitId &&
+          object.props[skapieRoleProp] == 'body',
+    );
+    expect(body.props['prompt'], 'hello');
+    expect(body.props['content'], contains('Echo: hello'));
+    expect(body.props['content'], contains('Input'));
+    expect(body.props['content'], contains('Output'));
+    expect(find.byKey(const Key('agent-chat-input')), findsNothing);
+  });
 
   testWidgets('palette Settings opens the settings sheet', (tester) async {
     await pumpHome(tester);
@@ -328,10 +349,7 @@ void main() {
     final grant = store.document.objects.firstWhere(
       (object) => object.props['toolName'] == 'list_kits',
     );
-    expect(
-      kitHasLink(grant, to: llmBody.id, port: llmToolsPort),
-      isTrue,
-    );
+    expect(kitHasLink(grant, to: llmBody.id, port: llmToolsPort), isTrue);
     expect(llmBody.props['content'], contains('Tools: list_kits'));
   });
 

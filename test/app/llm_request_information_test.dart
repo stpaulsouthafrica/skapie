@@ -5,6 +5,7 @@ import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/llm_request_highlight.dart';
 import 'package:skapie/app/llm_request_information.dart';
+import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
@@ -49,7 +50,16 @@ Authorization: <redacted>
     final store = SceneStore();
     final kitApi = createAppKitApi(store: store);
     final ids = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
-    kitApi.updateProps(ids.last, {'prompt': 'hello from the card'});
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-300, 0),
+    );
+    kitApi.updateProps(text.last, {'content': 'hello from the card'});
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: ids.last,
+    );
     final body = store.document.objectById(ids.last)!;
     final controller = AgentController(
       kitApi: kitApi,

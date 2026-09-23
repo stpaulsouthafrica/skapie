@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/kit_ports.dart';
+import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/paint/cables/cable_hit.dart';
 import 'package:skapie/paint/cables/cable_motion.dart';
@@ -12,7 +13,29 @@ import 'package:skapie/scene/scene.dart';
 
 const double _travelSeconds = 0.32;
 const double _settleSeconds = 0.52;
-const double _flowSeconds = 1.45;
+
+/// Pulse only while a tool call is in flight on this cable.
+double? cableInvocationFlow({
+  required SceneCable cable,
+  required String? runningBodyId,
+  required String? activeToolFrameId,
+  required double clock,
+}) {
+  final activeTool = activeToolFrameId;
+  if (activeTool == null || runningBodyId == null) {
+    return null;
+  }
+  final toolCable =
+      cable.port == llmToolsPort &&
+      cable.sourceId == activeTool &&
+      cable.targetBodyId == runningBodyId;
+  final repositoryCable =
+      cable.port == repositoryPort && cable.targetFrameId == activeTool;
+  if (!toolCable && !repositoryCable) {
+    return null;
+  }
+  return (clock / 0.55) % 1;
+}
 
 class CableLayer extends StatefulWidget {
   const CableLayer({
@@ -25,9 +48,12 @@ class CableLayer extends StatefulWidget {
     this.dragFrameId,
     this.dragKind,
     this.dragCursor,
+    this.resizeFrameId,
+    this.resizeHeight,
     this.previewOnly = false,
     this.paintDrag = true,
     this.runningBodyId,
+    this.activeToolFrameId,
     this.motion,
     this.retractions = const [],
     this.onRetractionDone,
@@ -41,9 +67,12 @@ class CableLayer extends StatefulWidget {
   final String? dragFrameId;
   final KitPortKind? dragKind;
   final Offset? dragCursor;
+  final String? resizeFrameId;
+  final double? resizeHeight;
   final bool previewOnly;
   final bool paintDrag;
   final String? runningBodyId;
+  final String? activeToolFrameId;
   final CableMotion? motion;
   final List<RetractingCable> retractions;
   final ValueChanged<RetractingCable>? onRetractionDone;
@@ -69,7 +98,13 @@ class _CableLayerState extends State<CableLayer>
       if (!mounted) {
         return;
       }
-      _pushMotion(sceneCables(widget.document));
+      _pushMotion(
+        sceneCables(
+          widget.document,
+          resizeFrameId: widget.resizeFrameId,
+          resizeHeight: widget.resizeHeight,
+        ),
+      );
       final finished = [
         for (final item in widget.retractions)
           if (item.progress >= 1) item,
@@ -95,7 +130,11 @@ class _CableLayerState extends State<CableLayer>
   Widget build(BuildContext context) {
     final scene = widget.previewOnly
         ? const <SceneCable>[]
-        : sceneCables(widget.document);
+        : sceneCables(
+            widget.document,
+            resizeFrameId: widget.resizeFrameId,
+            resizeHeight: widget.resizeHeight,
+          );
     if (!widget.previewOnly) {
       _note(scene);
     }
@@ -253,7 +292,7 @@ class _CableLayerState extends State<CableLayer>
   void _syncTicker() {
     final live =
         _arrivals.isNotEmpty ||
-        widget.runningBodyId != null ||
+        widget.activeToolFrameId != null ||
         widget.retractions.isNotEmpty;
     if (live && !_ticker.isActive) {
       _ticker.start();
@@ -263,11 +302,12 @@ class _CableLayerState extends State<CableLayer>
   }
 
   double? _flow(SceneCable cable) {
-    final running = widget.runningBodyId;
-    if (running == null || !cable.affectsRun || cable.targetBodyId != running) {
-      return null;
-    }
-    return (_clock / _flowSeconds) % 1;
+    return cableInvocationFlow(
+      cable: cable,
+      runningBodyId: widget.runningBodyId,
+      activeToolFrameId: widget.activeToolFrameId,
+      clock: _clock,
+    );
   }
 
   List<PaintedCable> _drag() {
@@ -288,19 +328,25 @@ class _CableLayerState extends State<CableLayer>
     final target = snapped == null
         ? null
         : widget.document.objectById(snapped.frameId);
+    final fromIsRight = kitPortIsOutput(kind);
+    final toIsRight = snapped == null
+        ? !fromIsRight
+        : kitPortIsOutput(snapped.kind);
     return [
       PaintedCable(
         from: _screen(_shown(_center(frame, kind), frame.id)),
         to: _screen(snapped?.center ?? cursor),
         color: target == null ? kitAccentColor(frame) : kitAccentColor(target),
         preview: true,
+        exitsRight: fromIsRight,
+        entersFromLeft: !toIsRight,
       ),
     ];
   }
 
   KitPort? _snap(KitPortKind sourceKind, Offset cursor, SceneObject source) {
     final hit = hitKitPort(kitPorts(widget.document), cursor);
-    if (hit == null || !kitPortAccepts(sourceKind, hit.kind)) {
+    if (hit == null || !kitPortsConnect(sourceKind, hit.kind)) {
       return null;
     }
     if (sourceKind == KitPortKind.llmOutput) {
@@ -319,9 +365,12 @@ class _CableLayerState extends State<CableLayer>
 
   Offset _center(SceneObject frame, KitPortKind kind) {
     return switch (kind) {
+      KitPortKind.textIn => textInputCenter(frame),
       KitPortKind.textOut ||
-      KitPortKind.conversationOut => textOutputCenter(frame),
+      KitPortKind.conversationOut ||
+      KitPortKind.repositoryOut => textOutputCenter(frame),
       KitPortKind.toolOut => toolOutputCenter(frame),
+      KitPortKind.toolRepository => toolRepositoryCenter(frame),
       KitPortKind.llmInput => llmInputCenter(frame),
       KitPortKind.llmContext => llmContextCenter(frame),
       KitPortKind.llmConversation => llmConversationCenter(frame),

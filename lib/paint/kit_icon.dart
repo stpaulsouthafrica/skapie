@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/llm_kit_mark.dart';
 
@@ -82,12 +84,7 @@ class _KitIconPainter extends CustomPainter {
           paint,
         );
       case KitIconKind.text:
-        final left = rect.left;
-        final right = rect.right;
-        for (var i = 0; i < 3; i++) {
-          final y = rect.top + rect.height * (0.22 + i * 0.28);
-          canvas.drawLine(Offset(left, y), Offset(right, y), paint);
-        }
+        _paintTextMark(canvas, size, color);
       case KitIconKind.box:
         canvas.drawRRect(
           RRect.fromRectAndRadius(rect, Radius.circular(rect.width * 0.18)),
@@ -138,6 +135,48 @@ class _KitIconPainter extends CustomPainter {
       case KitIconKind.llm:
         break;
     }
+  }
+
+  void _paintTextMark(Canvas canvas, Size size, Color color) {
+    final stroke = math.max(1.15, size.shortestSide * 0.09);
+    final ink = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.square
+      ..strokeJoin = StrokeJoin.miter;
+    final side = size.shortestSide;
+    final left = side * 0.04;
+    final top = side * 0.08;
+    final tRight = side * 0.68;
+    final bottom = side * 0.92;
+    final stemX = (left + tRight) / 2;
+    final serif = side * 0.16;
+    canvas.drawLine(Offset(left, top), Offset(tRight, top), ink);
+    canvas.drawLine(Offset(left, top), Offset(left, top + serif), ink);
+    canvas.drawLine(Offset(tRight, top), Offset(tRight, top + serif), ink);
+    canvas.drawLine(Offset(stemX, top), Offset(stemX, bottom), ink);
+    final foot = side * 0.14;
+    canvas.drawLine(
+      Offset(stemX - foot, bottom),
+      Offset(stemX + foot, bottom),
+      ink,
+    );
+    final caretX = side * 0.9;
+    final caretTop = side * 0.22;
+    final caretBottom = side * 0.78;
+    final cap = side * 0.1;
+    canvas.drawLine(Offset(caretX, caretTop), Offset(caretX, caretBottom), ink);
+    canvas.drawLine(
+      Offset(caretX - cap, caretTop),
+      Offset(caretX + cap, caretTop),
+      ink,
+    );
+    canvas.drawLine(
+      Offset(caretX - cap, caretBottom),
+      Offset(caretX + cap, caretBottom),
+      ink,
+    );
   }
 
   @override

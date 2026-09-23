@@ -8,9 +8,14 @@
 - [Kit API](kit_api.md) — Kit API reference, cookbook, agent tools (Phase 9.1)
 - [Kit packages](kit_packages.md) — `kit.json` schema (single source), repo vs App Support vs `SKAPIE_KITS_ROOT`
 - [Agent harness](agent.md) — world-as-harness, command palette, selection typing, specialized LLM kit
-- [World tools](tools.md) — runner vs grant; `lib/tools/world/` + `kits/tools.*`
+- [Tool kits](tools.md) — host runner vs visible grant; world and repository tools
 - [Providers catalog](providers.md) — OpenCode Go seating chart, Connect merge, three vanilla surfaces
 - [Paint](paint.md) — cosmetic tokens, dark chrome, transient settings
-- **Dream goal / later arcs (not scheduled):** visible sub-agent kits, sandbox, personal coding-agent kit — the 10-phase core is not that
+- [Phase roadmap overview](phase_11_roadmap.md) — product direction through the Phase 20 complete-product gate
+- [Phase 11](phase_11.md) — inspectable coding-agent board and detailed implementation slices
+- [Phase 12](phase_12.md) — reliable single-agent loop
+- [Phase 13](phase_13.md) — extensible kit platform
+- [Phase 14](phase_14.md) — composable swarms
+- [Phase 15](phase_15.md) — engineer-ready product gate and Phases 16–20 horizon
 
 See also the product overview and run instructions in the [root README](../README.md).

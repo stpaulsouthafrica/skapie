@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.repo_list_files",
+  "displayName": "repo_list_files",
+  "description": "List source files in the connected repository.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.repo_list_files",
+        "skapieRole": "frame",
+        "requiresRepository": true,
+        "description": "List source files in the connected repository."
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "repo_list_files",
+        "fontSize": 14,
+        "toolName": "repo_list_files",
+        "attachedTo": "",
+        "requiresRepository": true,
+        "skapieKit": "tools.repo_list_files",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}
