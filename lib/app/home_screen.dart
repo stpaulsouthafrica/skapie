@@ -285,6 +285,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _add(harnessConversationKitId);
       case 'add-repository':
         _add(codingRepositoryKitId);
+      case 'add-patch-proposal':
+        _add(codingPatchProposalKitId);
+      case 'add-review-decision':
+        _add(codingReviewDecisionKitId);
+      case 'add-apply-patch':
+        _add(codingApplyPatchKitId);
       case 'add-box':
         _add(boardBoxKitId);
       case 'add-text':
@@ -424,6 +430,18 @@ class _HomeScreenState extends State<HomeScreen> {
       const PopupMenuItem(
         value: codingRepositoryKitId,
         child: Text('Repository'),
+      ),
+      const PopupMenuItem(
+        value: codingPatchProposalKitId,
+        child: Text('Patch Proposal'),
+      ),
+      const PopupMenuItem(
+        value: codingReviewDecisionKitId,
+        child: Text('Review Decision'),
+      ),
+      const PopupMenuItem(
+        value: codingApplyPatchKitId,
+        child: Text('Apply Patch'),
       ),
       const PopupMenuItem(value: boardButtonKitId, child: Text('Button')),
       for (final kit in widget.kitApi.listKits())

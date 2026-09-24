@@ -147,7 +147,6 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
   );
   late final FocusNode _focus = FocusNode(onKeyEvent: _onKey);
   final ScrollController _vertical = ScrollController();
-  final ScrollController _horizontal = ScrollController();
   var _saved = false;
   int? _hoverLine;
 
@@ -163,7 +162,6 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
     _text.dispose();
     _focus.dispose();
     _vertical.dispose();
-    _horizontal.dispose();
     super.dispose();
   }
 
@@ -225,19 +223,43 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
     height: _lineHeightFactor,
   );
 
-  double _contentWidth() {
-    var widest = '';
-    for (final line in _text.text.split('\n')) {
-      if (line.length > widest.length) {
-        widest = line;
-      }
-    }
+  List<int> _visualLineCounts(double textWidth) {
+    final width = math.max(1.0, textWidth);
+    return [
+      for (final line in _text.text.split('\n')) _wrappedLineCount(line, width),
+    ];
+  }
+
+  int _wrappedLineCount(String line, double maxWidth) {
     final painter = TextPainter(
-      text: TextSpan(text: widest, style: _codeStyle),
+      text: TextSpan(text: line.isEmpty ? ' ' : line, style: _codeStyle),
       textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout();
-    return painter.width + _codeLeft + _codeRight;
+      strutStyle: const StrutStyle(
+        fontFamily: _font,
+        fontFamilyFallback: _fontFallback,
+        fontSize: _fontSize,
+        height: _lineHeightFactor,
+        forceStrutHeight: true,
+      ),
+    )..layout(maxWidth: maxWidth);
+    final count = math.max(1, painter.computeLineMetrics().length);
+    painter.dispose();
+    return count;
+  }
+
+  int? _logicalLineAt(double dy, List<int> visualCounts) {
+    var y = dy - _padTop;
+    if (y < 0) {
+      return null;
+    }
+    for (var i = 0; i < visualCounts.length; i++) {
+      final height = visualCounts[i] * _lineHeight;
+      if (y < height) {
+        return i;
+      }
+      y -= height;
+    }
+    return null;
   }
 
   void _focusEnd() {
@@ -396,13 +418,14 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
     final gutterWidth = 20.0 + digits * 8.2;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final codeWidth = math.max(
-          constraints.maxWidth - gutterWidth,
-          _contentWidth(),
+        final codeWidth = math.max(0.0, constraints.maxWidth - gutterWidth);
+        final visualCounts = _visualLineCounts(
+          codeWidth - _codeLeft - _codeRight,
         );
+        final visualLines = visualCounts.fold<int>(0, (sum, n) => sum + n);
         final height = math.max(
           constraints.maxHeight,
-          _padTop + lines * _lineHeight + _padBottom,
+          _padTop + visualLines * _lineHeight + _padBottom,
         );
         return Scrollbar(
           controller: _vertical,
@@ -411,9 +434,10 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
             child: MouseRegion(
               cursor: SystemMouseCursors.text,
               onHover: (event) {
-                final line = ((event.localPosition.dy - _padTop) / _lineHeight)
-                    .floor();
-                final next = line >= 0 && line < lines ? line : null;
+                final next = _logicalLineAt(
+                  event.localPosition.dy,
+                  visualCounts,
+                );
                 if (next != _hoverLine) {
                   setState(() => _hoverLine = next);
                 }
@@ -424,25 +448,15 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _gutter(gutterWidth, lines, active),
+                    _gutter(gutterWidth, visualCounts, active),
                     Expanded(
                       child: GestureDetector(
                         behavior: HitTestBehavior.translucent,
                         onTap: _focusEnd,
-                        child: Scrollbar(
-                          controller: _horizontal,
-                          child: SingleChildScrollView(
-                            controller: _horizontal,
-                            scrollDirection: Axis.horizontal,
-                            child: SizedBox(
-                              width: codeWidth,
-                              height: height,
-                              child: Align(
-                                alignment: Alignment.topLeft,
-                                child: _field(),
-                              ),
-                            ),
-                          ),
+                        child: SizedBox(
+                          width: codeWidth,
+                          height: height,
+                          child: _field(),
                         ),
                       ),
                     ),
@@ -456,7 +470,7 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
     );
   }
 
-  Widget _gutter(double width, int lines, (int, int)? active) {
+  Widget _gutter(double width, List<int> visualCounts, (int, int)? active) {
     final tokens = widget.tokens;
     return Container(
       width: width,
@@ -467,10 +481,10 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          for (var line = 0; line < lines; line++)
+          for (var line = 0; line < visualCounts.length; line++)
             SizedBox(
               key: ValueKey('full-screen-text-editor-gutter-$line'),
-              height: _lineHeight,
+              height: _lineHeight * visualCounts[line],
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: _gutterTint(tokens, line, active),
@@ -479,17 +493,23 @@ class _FullScreenTextEditorState extends State<FullScreenTextEditor> {
                   ),
                 ),
                 child: Align(
-                  alignment: Alignment.centerRight,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Text(
-                      '${line + 1}',
-                      style: TextStyle(
-                        color: _gutterInk(tokens, line, active),
-                        fontFamily: _font,
-                        fontFamilyFallback: _fontFallback,
-                        fontSize: 11.5,
-                        height: 1,
+                  alignment: Alignment.topRight,
+                  child: SizedBox(
+                    height: _lineHeight,
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Text(
+                          '${line + 1}',
+                          style: TextStyle(
+                            color: _gutterInk(tokens, line, active),
+                            fontFamily: _font,
+                            fontFamilyFallback: _fontFallback,
+                            fontSize: 11.5,
+                            height: 1,
+                          ),
+                        ),
                       ),
                     ),
                   ),

@@ -10,7 +10,7 @@ void main() {
     for (final spec in worldToolKitSpecs) {
       final id = worldToolKitId(spec.toolName);
       expect(api.getKit(id), isNotNull, reason: id);
-      expect(api.getKit(id)!.displayName, spec.toolName);
+      expect(api.getKit(id)!.displayName, spec.label);
     }
   });
 

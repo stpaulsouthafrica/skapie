@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "coding.apply_patch",
+  "displayName": "Apply Patch",
+  "description": "Writes only after a valid review decision.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 280,
+      "height": 120,
+      "props": {
+        "skapieKit": "coding.apply_patch",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 40,
+      "width": 256,
+      "height": 48,
+      "props": {
+        "content": "Inert until a valid review decision exists",
+        "fontSize": 13,
+        "skapieKit": "coding.apply_patch",
+        "skapieRole": "body"
+      }
+    }
+  ]
+}

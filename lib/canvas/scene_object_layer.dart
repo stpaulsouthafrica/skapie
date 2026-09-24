@@ -129,15 +129,12 @@ class SceneObjectLayer extends StatelessWidget {
     final ctx = RegistryBuildContext(zoom: camera.zoom);
     final role = object.props[skapieRoleProp];
     final isLlmBody = isLlmKitObject(object) && role == 'body';
-    final isTextBody = kitIdOf(object) == boardTextKitId && role == 'body';
-    final isConversationBody =
-        kitIdOf(object) == harnessConversationKitId && role == 'body';
+    final isPreviewBody = kitUsesTextPreview(kitIdOf(object)) && role == 'body';
     final t = _overviewT;
     final kitChild = isKitObject(object) && role != 'frame';
     final hide =
         isLlmBody ||
-        isTextBody ||
-        isConversationBody ||
+        isPreviewBody ||
         role == 'grant' ||
         (t >= 1 && kitChild);
     final paintedHeight = object.id == resizeFrameId && resizeHeight != null
@@ -426,6 +423,8 @@ class SceneObjectLayer extends StatelessWidget {
             ],
           ),
         ),
+        if (kitIdOf(frame) == proposePatchKitId)
+          _outputCaption(tokens, zoom, frame, label: 'Result'),
       ],
     );
   }
@@ -465,6 +464,39 @@ class SceneObjectLayer extends StatelessWidget {
               content: _bodyContent(frame, harnessConversationKitId),
               leading: 'In',
               trailing: 'Out',
+            ),
+          ),
+        if (kitIdOf(frame) == codingPatchProposalKitId)
+          Positioned.fill(
+            child: _previewFooter(
+              tokens,
+              zoom,
+              frame,
+              content: _bodyContent(frame, codingPatchProposalKitId),
+              leading: 'In',
+              trailing: 'Out',
+            ),
+          ),
+        if (kitIdOf(frame) == codingReviewDecisionKitId)
+          Positioned.fill(
+            child: _previewFooter(
+              tokens,
+              zoom,
+              frame,
+              content: _bodyContent(frame, codingReviewDecisionKitId),
+              leading: 'In',
+              trailing: 'Out',
+            ),
+          ),
+        if (kitIdOf(frame) == codingApplyPatchKitId)
+          Positioned.fill(
+            child: _previewFooter(
+              tokens,
+              zoom,
+              frame,
+              content: _bodyContent(frame, codingApplyPatchKitId),
+              leading: 'In',
+              trailing: '',
             ),
           ),
         if (kitIdOf(frame) == codingRepositoryKitId)

@@ -8,11 +8,18 @@ class WorldToolKitSpec {
     this.toolName,
     this.description, {
     this.requiresRepository = false,
+    this.displayName,
+    this.frameHeight,
   });
 
   final String toolName;
   final String description;
   final bool requiresRepository;
+  final String? displayName;
+  final double? frameHeight;
+
+  String get label => displayName ?? toolName;
+  double get height => frameHeight ?? toolFrameHeight;
 }
 
 const List<WorldToolKitSpec> worldToolKitSpecs = [
@@ -55,6 +62,12 @@ const List<WorldToolKitSpec> worldToolKitSpecs = [
     'Read a bounded Git diff.',
     requiresRepository: true,
   ),
+  WorldToolKitSpec(
+    proposePatchToolName,
+    'Propose a code change. Creates a proposal artifact; does not write files.',
+    displayName: 'Propose Patch',
+    frameHeight: proposePatchFrameHeight,
+  ),
 ];
 
 String worldToolKitId(String toolName) => 'tools.$toolName';
@@ -87,7 +100,10 @@ void fitPlacedToolKits(KitApi kitApi) {
         kitApi.updateProps(frame.id, {'description': seeded});
       }
     }
-    if ((frame.height - toolFrameHeight).abs() <= 0.5) {
+    final intendedHeight = kitIdOf(frame) == proposePatchKitId
+        ? proposePatchFrameHeight
+        : toolFrameHeight;
+    if ((frame.height - intendedHeight).abs() <= 0.5) {
       continue;
     }
     final document = kitApi.store.document;
@@ -95,16 +111,16 @@ void fitPlacedToolKits(KitApi kitApi) {
       if (object.id == frame.id || !kitChildBelongsToFrame(object, frame)) {
         continue;
       }
-      if (object.y + object.height <= frame.y + toolFrameHeight + 0.5) {
+      if (object.y + object.height <= frame.y + intendedHeight + 0.5) {
         continue;
       }
       kitApi.updateFrame(
         id: object.id,
         y: frame.y + kitBarWorld + 4,
-        height: toolFrameHeight - kitBarWorld - 8,
+        height: intendedHeight - kitBarWorld - 8,
       );
     }
-    kitApi.updateFrame(id: frame.id, height: toolFrameHeight);
+    kitApi.updateFrame(id: frame.id, height: intendedHeight);
   }
 }
 
@@ -113,7 +129,7 @@ Map<String, Object?> worldToolKitJson(WorldToolKitSpec spec) {
   return {
     'schemaVersion': 1,
     'id': id,
-    'displayName': spec.toolName,
+    'displayName': spec.label,
     'description': spec.description,
     'capabilities': <Object?>[],
     'objects': [
@@ -122,7 +138,7 @@ Map<String, Object?> worldToolKitJson(WorldToolKitSpec spec) {
         'x': 0,
         'y': 0,
         'width': 200,
-        'height': toolFrameHeight,
+        'height': spec.height,
         'props': {
           skapieKitProp: id,
           skapieRoleProp: 'frame',
@@ -154,14 +170,14 @@ KitRecipe worldToolKitRecipe(WorldToolKitSpec spec) {
   final id = worldToolKitId(spec.toolName);
   return KitRecipe(
     id: id,
-    displayName: spec.toolName,
+    displayName: spec.label,
     objects: [
       KitObjectSpec(
         typeId: boxTypeId,
         x: 0,
         y: 0,
         width: 200,
-        height: toolFrameHeight,
+        height: spec.height,
         props: {
           skapieKitProp: id,
           skapieRoleProp: 'frame',

@@ -372,4 +372,52 @@ void main() {
     expect(find.text('Output'), findsNothing);
     expect(find.text('list repo files.'), findsNothing);
   });
+
+  testWidgets('a patch proposal kit previews content once with In and Out', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox.fromSize(
+          size: viewport,
+          child: SceneObjectLayer(
+            camera: CanvasCamera(),
+            viewportSize: viewport,
+            objects: const [
+              SceneObject(
+                id: 'proposal-frame',
+                type: 'box',
+                x: -140,
+                y: -75,
+                width: 280,
+                height: 120,
+                props: {
+                  skapieKitProp: codingPatchProposalKitId,
+                  skapieRoleProp: 'frame',
+                },
+              ),
+              SceneObject(
+                id: 'proposal-body',
+                type: 'text',
+                x: -128,
+                y: -35,
+                width: 256,
+                height: 48,
+                props: {
+                  skapieKitProp: codingPatchProposalKitId,
+                  skapieRoleProp: 'body',
+                  'content': 'No proposal yet',
+                },
+              ),
+            ],
+            registry: createBuiltinRegistry(),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('No proposal yet'), findsOneWidget);
+    expect(find.text('In'), findsOneWidget);
+    expect(find.text('Out'), findsOneWidget);
+  });
 }

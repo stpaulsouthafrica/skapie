@@ -6,6 +6,7 @@ import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 import 'package:skapie/tools/repository/repository_tools.dart';
 
@@ -162,7 +163,10 @@ LlmToolOffer llmToolOffer({
           name,
           repositoryPath: path,
           permission: repositoryPermission,
-        );
+        ) ??
+        (name == proposePatchToolName && frame != null
+            ? proposePatchTool(kitApi: kitApi, proposeFrameId: frame.id)
+            : null);
     if (tool == null) {
       filtered.add(FilteredTool(name: name, reason: 'Unknown tool'));
       kitApi.updateProps(object.id, {

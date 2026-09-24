@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "coding.review_decision",
+  "displayName": "Review Decision",
+  "description": "A user-owned Accept or Reject. Connecting it does not apply.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 280,
+      "height": 120,
+      "props": {
+        "skapieKit": "coding.review_decision",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 40,
+      "width": 256,
+      "height": 48,
+      "props": {
+        "content": "No decision yet",
+        "fontSize": 13,
+        "decision": "",
+        "proposalId": "",
+        "fingerprint": "",
+        "skapieKit": "coding.review_decision",
+        "skapieRole": "body"
+      }
+    }
+  ]
+}

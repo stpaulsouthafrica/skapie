@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/tools/world/kits.dart';
 
 const String demoNoteCardKitId = 'demo.note-card';
@@ -15,6 +16,18 @@ const String boardButtonKitId = 'board.button';
 const String harnessLlmKitId = 'harness.llm';
 const String harnessConversationKitId = 'harness.conversation';
 const String codingRepositoryKitId = 'coding.repository';
+const String proposePatchToolName = 'propose_patch';
+const String proposePatchKitId = 'tools.propose_patch';
+const String codingPatchProposalKitId = 'coding.patch_proposal';
+const String codingReviewDecisionKitId = 'coding.review_decision';
+const String codingApplyPatchKitId = 'coding.apply_patch';
+const String proposalIdProp = 'proposalId';
+const String proposalFingerprintProp = 'fingerprint';
+const String reviewDecisionProp = 'decision';
+const String patchProposalPort = 'proposal';
+const String patchReviewPort = 'review';
+const String patchApplyPort = 'apply';
+const double proposePatchFrameHeight = 120;
 const String harnessSystemPromptKitId = 'harness.system-prompt';
 const String harnessToolsKitId = 'harness.tools';
 const String skapieKitProp = 'skapieKit';
@@ -557,6 +570,18 @@ String kitNameStem(String kitId) {
   if (kitId.startsWith('tools.')) {
     return 'Tool';
   }
+  if (kitId == codingRepositoryKitId) {
+    return 'Repository';
+  }
+  if (kitId == codingPatchProposalKitId) {
+    return 'Patch Proposal';
+  }
+  if (kitId == codingReviewDecisionKitId) {
+    return 'Review Decision';
+  }
+  if (kitId == codingApplyPatchKitId) {
+    return 'Apply Patch';
+  }
   if (kitId.startsWith('harness.')) {
     return kitId.substring('harness.'.length);
   }
@@ -653,5 +678,6 @@ KitApi createAppKitApi({
   api.registerKit(harnessSystemPromptRecipe);
   api.registerKit(harnessToolsRecipe);
   registerWorldToolKits(api);
+  registerPatchKits(api);
   return api;
 }

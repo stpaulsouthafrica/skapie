@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.propose_patch",
+  "displayName": "Propose Patch",
+  "description": "Propose a code change. Creates a proposal artifact; does not write files.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 120,
+      "props": {
+        "skapieKit": "tools.propose_patch",
+        "skapieRole": "frame",
+        "description": "Propose a code change. Creates a proposal artifact; does not write files."
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "propose_patch",
+        "fontSize": 14,
+        "toolName": "propose_patch",
+        "attachedTo": "",
+        "skapieKit": "tools.propose_patch",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

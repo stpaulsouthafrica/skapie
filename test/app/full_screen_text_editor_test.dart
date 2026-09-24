@@ -114,4 +114,54 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('full-screen-text-editor')), findsNothing);
   });
+
+  testWidgets('long lines wrap in the editor instead of scrolling sideways', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(720, 540);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final long =
+        'Make Test File.rtf cleaner: Content is currently 8 lines of '
+        'macOS TextEdit boilerplate that is hard to read because it never '
+        'breaks across the viewport and keeps scrolling sideways forever.';
+    await tester.pumpWidget(
+      PaintScope(
+        tokens: PaintTokens.dark(),
+        child: MaterialApp(
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showFullScreenTextEditor(
+                context: context,
+                title: 'Patch Proposal',
+                text: long,
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+
+    final editor = tester.getSize(
+      find.byKey(const Key('full-screen-text-editor')),
+    );
+    final field = tester.getSize(
+      find.byKey(const Key('full-screen-text-editor-field')),
+    );
+    expect(field.width, lessThan(editor.width));
+    expect(field.height, greaterThan(18 + 13 * 1.6 * 2 + 28));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is SingleChildScrollView &&
+            widget.scrollDirection == Axis.horizontal,
+      ),
+      findsNothing,
+    );
+  });
 }

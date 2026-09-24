@@ -7,3 +7,5 @@ The git `kits/` tree is what you commit. A sandboxed app loads **Application Sup
 Demo kit package: [`demo.note-card/kit.json`](demo.note-card/kit.json).
 
 Harness kit packages: [`harness.llm/kit.json`](harness.llm/kit.json), [`harness.system-prompt/kit.json`](harness.system-prompt/kit.json), [`harness.tools/kit.json`](harness.tools/kit.json).
+
+Patch board packages: [`tools.propose_patch/kit.json`](tools.propose_patch/kit.json), [`coding.patch_proposal/kit.json`](coding.patch_proposal/kit.json), [`coding.review_decision/kit.json`](coding.review_decision/kit.json), [`coding.apply_patch/kit.json`](coding.apply_patch/kit.json).

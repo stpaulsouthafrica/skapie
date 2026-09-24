@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "coding.patch_proposal",
+  "displayName": "Patch Proposal",
+  "description": "Structured proposal data. Not a tool.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 280,
+      "height": 120,
+      "props": {
+        "skapieKit": "coding.patch_proposal",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 40,
+      "width": 256,
+      "height": 48,
+      "props": {
+        "content": "No proposal yet",
+        "fontSize": 13,
+        "proposalId": "",
+        "fingerprint": "",
+        "note": "",
+        "skapieKit": "coding.patch_proposal",
+        "skapieRole": "body"
+      }
+    }
+  ]
+}

@@ -34,6 +34,21 @@ const List<CommandAction> defaultCommandActions = [
     label: 'Add Button',
     icon: KitIconKind.button,
   ),
+  CommandAction(
+    id: 'add-patch-proposal',
+    label: 'Add Patch Proposal',
+    icon: KitIconKind.box,
+  ),
+  CommandAction(
+    id: 'add-review-decision',
+    label: 'Add Review Decision',
+    icon: KitIconKind.box,
+  ),
+  CommandAction(
+    id: 'add-apply-patch',
+    label: 'Add Apply Patch',
+    icon: KitIconKind.box,
+  ),
   CommandAction(id: 'settings', label: 'Settings', icon: KitIconKind.settings),
 ];
 

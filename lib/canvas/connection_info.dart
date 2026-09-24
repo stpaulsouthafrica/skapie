@@ -5,6 +5,7 @@ import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/patch/patch_board.dart';
 
 const int connectionPreviewLimit = 280;
 
@@ -127,6 +128,33 @@ String _preview(SceneDocument document, SceneCable cable, PortValue value) {
       return path.isEmpty
           ? 'No folder chosen. The grant is not live.'
           : 'Read access to $path';
+    case PortValue.patchProposal:
+      final proposalFrame =
+          (source != null && kitIdOf(source) == codingPatchProposalKitId)
+          ? source
+          : (target != null && kitIdOf(target) == codingPatchProposalKitId)
+          ? target
+          : null;
+      final body = proposalFrame == null
+          ? null
+          : patchProposalBody(document, proposalFrame.id);
+      final note = body?.props['note']?.toString().trim() ?? '';
+      final id = body?.props[proposalIdProp]?.toString().trim() ?? '';
+      if (id.isEmpty) {
+        return 'No proposal yet';
+      }
+      return note.isEmpty ? 'Proposal $id' : note;
+    case PortValue.reviewDecision:
+      final reviewFrame =
+          (source != null && kitIdOf(source) == codingReviewDecisionKitId)
+          ? source
+          : (target != null && kitIdOf(target) == codingReviewDecisionKitId)
+          ? target
+          : null;
+      final decision = reviewFrame == null
+          ? ''
+          : reviewDecisionOf(document, reviewFrame.id);
+      return decision.isEmpty ? 'No decision yet' : decision;
   }
 }
 

@@ -17,6 +17,12 @@ enum KitPortKind {
   llmConversation,
   llmTools,
   llmOutput,
+  proposalResult,
+  proposalIn,
+  proposalOut,
+  reviewIn,
+  reviewOut,
+  applyIn,
 }
 
 enum PortDirection { input, output }
@@ -42,7 +48,9 @@ enum PortValue {
   conversation('Conversation', PortRole.data),
   transcript('Transcript', PortRole.data),
   tool('Tool', PortRole.capability),
-  repository('Repository', PortRole.grant);
+  repository('Repository', PortRole.grant),
+  patchProposal('Proposal', PortRole.data),
+  reviewDecision('Review', PortRole.data);
 
   const PortValue(this.label, this.role);
 
@@ -188,6 +196,15 @@ const List<KitPortSpec> repositoryKitPorts = [
   ),
 ];
 
+const KitPortSpec toolOutPort = KitPortSpec(
+  id: 'out',
+  kind: KitPortKind.toolOut,
+  label: 'LLM',
+  direction: PortDirection.output,
+  value: PortValue.tool,
+  placement: PortPlacement.middle(PortSide.right),
+);
+
 const List<KitPortSpec> worldToolKitPorts = [
   KitPortSpec(
     id: repositoryPort,
@@ -201,13 +218,67 @@ const List<KitPortSpec> worldToolKitPorts = [
     requiredGroup: repositoryPort,
     requiredMessage: 'Repository grant missing',
   ),
+  toolOutPort,
+];
+
+const List<KitPortSpec> proposePatchKitPorts = [
+  toolOutPort,
+  KitPortSpec(
+    id: 'result',
+    kind: KitPortKind.proposalResult,
+    label: 'Result',
+    direction: PortDirection.output,
+    value: PortValue.patchProposal,
+    placement: PortPlacement.footer(PortSide.right),
+  ),
+];
+
+const List<KitPortSpec> patchProposalKitPorts = [
+  KitPortSpec(
+    id: patchProposalPort,
+    kind: KitPortKind.proposalIn,
+    label: 'In',
+    direction: PortDirection.input,
+    value: PortValue.patchProposal,
+    placement: PortPlacement.footer(PortSide.left),
+  ),
   KitPortSpec(
     id: 'out',
-    kind: KitPortKind.toolOut,
-    label: 'LLM',
+    kind: KitPortKind.proposalOut,
+    label: 'Out',
     direction: PortDirection.output,
-    value: PortValue.tool,
-    placement: PortPlacement.middle(PortSide.right),
+    value: PortValue.patchProposal,
+    placement: PortPlacement.footer(PortSide.right),
+  ),
+];
+
+const List<KitPortSpec> reviewDecisionKitPorts = [
+  KitPortSpec(
+    id: patchReviewPort,
+    kind: KitPortKind.reviewIn,
+    label: 'In',
+    direction: PortDirection.input,
+    value: PortValue.patchProposal,
+    placement: PortPlacement.footer(PortSide.left),
+  ),
+  KitPortSpec(
+    id: 'out',
+    kind: KitPortKind.reviewOut,
+    label: 'Out',
+    direction: PortDirection.output,
+    value: PortValue.reviewDecision,
+    placement: PortPlacement.footer(PortSide.right),
+  ),
+];
+
+const List<KitPortSpec> applyPatchKitPorts = [
+  KitPortSpec(
+    id: patchApplyPort,
+    kind: KitPortKind.applyIn,
+    label: 'In',
+    direction: PortDirection.input,
+    value: PortValue.reviewDecision,
+    placement: PortPlacement.footer(PortSide.left),
   ),
 ];
 
@@ -276,6 +347,10 @@ const Map<String, List<KitPortSpec>> builtinKitPorts = {
   harnessConversationKitId: conversationKitPorts,
   codingRepositoryKitId: repositoryKitPorts,
   harnessLlmKitId: llmKitPorts,
+  proposePatchKitId: proposePatchKitPorts,
+  codingPatchProposalKitId: patchProposalKitPorts,
+  codingReviewDecisionKitId: reviewDecisionKitPorts,
+  codingApplyPatchKitId: applyPatchKitPorts,
 };
 
 final Map<KitPortKind, KitPortSpec> _specsByKind = {

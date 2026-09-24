@@ -40,6 +40,13 @@ void main() {
       worldToolKitId('repo_list_files'),
       origin: const Offset(-400, 400),
     );
+    kitApi.instantiate(proposePatchKitId, origin: const Offset(-400, 600));
+    kitApi.instantiate(codingPatchProposalKitId, origin: const Offset(0, 600));
+    kitApi.instantiate(
+      codingReviewDecisionKitId,
+      origin: const Offset(400, 600),
+    );
+    kitApi.instantiate(codingApplyPatchKitId, origin: const Offset(800, 600));
     connectTextToLlm(
       kitApi: kitApi,
       textObjectId: text.first,

@@ -502,6 +502,55 @@ void main() {
     );
   });
 
+  testWidgets('double-click a patch proposal opens a full-screen editor', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    kitApi.instantiate(
+      codingPatchProposalKitId,
+      origin: const Offset(-140, -75),
+    );
+    final selection = SelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(
+            store: store,
+            kitApi: kitApi,
+            selection: selection,
+          ),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.tapAt(center);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(center);
+    await tester.pump();
+
+    expect(find.byKey(const Key('text-kit-editor')), findsOneWidget);
+    expect(find.byKey(const Key('inline-text-edit')), findsNothing);
+    await tester.enterText(
+      find.byKey(const Key('text-kit-editor-field')),
+      'rename foo to bar',
+    );
+    await tester.tap(find.byKey(const Key('text-kit-editor-close')));
+    await tester.pumpAndSettle();
+
+    expect(
+      store.document.objects
+          .firstWhere(
+            (object) =>
+                object.props[skapieKitProp] == codingPatchProposalKitId &&
+                object.props[skapieRoleProp] == 'body',
+          )
+          .props['content'],
+      'rename foo to bar',
+    );
+  });
+
   testWidgets('double-click a conversation kit opens a chat view', (
     tester,
   ) async {

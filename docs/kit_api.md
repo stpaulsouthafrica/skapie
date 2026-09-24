@@ -228,7 +228,7 @@ KitApi createAppKitApi({
 })
 ```
 
-Uses `createBuiltinRegistry()` if `registry` is omitted. Always registers `demoNoteCardRecipe`, the harness kit recipes, and world-tool grants (`tools.*`). Call `reloadPackages` afterward so disk wins.
+Uses `createBuiltinRegistry()` if `registry` is omitted. Always registers `demoNoteCardRecipe`, the harness kit recipes, world-tool grants (`tools.*`), and the patch board kits (`coding.patch_proposal`, `coding.review_decision`, `coding.apply_patch`). Call `reloadPackages` afterward so disk wins.
 
 ## Errors
 

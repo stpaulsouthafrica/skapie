@@ -1080,7 +1080,7 @@ class CanvasViewportState extends State<CanvasViewport>
 
   SceneObject? _previewKitBody(SceneObject hit) {
     final kitId = kitIdOf(hit);
-    if (kitId != boardTextKitId && kitId != harnessConversationKitId) {
+    if (!kitUsesTextPreview(kitId)) {
       return null;
     }
     if (hit.props[skapieRoleProp] == 'body') {
@@ -1125,9 +1125,7 @@ class CanvasViewportState extends State<CanvasViewport>
     if (object.type != textTypeId) {
       return false;
     }
-    if (isLlmKitObject(object) ||
-        kitIdOf(object) == harnessConversationKitId ||
-        kitIdOf(object) == boardTextKitId) {
+    if (isLlmKitObject(object) || kitUsesTextPreview(kitIdOf(object))) {
       return false;
     }
     return object.props[skapieRoleProp] != 'grant';
