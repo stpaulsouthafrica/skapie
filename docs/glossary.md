@@ -20,6 +20,7 @@ Locked product vocabulary. Use these words in code, comments, docs, and UI.
 | **System-prompt kit** | `harness.system-prompt`. Stub: editable prompt text on the board. Not injected into first Enter. |
 | **Tools kit** | `harness.tools`. Stub: tools as a separate concern from the model. Not attached to first Enter. |
 | **Agent session** | In-memory message log + turn/tool loop. Kept for a later board wire. Not the default chat Enter. See [agent](agent.md). |
+| **Full Screen text editor** | The one global full-screen window for reading or editing text (`showFullScreenTextEditor` in `lib/app/full_screen_text_editor.dart`). Double-clicking a text kit opens it to edit. The run evidence magnifying glass and the Request Information view open it read-only. It numbers every line, lights only the hovered or edited line number, and picks JSON, Dart, or plain text coloring from the content. Every full-screen text view uses this editor. Do not build another. |
 | **Paint** | Cosmetic chrome only: tokens and transient settings. Not the scene, not a kit. See [paint](paint.md). |
 | **Graph node** | Reserved for a future cable/port graph. **Do not use for scene items.** |
 

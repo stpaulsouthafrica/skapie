@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/home_screen.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -92,6 +93,7 @@ class _SkapieAppState extends State<SkapieApp> {
     fitPlacedTextKits(nextKitApi);
     final runtime = _controller.runtime;
     final session = buildAgentSession(kitApi: nextKitApi, runtime: runtime);
+    final ledgerFile = RunLedgerFile.besideScene(nextStore.sceneFilePath);
     final nextController = AgentController(
       kitApi: nextKitApi,
       session: session,
@@ -102,7 +104,9 @@ class _SkapieAppState extends State<SkapieApp> {
       memoryApiKey: _controller.memoryApiKey,
       prefs: _controller.prefs,
       repositoryPermission: _controller.repositoryPermission,
+      ledgerFile: ledgerFile,
     );
+    await nextController.loadLedger();
     nextController.rememberCatalog(_controller.catalogModels);
     if (!mounted) {
       return;

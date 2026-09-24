@@ -36,6 +36,8 @@ class SceneObjectLayer extends StatelessWidget {
     this.resizeFrameId,
     this.resizeHeight,
     this.blockedRunBodyIds = const {},
+    this.identifiedKits,
+    this.identifyAmount = 0,
     this.overviewProgress,
     this.portReadiness = const {},
   });
@@ -57,6 +59,12 @@ class SceneObjectLayer extends StatelessWidget {
 
   /// LLM bodies with a board issue that stops Run. Their play is dimmed.
   final Set<String> blockedRunBodyIds;
+
+  /// When set, every other kit is dimmed. Null leaves the board as it is.
+  final Set<String>? identifiedKits;
+
+  /// 0 is normal, 1 is fully dimmed beside [identifiedKits].
+  final double identifyAmount;
 
   /// 0 is full detail, 1 is overview, between is a crossfade. Null follows
   /// [kitOverviewAt] with no transition.
@@ -155,6 +163,15 @@ class SceneObjectLayer extends StatelessWidget {
     }
     if (object.rotation != 0) {
       child = Transform.rotate(angle: object.rotation, child: child);
+    }
+    final identified = identifiedKits;
+    final identify = identifyAmount;
+    if (identified != null &&
+        identify > 0 &&
+        role == 'frame' &&
+        isKitObject(object) &&
+        !identified.contains(object.id)) {
+      child = Opacity(opacity: 1 - 0.72 * identify, child: child);
     }
     return Positioned(left: topLeft.dx, top: topLeft.dy, child: child);
   }
@@ -550,7 +567,7 @@ class SceneObjectLayer extends StatelessWidget {
                     child: Center(
                       child: Icon(
                         key: const Key('llm-kit-run-button'),
-                        running ? Icons.hourglass_top : Icons.play_arrow,
+                        running ? Icons.stop : Icons.play_arrow,
                         size: 16 * zoom,
                         color: runBlocked && !running
                             ? tokens.muted.withValues(alpha: 0.45)

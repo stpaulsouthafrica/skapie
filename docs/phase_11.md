@@ -1,18 +1,3 @@
-## 11.2 — durable, navigable run evidence
-
-**Goal.** Make legibility a reusable product primitive rather than a last-run inspector widget.
-
-**Implementation detail.**
-
-1. Define small versioned Run and RunEvent records. Start with events the current reader can actually emit: run requested, graph validated, model request started/finished with its offered tool set, tool call started/finished, and run completed/failed/interrupted. Add proposal, approval, and command events only when 11.3 and 11.4 introduce those actions. Use an increasing event sequence and wall time.
-2. Bound each saved event payload and each timeline page; warn before stored run history grows unreasonably. Do not silently discard proposal, approval, apply, or revert evidence to meet a size limit. Incomplete runs reopen as interrupted, never as completed. Add retention controls when actual usage shows a need. Store large content separately only when the first bounded record format cannot handle it.
-3. Record the exact offered tool set and schema version or digest at model-call time. A connected kit can be filtered out by validation; the record must show why. Capture model/provider, elapsed time, errors, and token usage when supplied, without logging credentials or inventing cost numbers.
-4. Render one timeline from the event store. Clicking an event highlights the responsible kit and actual cable on the recorded relevant subgraph. Expand to see bounded input/result detail and collapse to a compact summary. Keep export bundles and elaborate filters for Phase 12 or 15.
-5. Reopen and inspect past runs without invoking model calls or tools. A full animated scrubber is optional polish; persistent facts and accurate navigation are the gate. A new run against current state receives a new run ID.
-
-**Feel and wow.** The timeline is a second lens on the board, not a second chat app. Selecting a past event softly lights the exact route taken and leaves all unused cables still. An error stops at the failing kit with a clear label. Users can hide the timeline and traces independently. At low zoom, cards show status and count; opening a kit reveals full evidence.
-
-**Acceptance.** After closing and reopening the app, the user can identify which model, Context text, Conversation turns, repository, grant, and bounded call arguments and outputs produced an answer, subject to deliberate redaction. The ledger's fingerprint of those turns matches what was sent. Editing the Conversation kit afterward changes the next Run and does not rewrite the old one. Approval state becomes part of this same timeline in 11.3. Editing the current graph does not alter the old run. A deliberately interrupted run is visibly interrupted. Sensitive payloads are not placed in scene.json.
 
 ## 11.3 — proposed patches, review, and application
 

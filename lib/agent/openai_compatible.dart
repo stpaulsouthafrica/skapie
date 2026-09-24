@@ -14,6 +14,41 @@ class AgentHttpException implements Exception {
   String toString() => message;
 }
 
+/// Set while a run is in flight. Models report the request they are about to send.
+void Function(String request)? agentHttpRequestObserver;
+
+/// The HTTP request, with credentials removed.
+String redactedHttpRequest({
+  required String url,
+  required Map<String, String> headers,
+  required Object body,
+}) {
+  final safe = <String, String>{};
+  for (final entry in headers.entries) {
+    final key = entry.key.toLowerCase();
+    final secret = key == 'authorization' || key == 'x-api-key';
+    safe[entry.key] = secret ? '[redacted]' : entry.value;
+  }
+  return jsonEncode({
+    'method': 'POST',
+    'url': url,
+    'headers': safe,
+    'body': body,
+  });
+}
+
+void reportAgentHttpRequest({
+  required String url,
+  required Map<String, String> headers,
+  required Object body,
+}) {
+  final observer = agentHttpRequestObserver;
+  if (observer == null) {
+    return;
+  }
+  observer(redactedHttpRequest(url: url, headers: headers, body: body));
+}
+
 class AgentHttpDiagnostic {
   const AgentHttpDiagnostic({
     required this.baseUrl,
@@ -175,7 +210,25 @@ class OpenAiCompatibleAgentModel implements AgentModel {
   final Duration timeout;
   final String? reasoningEffort;
   final http.Client _client;
+  http.Client get httpClient => _client;
   AgentHttpDiagnostic? lastDiagnostic;
+
+  /// Same endpoint and key, with the kit's chosen model id.
+  OpenAiCompatibleAgentModel withModel(String model) {
+    if (model == this.model) {
+      return this;
+    }
+    return OpenAiCompatibleAgentModel(
+      baseUrl: baseUrl,
+      apiKey: apiKey,
+      model: model,
+      presetId: presetId,
+      headers: headers,
+      httpClient: _client,
+      timeout: timeout,
+      reasoningEffort: reasoningEffort,
+    );
+  }
 
   bool get _reasoningAttached {
     final effort = reasoningEffort?.trim();
@@ -212,16 +265,22 @@ class OpenAiCompatibleAgentModel implements AgentModel {
       reasoningEffort: _reasoningAttached ? reasoningEffort : null,
     );
     _recordDiagnostic(tools: tools);
+    final sentHeaders = {
+      'Authorization': 'Bearer $apiKey',
+      'Content-Type': 'application/json',
+      ...headers,
+    };
+    reportAgentHttpRequest(
+      url: openaiChatCompletionsUrl(baseUrl),
+      headers: sentHeaders,
+      body: body,
+    );
     final http.Response response;
     try {
       response = await _client
           .post(
             Uri.parse(openaiChatCompletionsUrl(baseUrl)),
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-              ...headers,
-            },
+            headers: sentHeaders,
             body: jsonEncode(body),
           )
           .timeout(timeout);

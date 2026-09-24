@@ -132,6 +132,11 @@ class AgentTurnFailed extends AgentEvent {
   final Object error;
 }
 
+/// The caller stopped the turn. No further model or tool work should run.
+class AgentRunInterrupted implements Exception {
+  const AgentRunInterrupted();
+}
+
 /// One conversation. Scene mutations go through [kitApi] tools only.
 class AgentSession {
   AgentSession({
@@ -175,17 +180,25 @@ class AgentSession {
   ///
   /// On model failure: user message is kept, [AgentTurnFailed] is emitted,
   /// then the error is rethrown. Tool dispatch errors become tool messages.
-  Future<void> sendUser(String text) async {
+  Future<void> sendUser(String text, {bool Function()? isCancelled}) async {
     final user = AgentMessage(role: AgentRole.user, content: text);
     _messages.add(user);
     _events.add(const AgentTurnStarted());
     _events.add(AgentMessageAppended(user));
+    void stopIfCancelled() {
+      if (isCancelled?.call() == true) {
+        throw const AgentRunInterrupted();
+      }
+    }
+
     try {
       for (var i = 0; i < maxToolIterations; i++) {
+        stopIfCancelled();
         final reply = await model.complete(
           messages: List.unmodifiable(_messages),
           tools: includeTools ? List.unmodifiable(_tools) : const <AgentTool>[],
         );
+        stopIfCancelled();
         final calls = reply.toolCalls;
         if (calls == null || calls.isEmpty) {
           final assistant = AgentMessage(
@@ -205,11 +218,13 @@ class AgentSession {
         _messages.add(assistant);
         _events.add(AgentMessageAppended(assistant));
         for (final call in calls) {
+          stopIfCancelled();
           _events.add(AgentToolStarted(call));
           final result = await _dispatcher.dispatch(
             call.name,
             call.argumentsJson,
           );
+          stopIfCancelled();
           _events.add(AgentToolFinished(call, result));
           final toolMessage = AgentMessage(
             role: AgentRole.tool,
@@ -227,6 +242,8 @@ class AgentSession {
       _messages.add(limit);
       _events.add(const AgentMessageAppended(limit));
       _events.add(const AgentTurnFinished());
+    } on AgentRunInterrupted {
+      rethrow;
     } catch (error) {
       _events.add(AgentTurnFailed(error));
       rethrow;

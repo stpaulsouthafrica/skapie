@@ -124,6 +124,10 @@ class _LlmKitInputState extends State<LlmKitInput> {
   List<BoardIssue> get _blockers =>
       validateBoard(widget.kitApi.store.document).runBlockers(widget.body.id);
 
+  void _stop() {
+    widget.controller.interruptRun();
+  }
+
   Future<void> _submit() async {
     final prompt = _cableInput;
     if (_blockers.isNotEmpty || _busy) {
@@ -145,7 +149,8 @@ class _LlmKitInputState extends State<LlmKitInput> {
   Widget build(BuildContext context) {
     final tokens = PaintScope.of(context);
     final blockers = _blockers;
-    final blocked = blockers.isNotEmpty || _busy;
+    final runningHere = widget.controller.runningBodyId == widget.body.id;
+    final blocked = blockers.isNotEmpty || (_busy && !runningHere);
     final choices = _choices;
     final selected = _selectedModel;
     return Column(
@@ -191,8 +196,8 @@ class _LlmKitInputState extends State<LlmKitInput> {
         KeyedSubtree(
           key: const Key('llm-kit-run'),
           child: PaintButton(
-            label: _busy ? 'Running' : 'Run',
-            onPressed: blocked ? null : _submit,
+            label: runningHere ? 'Stop' : 'Run',
+            onPressed: runningHere ? _stop : (blocked ? null : _submit),
           ),
         ),
         const SizedBox(height: 8),

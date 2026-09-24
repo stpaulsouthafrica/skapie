@@ -97,6 +97,9 @@ class CanvasViewportState extends State<CanvasViewport>
   late final AnimationController _overview;
   late double _overviewTarget;
   late final AnimationController _portReady;
+  late final AnimationController _identify;
+  Set<String>? _identifyKits;
+  Set<String>? _identifyCables;
   Map<String, double> _lastReadiness = const {};
   String? _inspectedIssue;
   List<({String frameId, KitPortKind kind})> _flashTargets = const [];
@@ -163,6 +166,25 @@ class CanvasViewportState extends State<CanvasViewport>
       value: _overviewTarget,
     );
     _portReady = AnimationController(vsync: this, duration: portReadyFade);
+    _identify = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _identify.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+    _identify.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed &&
+          widget.agentController?.trace == null &&
+          mounted) {
+        setState(() {
+          _identifyKits = null;
+          _identifyCables = null;
+        });
+      }
+    });
     widget.store.addListener(_onStore);
     widget.selection.addListener(_onSelection);
     widget.agentController?.addListener(_onAgent);
@@ -202,6 +224,7 @@ class CanvasViewportState extends State<CanvasViewport>
     _issueFlash.dispose();
     _overview.dispose();
     _portReady.dispose();
+    _identify.dispose();
     super.dispose();
   }
 
@@ -216,7 +239,23 @@ class CanvasViewportState extends State<CanvasViewport>
         ..stop()
         ..start();
     }
+    _syncIdentify();
     setState(() {});
+  }
+
+  void _syncIdentify() {
+    final trace = widget.agentController?.trace;
+    if (trace != null) {
+      _identifyKits = trace.kits;
+      _identifyCables = trace.cables;
+      if (_identify.value < 1) {
+        _identify.forward();
+      }
+      return;
+    }
+    if (_identifyKits != null && _identify.value > 0) {
+      _identify.reverse();
+    }
   }
 
   void _onStore() {
@@ -469,13 +508,19 @@ class CanvasViewportState extends State<CanvasViewport>
 
   void _runLlm(SceneObject frame) {
     final controller = widget.agentController;
-    if (controller == null || controller.runningBodyId != null) {
+    if (controller == null) {
       return;
     }
     final body = llmKitBodyForSelection(
       document: widget.store.document,
       selectedId: frame.id,
     );
+    if (controller.runningBodyId != null) {
+      if (body != null && controller.runningBodyId == body.id) {
+        controller.interruptRun();
+      }
+      return;
+    }
     if (body == null) {
       return;
     }
@@ -1390,6 +1435,9 @@ class CanvasViewportState extends State<CanvasViewport>
                       validation: validation,
                       invalidColor: tokens.danger,
                       selectedCableId: widget.selection.selectedCableId,
+                      traceCables: _identifyCables ?? const {},
+                      traceKits: _identifyKits ?? const {},
+                      traceAmount: Curves.easeInOut.transform(_identify.value),
                     ),
                     AnimatedBuilder(
                       animation: Listenable.merge([_overview, _portReady]),
@@ -1407,6 +1455,10 @@ class CanvasViewportState extends State<CanvasViewport>
                         resizeFrameId: _resizeFrameId,
                         resizeHeight: _resizeHeight,
                         blockedRunBodyIds: blockedLlmBodies(validation),
+                        identifiedKits: _identifyKits,
+                        identifyAmount: Curves.easeInOut.transform(
+                          _identify.value,
+                        ),
                         overviewProgress: _overview.value,
                         portReadiness: {
                           for (final entry in _heldPortReadiness().entries)

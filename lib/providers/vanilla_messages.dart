@@ -74,17 +74,23 @@ class VanillaMessagesClient implements VanillaSurfaceClient {
       history: history,
     );
     _record();
+    final sentHeaders = {
+      'Authorization': 'Bearer $apiKey',
+      'x-api-key': apiKey,
+      'Content-Type': 'application/json',
+      ...headers,
+    };
+    reportAgentHttpRequest(
+      url: anthropicMessagesUrl(baseUrl),
+      headers: sentHeaders,
+      body: body,
+    );
     final http.Response response;
     try {
       response = await _client
           .post(
             Uri.parse(anthropicMessagesUrl(baseUrl)),
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'x-api-key': apiKey,
-              'Content-Type': 'application/json',
-              ...headers,
-            },
+            headers: sentHeaders,
             body: jsonEncode(body),
           )
           .timeout(timeout);

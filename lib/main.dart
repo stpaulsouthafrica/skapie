@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/skapie_app.dart';
@@ -150,7 +151,8 @@ Future<AgentController> bootstrapAgentController({
         : 'Skapie agent: ${runtime.presetId} model=${runtime.model}',
   );
   final session = buildAgentSession(kitApi: kitApi, runtime: runtime);
-  return AgentController(
+  final ledgerFile = RunLedgerFile.besideScene(kitApi.store.sceneFilePath);
+  final controller = AgentController(
     kitApi: kitApi,
     session: session,
     vanilla: buildVanillaCompletion(runtime: runtime, sessionId: session.id),
@@ -159,5 +161,8 @@ Future<AgentController> bootstrapAgentController({
     sources: sources,
     memoryApiKey: prefs?.apiKey ?? runtime.apiKey,
     prefs: prefs,
+    ledgerFile: ledgerFile,
   );
+  await controller.loadLedger();
+  return controller;
 }

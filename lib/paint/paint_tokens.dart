@@ -11,6 +11,7 @@ class PaintTokens {
     required this.muted,
     required this.hairline,
     required this.danger,
+    required this.success,
     required this.onAccent,
   });
 
@@ -22,6 +23,7 @@ class PaintTokens {
   final Color muted;
   final Color hairline;
   final Color danger;
+  final Color success;
   final Color onAccent;
 
   static const Color champagne = Color(0xFFC4A46A);
@@ -42,6 +44,7 @@ class PaintTokens {
       muted: ink.withValues(alpha: 0.62),
       hairline: accent.withValues(alpha: 0.35),
       danger: const Color(0xFFB85C5C),
+      success: const Color(0xFF6E9B6A),
       onAccent: const Color(0xFF1A1408),
     );
   }
@@ -57,6 +60,7 @@ class PaintTokens {
       muted: ink.withValues(alpha: 0.62),
       hairline: accent.withValues(alpha: 0.45),
       danger: const Color(0xFFB85C5C),
+      success: const Color(0xFF3D6B4F),
       onAccent: const Color(0xFF1A1408),
     );
   }

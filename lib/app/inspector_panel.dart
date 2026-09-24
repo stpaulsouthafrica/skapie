@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/agent/run_ledger.dart';
+import 'package:skapie/app/full_screen_text_editor.dart';
 import 'package:skapie/app/connection_inspector.dart';
 import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/app/llm_request_information.dart';
@@ -511,6 +513,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
                       ),
                     if (llmBody != null && controller != null)
                       _toolActivity(llmBody.id, controller),
+                    if (llmBody != null && controller != null)
+                      _runEvidence(llmBody.id, controller),
                     if (kitIdOf(object) == codingRepositoryKitId)
                       _section('Repository', [
                         Tooltip(
@@ -661,6 +665,241 @@ class _InspectorPanelState extends State<InspectorPanel> {
         ],
       ),
     );
+  }
+
+  int? _evidencePage;
+  String? _evidenceRunId;
+  String? _hoverEvent;
+
+  void _openRunEvent(
+    RunRecord run,
+    RunEvent event,
+    AgentController controller,
+  ) {
+    final stored = controller.ledger.inspectText(run, event);
+    final body = (stored == null || stored.isEmpty)
+        ? runEventInspectBody(event)
+        : stored;
+    showFullScreenTextEditor(
+      context: context,
+      title: runEventLabel(event.kind),
+      text: body,
+      details: runEventInspectAside(event),
+      readOnly: true,
+      surfaceKey: const Key('run-event-fullscreen'),
+      fieldKey: const Key('run-event-field'),
+      closeKey: const Key('run-event-close'),
+    );
+  }
+
+  Widget _timelineEvent(
+    RunRecord run,
+    RunEvent event,
+    AgentController controller,
+    PaintTokens tokens,
+  ) {
+    final key = '${run.id}:${event.sequence}';
+    final hover = _hoverEvent == key;
+    final failed =
+        event.kind == RunEventKind.runFailed || event.payload['ok'] == false;
+    final succeeded =
+        event.kind == RunEventKind.toolCallFinished &&
+        event.payload['ok'] != false;
+    final color = failed
+        ? tokens.danger
+        : succeeded
+        ? tokens.success
+        : tokens.ink;
+    return Padding(
+      key: ValueKey('run-event-${run.id}-${event.sequence}'),
+      padding: const EdgeInsets.only(bottom: 2),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hoverEvent = key),
+        onExit: (_) {
+          if (_hoverEvent == key) {
+            setState(() => _hoverEvent = null);
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            color: hover
+                ? tokens.ink.withValues(alpha: 0.06)
+                : Colors.transparent,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 4, 6),
+                  child: Text(
+                    runEventSummary(event),
+                    style: TextStyle(color: color, fontSize: 12),
+                  ),
+                ),
+              ),
+              IconButton(
+                key: ValueKey('run-event-inspect-${run.id}-${event.sequence}'),
+                tooltip: 'Inspect',
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints.tightFor(
+                  width: 28,
+                  height: 28,
+                ),
+                onPressed: () => _openRunEvent(run, event, controller),
+                icon: Icon(Icons.search, size: 16, color: tokens.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _runEvidence(String bodyId, AgentController controller) {
+    final runs = controller.ledger.runsFor(bodyId);
+    RunRecord? run;
+    var runIndex = -1;
+    if (runs.isNotEmpty) {
+      final selected = _evidenceRunId;
+      runIndex = selected == null
+          ? runs.length - 1
+          : runs.indexWhere((item) => item.id == selected);
+      if (runIndex < 0) {
+        runIndex = runs.length - 1;
+      }
+      run = runs[runIndex];
+    }
+    final page = runEvidencePage(run, _evidencePage ?? 1 << 20);
+    final tokens = PaintScope.of(context);
+    return _section('Run evidence', [
+      ExpansionTile(
+        key: ValueKey('run-evidence-$bodyId'),
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: EdgeInsets.zero,
+        title: run == null
+            ? Text(
+                'No saved run',
+                style: TextStyle(color: tokens.ink, fontSize: 12),
+              )
+            : Row(
+                children: [
+                  IconButton(
+                    key: const Key('run-evidence-previous-run'),
+                    tooltip: 'Previous run',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    onPressed: runIndex > 0
+                        ? () {
+                            controller.clearTrace();
+                            setState(() {
+                              _evidenceRunId = runs[runIndex - 1].id;
+                              _evidencePage = null;
+                            });
+                          }
+                        : null,
+                    icon: Icon(
+                      Icons.chevron_left,
+                      size: 18,
+                      color: runIndex > 0 ? tokens.ink : tokens.muted,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      run.id,
+                      key: const Key('run-evidence-name'),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: tokens.ink, fontSize: 12),
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('run-evidence-identify'),
+                    tooltip: 'Identify',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    onPressed: () => controller.identifyRun(run!),
+                    icon: Icon(
+                      Icons.lightbulb_outline,
+                      size: 16,
+                      color: tokens.ink,
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('run-evidence-next-run'),
+                    tooltip: 'Next run',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    onPressed: runIndex < runs.length - 1
+                        ? () {
+                            controller.clearTrace();
+                            setState(() {
+                              _evidenceRunId = runs[runIndex + 1].id;
+                              _evidencePage = null;
+                            });
+                          }
+                        : null,
+                    icon: Icon(
+                      Icons.chevron_right,
+                      size: 18,
+                      color: runIndex < runs.length - 1
+                          ? tokens.ink
+                          : tokens.muted,
+                    ),
+                  ),
+                ],
+              ),
+        children: [
+          if (controller.ledger.historyWarning)
+            Text(
+              'Run history is large. Older runs are kept.',
+              key: const Key('run-history-warning'),
+              style: TextStyle(color: tokens.danger, fontSize: 12),
+            ),
+          if (run == null)
+            _readOnly('', 'Run a reader to record events', hideLabel: true),
+          for (final event in page.events)
+            _timelineEvent(run!, event, controller, tokens),
+          if (page.pageCount > 1)
+            Row(
+              children: [
+                TextButton(
+                  key: const Key('run-evidence-previous'),
+                  onPressed: page.page > 0
+                      ? () => setState(() => _evidencePage = page.page - 1)
+                      : null,
+                  child: const Text('Previous'),
+                ),
+                Text(
+                  '${page.page + 1} / ${page.pageCount}',
+                  style: TextStyle(color: tokens.muted, fontSize: 11),
+                ),
+                TextButton(
+                  key: const Key('run-evidence-next'),
+                  onPressed: page.page < page.pageCount - 1
+                      ? () => setState(() => _evidencePage = page.page + 1)
+                      : null,
+                  child: const Text('Next'),
+                ),
+              ],
+            ),
+        ],
+      ),
+    ]);
   }
 
   Widget _toolActivity(String bodyId, AgentController controller) {

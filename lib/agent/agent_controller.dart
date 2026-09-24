@@ -8,8 +8,13 @@ import 'package:skapie/agent/agent_models_catalog.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/llm_kit.dart';
+import 'package:skapie/agent/run_ledger.dart';
+import 'package:skapie/agent/run_route.dart';
+import 'package:skapie/agent/messages_agent_model.dart';
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/agent/responses_agent_model.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/providers/model_surface.dart';
 import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 import 'package:skapie/tools/attach.dart';
@@ -45,12 +50,19 @@ class AgentController extends ChangeNotifier {
     this.prefs,
     this.vanilla,
     this.repositoryPermission = const SystemRepositoryPermission(),
-  });
+    RunLedger? ledger,
+    this.ledgerFile,
+  }) : ledger = ledger ?? RunLedger();
 
   final KitApi kitApi;
   final AgentPrefsStore? prefsStore;
   final AgentRuntimeSources sources;
   final RepositoryPermission repositoryPermission;
+  final RunLedger ledger;
+  final RunLedgerFile? ledgerFile;
+  Future<void> _ledgerWrites = Future.value();
+  String? _activeRunId;
+  _RunCancel? _gate;
 
   AgentSession session;
   ResolvedAgentRuntime runtime;
@@ -83,6 +95,10 @@ class AgentController extends ChangeNotifier {
   /// Increments when a reply is written. The viewport plays one output flash.
   int outputPulse = 0;
   String? outputBodyId;
+
+  /// Kits and cables Identify is lighting. Null when the board is at rest.
+  RunTrace? trace;
+  int _traceToken = 0;
   final Map<String, List<AgentToolActivity>> _toolActivities = {};
   final Map<String, LlmRunUse> _runUse = {};
 
@@ -91,6 +107,89 @@ class AgentController extends ChangeNotifier {
 
   List<AgentToolActivity> toolActivitiesFor(String bodyId) =>
       List.unmodifiable(_toolActivities[bodyId] ?? const <AgentToolActivity>[]);
+
+  RunRecord? latestRunFor(String bodyId) {
+    final runs = ledger.runsFor(bodyId);
+    if (runs.isEmpty) {
+      return null;
+    }
+    return runs.last;
+  }
+
+  /// Stops the in-flight run. Further model and tool work is abandoned.
+  void interruptRun() {
+    final gate = _gate;
+    final runId = _activeRunId;
+    if (gate == null || runId == null || gate.cancelled) {
+      return;
+    }
+    gate.cancelled = true;
+    _note(
+      runId,
+      RunEventKind.runInterrupted,
+      const {},
+      routeForKit(kitApi.store.document, runningBodyId ?? ''),
+    );
+    runningBodyId = null;
+    activeToolFrameId = null;
+    seedPorts = const {};
+    notifyListeners();
+  }
+
+  Future<void> flushLedger() => _ledgerWrites;
+
+  Future<void> loadLedger() async {
+    final file = ledgerFile;
+    if (file == null) {
+      return;
+    }
+    await file.loadInto(ledger);
+    if (ledger.closedIncomplete) {
+      _ledgerWrites = _ledgerWrites.then((_) => file.write(ledger));
+      await _ledgerWrites;
+    }
+    notifyListeners();
+  }
+
+  void clearTrace() {
+    _traceToken++;
+    if (trace == null) {
+      return;
+    }
+    trace = null;
+    notifyListeners();
+  }
+
+  /// Lights every kit and cable in the run, and dims the rest.
+  /// The board eases in for half a second, holds for three, then eases out.
+  Future<void> identifyRun(RunRecord run) async {
+    final token = ++_traceToken;
+    trace = RunTrace.ensemble(run);
+    notifyListeners();
+    await Future<void>.delayed(const Duration(milliseconds: 3500));
+    if (_traceToken != token) {
+      return;
+    }
+    trace = null;
+    notifyListeners();
+  }
+
+  void _note(
+    String runId,
+    RunEventKind kind, [
+    Map<String, Object?> payload = const {},
+    RunRoute? route,
+  ]) {
+    final event = ledger.append(runId, kind, {...payload, ...?route?.fields});
+    if (event == null) {
+      return;
+    }
+    final file = ledgerFile;
+    if (file != null) {
+      _ledgerWrites = _ledgerWrites.then((_) => file.write(ledger));
+    }
+    notifyListeners();
+  }
 
   String get statusChip => agentStatusChip(runtime);
 
@@ -164,8 +263,12 @@ class AgentController extends ChangeNotifier {
     if (prompt.isEmpty || bodyId.isEmpty) {
       return;
     }
-    final blockers = validateBoard(kitApi.store.document)
-        .runBlockers(bodyId, inputSupplied: true);
+    final blockers = [
+      for (final issue in validateBoard(
+        kitApi.store.document,
+      ).runBlockers(bodyId, inputSupplied: true))
+        if (issue.kind != BoardIssueKind.missingGrant) issue,
+    ];
     if (blockers.isNotEmpty) {
       return;
     }
@@ -174,6 +277,10 @@ class AgentController extends ChangeNotifier {
       return;
     }
     runningBodyId = bodyId;
+    final gate = _RunCancel();
+    _gate = gate;
+    final run = ledger.begin(bodyId: bodyId);
+    _activeRunId = run.id;
     _runStartedAt = DateTime.now();
     activeToolFrameId = null;
     seedPorts = _seedPortsFor(bodyId);
@@ -187,16 +294,61 @@ class AgentController extends ChangeNotifier {
         bodyId,
       ).isNotEmpty,
     );
+    final into = _modelRoute(bodyId);
+    _note(run.id, RunEventKind.runRequested, {'bodyId': bodyId}, into);
+    _note(run.id, RunEventKind.graphValidated, {'ok': true}, into);
     notifyListeners();
+    Object? failure;
+    StackTrace? failureTrace;
     try {
-      await _completeSend(prompt: prompt, bodyId: bodyId);
+      await _completeSend(
+        prompt: prompt,
+        bodyId: bodyId,
+        runId: run.id,
+        gate: gate,
+      );
+    } catch (error, stack) {
+      failure = error;
+      failureTrace = stack;
+      if (!gate.cancelled) {
+        _note(run.id, RunEventKind.runFailed, {
+          'error': '$error',
+        }, _modelRoute(bodyId));
+      }
     } finally {
+      if (gate.cancelled) {
+        _note(run.id, RunEventKind.runInterrupted);
+      } else if (failure == null) {
+        _note(
+          run.id,
+          RunEventKind.runCompleted,
+          const {},
+          routeForReply(document: kitApi.store.document, bodyId: bodyId),
+        );
+      }
       _runUse[bodyId]?.finishedAt = DateTime.now();
-      runningBodyId = null;
-      activeToolFrameId = null;
-      seedPorts = const {};
+      if (identical(_gate, gate)) {
+        runningBodyId = null;
+        activeToolFrameId = null;
+        seedPorts = const {};
+        _activeRunId = null;
+        _gate = null;
+      }
       notifyListeners();
     }
+    if (failure != null && !gate.cancelled) {
+      Error.throwWithStackTrace(failure, failureTrace ?? StackTrace.current);
+    }
+  }
+
+  RunRoute _modelRoute(String bodyId) {
+    final use = _runUse[bodyId];
+    return routeIntoModel(
+      document: kitApi.store.document,
+      bodyId: bodyId,
+      ports: use?.readPorts ?? seedPorts,
+      conversation: use?.readConversation ?? false,
+    );
   }
 
   Set<String> _seedPortsFor(String bodyId) {
@@ -220,6 +372,8 @@ class AgentController extends ChangeNotifier {
   Future<void> _completeSend({
     required String prompt,
     required String bodyId,
+    required String runId,
+    required _RunCancel gate,
   }) async {
     final target = kitApi.store.document.objectById(bodyId);
     if (target == null) {
@@ -233,18 +387,63 @@ class AgentController extends ChangeNotifier {
     final document = kitApi.store.document;
     final systemText = llmContextText(document, bodyId);
     final history = llmConversationHistory(document, bodyId);
-    final attached = worldToolsForLlm(
+    final offer = llmToolOffer(
       kitApi: kitApi,
       llmBodyId: bodyId,
       repositoryPermission: repositoryPermission,
     );
+    final attached = offer.tools;
+    final callFacts = <String, Object?>{
+      'offeredTools': offer.names,
+      'toolSchemaDigest': offer.schemaDigest,
+      'filteredTools': [for (final tool in offer.filtered) tool.toJson()],
+      'model': model ?? '',
+      'provider': provider,
+    };
+    agentHttpRequestObserver = (request) {
+      if (gate.cancelled) {
+        return;
+      }
+      _note(runId, RunEventKind.modelRequestStarted, {
+        ...callFacts,
+        'request': request,
+      }, _modelRoute(bodyId));
+    };
     Object? failure;
     StackTrace? failureTrace;
     String? reply;
+    int? plainElapsed;
     try {
       if (attached.isNotEmpty) {
+        final turnModel = _modelForKit(session.model, model);
         final turn = AgentSession(
-          model: session.model,
+          model: _RunLedgerModel(
+            inner: turnModel,
+            onRequest:
+                (
+                  finished, {
+                  required bool ok,
+                  String? response,
+                  int? elapsedMs,
+                  String? error,
+                }) {
+                  if (gate.cancelled || !finished) {
+                    return;
+                  }
+                  _note(
+                    runId,
+                    RunEventKind.modelRequestFinished,
+                    _finishedCall(
+                      callFacts,
+                      ok: ok,
+                      response: response,
+                      elapsedMs: elapsedMs,
+                      error: error,
+                    ),
+                    _modelRoute(bodyId),
+                  );
+                },
+          ),
           kitApi: kitApi,
           tools: attached,
           includeTools: true,
@@ -263,21 +462,30 @@ class AgentController extends ChangeNotifier {
           (event) => _recordToolEvent(bodyId, event),
         );
         try {
-          await turn.sendUser(prompt);
+          await turn.sendUser(prompt, isCancelled: () => gate.cancelled);
         } finally {
           await events.cancel();
         }
         reply = turn.messages
             .lastWhere((message) => message.role == AgentRole.assistant)
             .content;
-        final sessionModel = session.model;
-        if (sessionModel is OpenAiCompatibleAgentModel) {
-          lastDiagnostic = sessionModel.lastDiagnostic;
-        } else {
-          lastDiagnostic = null;
-        }
+        lastDiagnostic = switch (turnModel) {
+          OpenAiCompatibleAgentModel completions => completions.lastDiagnostic,
+          OpenAiResponsesAgentModel responses => responses.lastDiagnostic,
+          OpenAiMessagesAgentModel messages => messages.lastDiagnostic,
+          _ => null,
+        };
       } else if (runtime.useFake) {
+        final watch = Stopwatch()..start();
+        _note(
+          runId,
+          RunEventKind.modelRequestStarted,
+          callFacts,
+          _modelRoute(bodyId),
+        );
         reply = 'Echo: $prompt';
+        watch.stop();
+        plainElapsed = watch.elapsedMilliseconds;
         lastDiagnostic = null;
       } else {
         final override =
@@ -298,7 +506,14 @@ class AgentController extends ChangeNotifier {
                 sessionId: session.id,
               )
             : vanilla;
+        final watch = Stopwatch()..start();
         if (client == null) {
+          _note(
+            runId,
+            RunEventKind.modelRequestStarted,
+            callFacts,
+            _modelRoute(bodyId),
+          );
           throw StateError('No vanilla client');
         }
         reply = await client.complete(
@@ -306,7 +521,9 @@ class AgentController extends ChangeNotifier {
           systemText: systemText,
           history: history,
         );
+        watch.stop();
         lastDiagnostic = client.lastDiagnostic;
+        plainElapsed = watch.elapsedMilliseconds;
       }
     } catch (error, stack) {
       failure = error;
@@ -317,10 +534,42 @@ class AgentController extends ChangeNotifier {
         lastDiagnostic = sessionModel.lastDiagnostic;
       } else {
         final client = vanilla;
-        if (client != null) {
+        if (client != null && client.lastDiagnostic != null) {
           lastDiagnostic = client.lastDiagnostic;
         }
       }
+      if (!gate.cancelled && attached.isEmpty) {
+        _note(
+          runId,
+          RunEventKind.modelRequestFinished,
+          _finishedCall(
+            callFacts,
+            ok: false,
+            response: lastDiagnostic?.responseBody,
+            elapsedMs: plainElapsed,
+            error: '$error',
+          ),
+          _modelRoute(bodyId),
+        );
+      }
+    }
+    agentHttpRequestObserver = null;
+    if (gate.cancelled) {
+      return;
+    }
+    if (failure == null && attached.isEmpty) {
+      _note(
+        runId,
+        RunEventKind.modelRequestFinished,
+        _finishedCall(
+          callFacts,
+          ok: true,
+          response: lastDiagnostic?.responseBody,
+          text: reply ?? '',
+          elapsedMs: plainElapsed,
+        ),
+        _modelRoute(bodyId),
+      );
     }
     publishLlmKit(
       kitApi: kitApi,
@@ -355,8 +604,35 @@ class AgentController extends ChangeNotifier {
   }
 
   void _recordToolEvent(String bodyId, AgentEvent event) {
+    if (_gate?.cancelled == true) {
+      return;
+    }
     final activities = _toolActivities.putIfAbsent(bodyId, () => []);
+    final runId = _activeRunId;
     if (event is AgentToolStarted) {
+      if (runId != null) {
+        final frameId = toolFrameIdForName(
+          kitApi.store.document,
+          bodyId,
+          event.call.name,
+        );
+        _note(
+          runId,
+          RunEventKind.toolCallStarted,
+          {
+            'name': event.call.name,
+            'callId': event.call.id,
+            'arguments': event.call.argumentsJson,
+          },
+          frameId == null
+              ? routeForKit(kitApi.store.document, bodyId)
+              : routeForTool(
+                  document: kitApi.store.document,
+                  bodyId: bodyId,
+                  toolFrameId: frameId,
+                ),
+        );
+      }
       activities.add(
         AgentToolActivity(
           callId: event.call.id,
@@ -380,6 +656,30 @@ class AgentController extends ChangeNotifier {
       _markToolUsed(activeToolFrameId);
       notifyListeners();
     } else if (event is AgentToolFinished) {
+      if (runId != null) {
+        final frameId = toolFrameIdForName(
+          kitApi.store.document,
+          bodyId,
+          event.call.name,
+        );
+        _note(
+          runId,
+          RunEventKind.toolCallFinished,
+          {
+            'name': event.call.name,
+            'callId': event.call.id,
+            'ok': event.result.json['ok'] != false,
+            'result': event.result.content,
+          },
+          frameId == null
+              ? routeForKit(kitApi.store.document, bodyId)
+              : routeForTool(
+                  document: kitApi.store.document,
+                  bodyId: bodyId,
+                  toolFrameId: frameId,
+                ),
+        );
+      }
       final index = activities.lastIndexWhere(
         (activity) => activity.callId == event.call.id,
       );
@@ -439,4 +739,110 @@ class AgentController extends ChangeNotifier {
       );
     }
   }
+}
+
+AgentModel _modelForKit(AgentModel current, String? model) {
+  if (current is! OpenAiCompatibleAgentModel) {
+    return current;
+  }
+  final chosen = (model?.trim().isNotEmpty ?? false)
+      ? model!.trim()
+      : current.model;
+  switch (lookupOpenCodeGoModel(chosen)?.surface) {
+    case ModelSurface.responses:
+      return OpenAiResponsesAgentModel.fromCompatible(current, model: chosen);
+    case ModelSurface.messages:
+      return OpenAiMessagesAgentModel.fromCompatible(current, model: chosen);
+    case ModelSurface.completions:
+    case null:
+      break;
+  }
+  if (chosen != current.model) {
+    return current.withModel(chosen);
+  }
+  return current;
+}
+
+class _RunCancel {
+  var cancelled = false;
+}
+
+/// Records one model request around each [AgentModel.complete] in a tool loop.
+class _RunLedgerModel implements AgentModel {
+  _RunLedgerModel({required this.inner, required this.onRequest});
+
+  final AgentModel inner;
+  final void Function(
+    bool finished, {
+    required bool ok,
+    String? response,
+    int? elapsedMs,
+    String? error,
+  })
+  onRequest;
+
+  @override
+  Future<AgentModelReply> complete({
+    required List<AgentMessage> messages,
+    List<AgentTool> tools = const [],
+  }) async {
+    onRequest(false, ok: true);
+    final watch = Stopwatch()..start();
+    try {
+      final reply = await inner.complete(messages: messages, tools: tools);
+      watch.stop();
+      onRequest(
+        true,
+        ok: true,
+        response: _modelResponseBody(inner),
+        elapsedMs: watch.elapsedMilliseconds,
+      );
+      return reply;
+    } catch (error) {
+      watch.stop();
+      onRequest(
+        true,
+        ok: false,
+        response: _modelResponseBody(inner),
+        elapsedMs: watch.elapsedMilliseconds,
+        error: '$error',
+      );
+      rethrow;
+    }
+  }
+}
+
+Map<String, Object?> _finishedCall(
+  Map<String, Object?> facts, {
+  required bool ok,
+  String? response,
+  String? text,
+  int? elapsedMs,
+  String? error,
+}) {
+  final usage = tokenUsageFromResponse(response);
+  return {
+    'ok': ok,
+    'model': facts['model'],
+    'provider': facts['provider'],
+    if (elapsedMs != null) 'elapsedMs': elapsedMs,
+    if (usage != null) 'usage': usage,
+    if (!ok && error != null && error.isNotEmpty) 'error': error,
+    if (response != null && response.isNotEmpty) 'response': response,
+    if (text != null) 'text': text,
+  };
+}
+
+String? _modelResponseBody(AgentModel model) {
+  final AgentHttpDiagnostic? diagnostic = switch (model) {
+    OpenAiCompatibleAgentModel completions => completions.lastDiagnostic,
+    OpenAiResponsesAgentModel responses => responses.lastDiagnostic,
+    OpenAiMessagesAgentModel messages => messages.lastDiagnostic,
+    _ => null,
+  };
+  final body = diagnostic?.responseBody ?? '';
+  if (body.isEmpty) {
+    return null;
+  }
+  return body;
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_request_preview.dart';
+import 'package:skapie/app/full_screen_text_editor.dart';
 import 'package:skapie/app/llm_request_highlight.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -83,15 +84,14 @@ class _LlmRequestInformationState extends State<LlmRequestInformation> {
   }
 
   Future<void> _openFull(String text) {
-    final tokens = PaintScope.of(context);
-    return showGeneralDialog<void>(
+    return showFullScreenTextEditor(
       context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Close request',
-      barrierColor: const Color(0xE60C0C0E),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return _RequestFullscreen(text: text, tokens: tokens);
-      },
+      title: 'Request',
+      text: text,
+      readOnly: true,
+      syntax: EditorSyntax.request,
+      surfaceKey: const Key('llm-request-fullscreen'),
+      closeKey: const Key('llm-request-close'),
     );
   }
 
@@ -166,63 +166,6 @@ class _LlmRequestInformationState extends State<LlmRequestInformation> {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _RequestFullscreen extends StatelessWidget {
-  const _RequestFullscreen({required this.text, required this.tokens});
-
-  final String text;
-  final PaintTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    final span = highlightLlmRequest(text, tokens, fontSize: 13);
-    return Material(
-      key: const Key('llm-request-fullscreen'),
-      color: tokens.canvas,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 16, 28, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Request',
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(color: tokens.ink),
-                    ),
-                  ),
-                  IconButton(
-                    key: const Key('llm-request-close'),
-                    tooltip: 'Close',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.close, color: tokens.muted),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: tokens.panel,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: tokens.hairline),
-                  ),
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: SelectableText.rich(span),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

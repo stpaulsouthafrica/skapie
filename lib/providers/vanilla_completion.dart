@@ -71,16 +71,22 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
       history: history,
     );
     _record();
+    final sentHeaders = {
+      'Authorization': 'Bearer $apiKey',
+      'Content-Type': 'application/json',
+      ...headers,
+    };
+    reportAgentHttpRequest(
+      url: openaiChatCompletionsUrl(baseUrl),
+      headers: sentHeaders,
+      body: body,
+    );
     final http.Response response;
     try {
       response = await _client
           .post(
             Uri.parse(openaiChatCompletionsUrl(baseUrl)),
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-              ...headers,
-            },
+            headers: sentHeaders,
             body: jsonEncode(body),
           )
           .timeout(timeout);

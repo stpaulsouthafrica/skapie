@@ -84,6 +84,9 @@ class CableLayer extends StatefulWidget {
     this.validation = BoardValidation.empty,
     this.invalidColor = const Color(0xFFB85C5C),
     this.selectedCableId,
+    this.traceCables = const {},
+    this.traceKits = const {},
+    this.traceAmount = 1,
   });
 
   final CanvasCamera camera;
@@ -108,6 +111,13 @@ class CableLayer extends StatefulWidget {
   final BoardValidation validation;
   final Color invalidColor;
   final String? selectedCableId;
+
+  /// Recorded route for the selected timeline event. Unused cables stay dark.
+  final Set<String> traceCables;
+  final Set<String> traceKits;
+
+  /// 0 is off, 1 is the full Identify glow.
+  final double traceAmount;
 
   @override
   State<CableLayer> createState() => _CableLayerState();
@@ -155,6 +165,12 @@ class _CableLayerState extends State<CableLayer>
   }
 
   double get _clock => _watch.elapsedMicroseconds / 1000000;
+
+  @override
+  void didUpdateWidget(CableLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTicker();
+  }
 
   @override
   void dispose() {
@@ -310,7 +326,10 @@ class _CableLayerState extends State<CableLayer>
       flash: pose?.flash ?? live?.head,
       flashAlpha: pose?.flashAlpha ?? live?.alpha ?? 1,
       arrival: pose?.arrival ?? 0,
-      rest: live?.rest ?? 0,
+      rest: math.max(
+        live?.rest ?? 0,
+        widget.traceCables.contains(cable.id) ? widget.traceAmount : 0,
+      ),
       flashTowardSource: pose?.towardSource ?? (live?.towardSource ?? false),
       arrivalAtStart: pose?.towardSource ?? (live?.towardSource ?? false),
       selected: cable.id == widget.selectedCableId,
@@ -613,6 +632,15 @@ class _CableLayerState extends State<CableLayer>
     }
     for (final act in _fading) {
       add(act);
+    }
+    final amount = widget.traceAmount;
+    if (amount > 0) {
+      for (final kit in widget.traceKits) {
+        final previous = levels[kit] ?? 0;
+        if (amount > previous) {
+          levels[kit] = amount;
+        }
+      }
     }
     glow.publish(levels, notify: notify);
   }

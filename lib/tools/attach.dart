@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/canvas/kit_links.dart';
@@ -79,51 +81,112 @@ List<String> attachedToolNames({
   return llmAttachedToolNames(kitApi.store.document, llmBodyId);
 }
 
+class FilteredTool {
+  const FilteredTool({required this.name, required this.reason});
+
+  final String name;
+  final String reason;
+
+  Map<String, String> toJson() => {'name': name, 'reason': reason};
+}
+
+class LlmToolOffer {
+  const LlmToolOffer({required this.tools, required this.filtered});
+
+  final List<AgentTool> tools;
+  final List<FilteredTool> filtered;
+
+  List<String> get names => [for (final tool in tools) tool.name];
+
+  /// Digest of the schemas actually sent. Not a version number the kits publish.
+  String get schemaDigest => toolSchemaDigest(tools);
+}
+
 List<AgentTool> worldToolsForLlm({
   required KitApi kitApi,
   required String llmBodyId,
   RepositoryPermission repositoryPermission =
       const SystemRepositoryPermission(),
 }) {
+  return llmToolOffer(
+    kitApi: kitApi,
+    llmBodyId: llmBodyId,
+    repositoryPermission: repositoryPermission,
+  ).tools;
+}
+
+LlmToolOffer llmToolOffer({
+  required KitApi kitApi,
+  required String llmBodyId,
+  RepositoryPermission repositoryPermission =
+      const SystemRepositoryPermission(),
+}) {
+  final document = kitApi.store.document;
   final byName = {for (final tool in createWorldTools(kitApi)) tool.name: tool};
   final tools = <AgentTool>[];
-  for (final object in kitApi.store.document.objects.toList()) {
-    if (!isWorldToolKit(object)) {
-      continue;
-    }
+  final filtered = <FilteredTool>[];
+  final seen = <String>{};
+  for (final object in document.objects.toList()) {
     if (!kitLinksOf(object)
         .any((link) => link.to == llmBodyId && link.port == llmToolsPort)) {
+      continue;
+    }
+    if (!isWorldToolKit(object)) {
+      filtered.add(
+        FilteredTool(name: kitIdOf(object) ?? object.id, reason: 'Wrong type'),
+      );
       continue;
     }
     final name = object.props['toolName']?.toString().trim() ?? '';
     if (name.isEmpty) {
       continue;
     }
+    if (!seen.add(name)) {
+      filtered.add(FilteredTool(name: name, reason: 'Duplicate tool'));
+      continue;
+    }
     final frame = kitFrameForSelection(
-      document: kitApi.store.document,
+      document: document,
       selectedId: object.id,
     );
+    final path = frame == null ? '' : repositoryPathForTool(document, frame.id);
+    if (repositoryToolNames.contains(name) && path.isEmpty) {
+      filtered.add(
+        FilteredTool(name: name, reason: 'Repository grant missing'),
+      );
+      continue;
+    }
     final tool =
         byName[name] ??
         repositoryToolForName(
           name,
-          repositoryPath: frame == null
-              ? ''
-              : repositoryPathForTool(kitApi.store.document, frame.id),
+          repositoryPath: path,
           permission: repositoryPermission,
         );
     if (tool == null) {
+      filtered.add(FilteredTool(name: name, reason: 'Unknown tool'));
       kitApi.updateProps(object.id, {
         'error': 'Unknown tool: $name',
         'content': 'Unknown tool: $name',
       });
       continue;
     }
-    if (!tools.any((item) => item.name == name)) {
-      tools.add(tool);
-    }
+    tools.add(tool);
   }
-  return tools;
+  return LlmToolOffer(tools: tools, filtered: filtered);
+}
+
+String toolSchemaDigest(List<AgentTool> tools) {
+  final canonical = jsonEncode([
+    for (final tool in tools)
+      {'name': tool.name, 'parameters': tool.parameters ?? const {}},
+  ]);
+  var hash = 0x811c9dc5;
+  for (final byte in utf8.encode(canonical)) {
+    hash ^= byte;
+    hash = (hash * 0x01000193) & 0xFFFFFFFF;
+  }
+  return hash.toRadixString(16).padLeft(8, '0');
 }
 
 String repositoryPathForTool(SceneDocument document, String toolFrameId) {

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/canvas/connection_info.dart';
@@ -313,8 +314,141 @@ void main() {
         kitApi.store.document.objectById(llmIds.last)!.props['reply'],
         'listed',
       );
+      final started = controller
+          .latestRunFor(llmIds.last)!
+          .events
+          .firstWhere(
+            (event) => event.kind == RunEventKind.modelRequestStarted,
+          );
+      expect(started.payload['offeredTools'], ['list_kits']);
+      expect(started.payload['toolSchemaDigest'], hasLength(8));
+      expect(jsonEncode(started.payload), isNot(contains('sk-secret-key')));
+      expect(started.payload.containsKey('cost'), isFalse);
     },
   );
+
+  test('Muse Spark with a tool posts to the responses endpoint', () async {
+    String? url;
+    Map<String, Object?>? sent;
+    final client = MockClient((request) async {
+      url = request.url.toString();
+      sent = Map<String, Object?>.from(jsonDecode(request.body) as Map);
+      return http.Response(
+        jsonEncode({
+          'output_text': 'spark',
+          'output': [
+            {
+              'type': 'message',
+              'content': [
+                {'type': 'output_text', 'text': 'spark'},
+              ],
+            },
+          ],
+        }),
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(
+        model: OpenAiCompatibleAgentModel(
+          baseUrl: 'https://opencode.ai/zen/go/v1',
+          apiKey: 'sk-secret-key',
+          model: 'minimax-m2.5',
+          presetId: 'opencode-go',
+          httpClient: client,
+        ),
+        kitApi: kitApi,
+      ),
+      runtime: const ResolvedAgentRuntime(
+        presetId: 'opencode-go',
+        useFake: false,
+        model: 'minimax-m2.5',
+        apiKey: 'sk-secret-key',
+      ),
+    );
+    final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    kitApi.updateProps(llmIds.last, {'model': 'muse-spark-1.3-contributor'});
+    final toolIds = kitApi.instantiate(
+      'tools.list_kits',
+      origin: const Offset(400, 0),
+    );
+    attachToolKit(
+      kitApi: kitApi,
+      toolObjectId: toolIds.first,
+      llmBodyId: llmIds.last,
+    );
+    sinkLlm(kitApi, llmIds.last);
+
+    await controller.sendUser('kits', targetBodyId: llmIds.last);
+
+    expect(url, 'https://opencode.ai/zen/go/v1/responses');
+    expect(sent?['model'], 'muse-spark-1.3-contributor');
+    expect(sent?.containsKey('messages'), isFalse);
+    expect(
+      kitApi.store.document.objectById(llmIds.last)!.props['reply'],
+      'spark',
+    );
+  });
+
+  test('a tool run sends the kit model and stores the server body unchanged', () async {
+    const raw =
+        '{"id":"gen-1","model":"deepseek-v4-flash","choices":[{"message":{"content":"ok"}}]}';
+    Map<String, Object?>? sent;
+    final client = MockClient((request) async {
+      sent = Map<String, Object?>.from(jsonDecode(request.body) as Map);
+      return http.Response(
+        raw,
+        200,
+        headers: {'content-type': 'application/json'},
+      );
+    });
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(
+        model: OpenAiCompatibleAgentModel(
+          baseUrl: 'https://opencode.ai/zen/go/v1',
+          apiKey: 'sk-secret-key',
+          model: 'minimax-m2.5',
+          presetId: 'opencode-go',
+          httpClient: client,
+        ),
+        kitApi: kitApi,
+      ),
+      runtime: const ResolvedAgentRuntime(
+        presetId: 'opencode-go',
+        useFake: false,
+        model: 'minimax-m2.5',
+        apiKey: 'sk-secret-key',
+      ),
+    );
+    final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+    kitApi.updateProps(llmIds.last, {'model': 'deepseek-v4-flash'});
+    final toolIds = kitApi.instantiate(
+      'tools.list_kits',
+      origin: const Offset(400, 0),
+    );
+    attachToolKit(
+      kitApi: kitApi,
+      toolObjectId: toolIds.first,
+      llmBodyId: llmIds.last,
+    );
+    sinkLlm(kitApi, llmIds.last);
+
+    await controller.sendUser('kits', targetBodyId: llmIds.last);
+
+    expect(sent?['model'], 'deepseek-v4-flash');
+    final run = controller.latestRunFor(llmIds.last)!;
+    final finished = run.events.firstWhere(
+      (event) => event.kind == RunEventKind.modelRequestFinished,
+    );
+    expect(
+      controller.ledger.inspectText(run, finished),
+      presentRunInspect(raw),
+    );
+    expect(controller.ledger.inspectText(run, finished), contains('\n'));
+  });
 
   test(
     'context and conversation ride on the request and the reply is stored',
@@ -639,8 +773,20 @@ void main() {
 
     await controller.sendUser('list files', targetBodyId: llm.last);
 
-    expect(kitApi.store.document.objectById(llm.last)!.props['prompt'], '');
-    expect(controller.runningBodyId, isNull);
+    final started = controller
+        .latestRunFor(llm.last)!
+        .events
+        .firstWhere((event) => event.kind == RunEventKind.modelRequestStarted);
+    expect(started.payload['offeredTools'], isEmpty);
+    expect(started.payload['filteredTools'], [
+      {'name': 'repo_list_files', 'reason': 'Repository grant missing'},
+    ]);
+    expect(started.payload.containsKey('apiKey'), isFalse);
+    expect(started.payload.containsKey('cost'), isFalse);
+    expect(
+      kitApi.store.document.objectById(llm.last)!.props['prompt'],
+      'list files',
+    );
   });
 
   test('LLM Output does not write into a Conversation kit', () async {
