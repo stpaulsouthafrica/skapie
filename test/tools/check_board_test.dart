@@ -12,6 +12,7 @@ import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/check/check_board.dart';
 import 'package:skapie/tools/check/check_redaction.dart';
@@ -633,4 +634,234 @@ void main() {
     selection.dispose();
     controller.dispose();
   });
+
+  test(
+    'a fresh live write check gates every repeat and preserves old evidence',
+    () async {
+      final spec = place(codingCheckSpecKitId);
+      final run = place(codingRunCheckKitId);
+      final result = place(codingCheckResultKitId);
+      final scope = place(codingWriteScopeKitId);
+      kitApi.updateProps(spec.first, {checkPresetProp: gitDiffCheckPreset});
+      kitApi.updateProps(scope.first, {writeScopePathProp: scratch.path});
+      connect(
+        KitPortKind.checkSpecOut,
+        spec.first,
+        KitPortKind.runCheckSpec,
+        run.first,
+      );
+      connect(
+        KitPortKind.writeScopeOut,
+        scope.first,
+        KitPortKind.runCheckWrite,
+        run.first,
+      );
+      connect(
+        KitPortKind.runCheckResult,
+        run.first,
+        KitPortKind.checkResultIn,
+        result.first,
+      );
+      expect(
+        connectedRunCheckForResult(kitApi.store.document, result.first)?.id,
+        run.first,
+      );
+      expect(
+        repeatCheckGate(kitApi.store.document, result.first).ready,
+        isTrue,
+      );
+
+      final ledger = RunLedger();
+      late final _CheckRunner runner;
+      runner = _CheckRunner(
+        () async => {
+          'outcome': runner.runs == 1 ? 'nonzero_exit' : 'exit_0',
+          'exitCode': runner.runs == 1 ? 2 : 0,
+          'gitStateKnown': true,
+          'beforeGit': ' M file.txt\n',
+          'afterGit': ' M file.txt\n',
+        },
+      );
+      Future<CheckAttempt> execute(bool allowed) => invokeRunCheck(
+        kitApi: kitApi,
+        runFrameId: run.first,
+        permission: _WritePermission(allowed),
+        runner: runner,
+        beginEvidence: (id, details) {
+          final record = ledger.begin(bodyId: id, kind: 'check');
+          ledger.append(record.id, RunEventKind.checkStarted, details);
+          return record;
+        },
+        appendEvidence: (id, kind, payload) => ledger.append(id, kind, payload),
+      );
+
+      final first = await execute(true);
+      expect(first.outcome, 'nonzero_exit');
+      final oldRecord = jsonEncode(ledger.runs.single.toJson());
+      final oldResult = checkResultBody(
+        kitApi.store.document,
+        result.first,
+      )!.props['content'];
+      final denied = await execute(false);
+      expect(denied.started, isFalse);
+      expect(runner.runs, 1);
+      expect(ledger.runs, hasLength(1));
+      expect(
+        checkResultBody(kitApi.store.document, result.first)!.props['content'],
+        oldResult,
+      );
+      final repeated = await execute(true);
+      expect(repeated.started, isTrue);
+      expect(repeated.outcome, 'exit_0');
+      expect(runner.runs, 2);
+      expect(ledger.runs, hasLength(2));
+      expect(ledger.runs.first.id, isNot(ledger.runs.last.id));
+      expect(
+        ledger.runs.last.events.first.at.isAfter(
+          ledger.runs.first.events.first.at,
+        ),
+        isTrue,
+      );
+      expect(jsonEncode(ledger.runs.first.toJson()), oldRecord);
+      final file = RunLedgerFile(File('${scratch.path}/repeat.runs.json'));
+      await file.write(ledger);
+      final reopened = RunLedger();
+      await file.loadInto(reopened);
+      expect(reopened.runs, hasLength(2));
+      expect(jsonEncode(reopened.runs.first.toJson()), oldRecord);
+    },
+  );
+
+  testWidgets(
+    'viewing history is inert; Repeat Check needs confirmation and a connected grant',
+    (tester) async {
+      final spec = place(codingCheckSpecKitId);
+      final run = place(codingRunCheckKitId);
+      final result = place(codingCheckResultKitId);
+      final scope = place(codingWriteScopeKitId);
+      kitApi.updateProps(spec.first, {checkPresetProp: gitDiffCheckPreset});
+      kitApi.updateProps(scope.first, {writeScopePathProp: scratch.path});
+      connect(
+        KitPortKind.checkSpecOut,
+        spec.first,
+        KitPortKind.runCheckSpec,
+        run.first,
+      );
+      connect(
+        KitPortKind.writeScopeOut,
+        scope.first,
+        KitPortKind.runCheckWrite,
+        run.first,
+      );
+      connect(
+        KitPortKind.runCheckResult,
+        run.first,
+        KitPortKind.checkResultIn,
+        result.first,
+      );
+      final controller = AgentController(
+        kitApi: kitApi,
+        session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+        runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      );
+      late final _CheckRunner runner;
+      runner = _CheckRunner(
+        () async => {
+          'outcome': 'exit_0',
+          'exitCode': 0,
+          'gitStateKnown': true,
+          'beforeGit': ' M file.txt\n',
+          'afterGit': ' M file.txt\n',
+        },
+      );
+      final body = checkResultBody(kitApi.store.document, result.first)!;
+      kitApi.updateProps(body.id, {
+        'content': 'Git diff --check · Nonzero exit · Git status unchanged',
+        'checkOutcome': 'nonzero_exit',
+      });
+      final previous = controller.beginCheckRun(body.id, {
+        'preset': gitDiffCheckPreset,
+        'cwd': scratch.path,
+      });
+      controller.appendCheckEvent(previous.id, RunEventKind.checkFinished, {
+        'outcome': 'nonzero_exit',
+        'exitCode': 2,
+      });
+      final oldRecord = jsonEncode(controller.ledger.runs.single.toJson());
+      final selection = SelectionController()..select(result.first);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InspectorPanel(
+              store: kitApi.store,
+              selection: selection,
+              kitApi: kitApi,
+              controller: controller,
+              writePermission: const _WritePermission(true),
+              checkRunner: runner,
+              checkDirectoryExists: (_) async => true,
+            ),
+          ),
+        ),
+      );
+      await tester.ensureVisible(find.byKey(const Key('open-check-ledger')));
+      await tester.tap(find.byKey(const Key('open-check-ledger')));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Viewing a saved run never starts a check.'),
+        findsOneWidget,
+      );
+      await tester.tap(
+        find.byKey(Key('check-ledger-${controller.ledger.runs.single.id}')),
+      );
+      await tester.pumpAndSettle();
+      expect(runner.runs, 0);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.byKey(const Key('repeat-check-action')));
+      await tester.tap(find.byKey(const Key('repeat-check-action')));
+      await tester.pump();
+      expect(find.text('Repeat Git diff check?'), findsOneWidget);
+      expect(runner.runs, 0);
+      await tester.tap(find.text('Cancel').last);
+      await tester.pumpAndSettle();
+      expect(runner.runs, 0);
+      await tester.tap(find.byKey(const Key('repeat-check-action')));
+      await tester.pump();
+      await tester.tap(find.text('Run again'));
+      await tester.pumpAndSettle();
+      expect(runner.runs, 1);
+      expect(controller.ledger.runs, hasLength(2));
+      expect(jsonEncode(controller.ledger.runs.first.toJson()), oldRecord);
+      expect(
+        controller.ledger.runs.last.events.first.at.isAfter(
+          controller.ledger.runs.first.events.first.at,
+        ),
+        isTrue,
+      );
+      expect(
+        checkResultBody(
+          kitApi.store.document,
+          result.first,
+        )!.props['checkOutcome'],
+        'exit_0',
+      );
+      kitApi.updateProps(scope.first, {writeScopePathProp: ''});
+      await tester.pump();
+      expect(
+        tester
+            .widget<PaintButton>(find.byKey(const Key('repeat-check-action')))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        find.textContaining('Connect a selected Write Scope'),
+        findsOneWidget,
+      );
+      expect(runner.runs, 1);
+      selection.dispose();
+      controller.dispose();
+    },
+  );
 }

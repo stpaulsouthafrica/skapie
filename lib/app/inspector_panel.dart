@@ -54,6 +54,7 @@ class InspectorPanel extends StatefulWidget {
     this.writePermission = const SystemPatchWritePermission(),
     this.effectLog,
     this.checkRunner = const SystemCheckProcessRunner(),
+    this.checkDirectoryExists,
   }) : kitApi =
            kitApi ?? KitApi(store: store, registry: createBuiltinRegistry());
 
@@ -65,6 +66,7 @@ class InspectorPanel extends StatefulWidget {
   final PatchWritePermission writePermission;
   final PatchEffectLog? effectLog;
   final CheckProcessRunner checkRunner;
+  final Future<bool> Function(String path)? checkDirectoryExists;
 
   /// When set, Cut cable plays the board retraction instead of vanishing.
   final ValueChanged<SceneCable>? onCutCable;
@@ -654,17 +656,23 @@ class _InspectorPanelState extends State<InspectorPanel> {
     ]);
   }
 
-  Future<void> _startCheck(SceneObject frame) async {
+  Future<void> _startCheck(
+    SceneObject frame, {
+    bool repeat = false,
+    String? expectedResultId,
+  }) async {
+    if (_checkBusy) return;
     final scope = connectedCheckWriteScope(widget.store.document, frame.id);
     final root = scope?.props[writeScopePathProp]?.toString() ?? '';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Run Git diff check?'),
+        title: Text(repeat ? 'Repeat Git diff check?' : 'Run Git diff check?'),
         content: Text(
           'Skapie will run installed Git with exactly: diff --check\n\n'
           'Working folder: $root\n\n'
-          'This process has repository write scope. Network access is allowed by the app sandbox, though this check does not request network access.',
+          'This process has repository write scope. Network access is allowed by the app sandbox, though this check does not request network access.'
+          '${repeat ? '\n\nSkapie will check the live Write Scope again and create a new run record. Earlier evidence stays saved.' : ''}',
         ),
         actions: [
           TextButton(
@@ -673,12 +681,25 @@ class _InspectorPanelState extends State<InspectorPanel> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Run check'),
+            child: Text(repeat ? 'Run again' : 'Run check'),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
+    final current = widget.store.document;
+    final currentScope = connectedCheckWriteScope(current, frame.id);
+    final currentRoot =
+        currentScope?.props[writeScopePathProp]?.toString() ?? '';
+    if (!checkGate(current, frame.id).ready ||
+        currentRoot != root ||
+        (expectedResultId != null &&
+            connectedCheckResult(current, frame.id)?.id != expectedResultId)) {
+      setState(
+        () => _checkMessage = 'Check setup changed. Review the cables and folder, then confirm again.',
+      );
+      return;
+    }
     setState(() {
       _checkBusy = true;
       _checkMessage = 'Running bounded check…';
@@ -689,6 +710,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
         runFrameId: frame.id,
         permission: widget.writePermission,
         runner: widget.checkRunner,
+        directoryExists: widget.checkDirectoryExists,
         beginEvidence: widget.controller == null
             ? null
             : (bodyId, details) =>
@@ -707,6 +729,15 @@ class _InspectorPanelState extends State<InspectorPanel> {
         setState(() => _checkBusy = false);
       }
     }
+  }
+
+  Future<void> _repeatCheck(SceneObject resultFrame) async {
+    final run = connectedRunCheckForResult(
+      widget.store.document,
+      resultFrame.id,
+    );
+    if (run == null) return;
+    await _startCheck(run, repeat: true, expectedResultId: resultFrame.id);
   }
 
   Future<void> _cancelCheck() async {
@@ -794,6 +825,21 @@ class _InspectorPanelState extends State<InspectorPanel> {
     final latestOutputText = latestRun == null || latestOutput == null
         ? ''
         : widget.controller?.ledger.inspectText(latestRun, latestOutput) ?? '';
+    const finishedOutcomes = {
+      'exit_0',
+      'nonzero_exit',
+      'timeout',
+      'cancelled',
+      'infrastructure_error',
+    };
+    final hasPastResult =
+        finishedOutcomes.contains(outcome) ||
+        runs.any(
+          (run) => run.events.any(
+            (event) => event.kind == RunEventKind.checkFinished,
+          ),
+        );
+    final repeatGate = repeatCheckGate(widget.store.document, frame.id);
     return _section('Check result', [
       _readOnly(
         'Outcome',
@@ -832,6 +878,39 @@ class _InspectorPanelState extends State<InspectorPanel> {
             label: 'Open check run ledger (${runs.length})',
             onPressed: () => _openCheckLedger(runs),
           ),
+        if (hasPastResult) ...[
+          const SizedBox(height: 8),
+          PaintButton(
+            key: const Key('repeat-check-action'),
+            label: _checkBusy ? 'Running…' : 'Repeat Check…',
+            filled: true,
+            onPressed: repeatGate.ready && !_checkBusy
+                ? () => _repeatCheck(frame)
+                : null,
+          ),
+          if (!repeatGate.ready) ...[
+            const SizedBox(height: 6),
+            Text(
+              repeatGate.reason,
+              style: TextStyle(color: tokens.danger, fontSize: 11),
+            ),
+          ],
+          if (_checkBusy) ...[
+            const SizedBox(height: 8),
+            PaintButton(
+              key: const Key('cancel-repeat-check-action'),
+              label: 'Stop check',
+              onPressed: _cancelCheck,
+            ),
+          ],
+          if (_checkMessage != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              _checkMessage!,
+              style: TextStyle(color: tokens.ink, fontSize: 11),
+            ),
+          ],
+        ],
         const SizedBox(height: 6),
         Text(
           'Exit 0 means only that this command exited 0. The LLM Context cable carries this short result, not the transcript.',
@@ -853,6 +932,10 @@ class _InspectorPanelState extends State<InspectorPanel> {
           height: 540,
           child: ListView(
             children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text('Viewing a saved run never starts a check.'),
+              ),
               for (final run in runs.reversed)
                 ExpansionTile(
                   key: Key('check-ledger-${run.id}'),

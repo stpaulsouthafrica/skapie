@@ -235,6 +235,22 @@ SceneObject? connectedCheckResult(SceneDocument document, String runFrameId) {
   return null;
 }
 
+/// The effect kit that produced this Result. Reading Result or its ledger does
+/// not call this kit; only an explicit user action may start it again.
+SceneObject? connectedRunCheckForResult(
+  SceneDocument document,
+  String resultFrameId,
+) =>
+    _linkedFrame(document, resultFrameId, checkResultPort, codingRunCheckKitId);
+
+CheckGate repeatCheckGate(SceneDocument document, String resultFrameId) {
+  final run = connectedRunCheckForResult(document, resultFrameId);
+  if (run == null) {
+    return const CheckGate('Reconnect Run Check to this Check Result.');
+  }
+  return checkGate(document, run.id);
+}
+
 SceneObject? checkResultBody(SceneDocument document, String resultFrameId) {
   final frame = document.objectById(resultFrameId);
   return frame == null ? null : _body(document, frame);
@@ -285,6 +301,7 @@ Future<CheckAttempt> invokeRunCheck({
   required String runFrameId,
   PatchWritePermission permission = const SystemPatchWritePermission(),
   CheckProcessRunner runner = const SystemCheckProcessRunner(),
+  Future<bool> Function(String path)? directoryExists,
   RunRecord Function(String resultBodyId, Map<String, Object?> details)?
   beginEvidence,
   void Function(String runId, RunEventKind kind, Map<String, Object?> payload)?
@@ -300,7 +317,8 @@ Future<CheckAttempt> invokeRunCheck({
   final result = connectedCheckResult(document, runFrameId)!;
   final body = checkResultBody(document, result.id)!;
   try {
-    if (!await permission.canWrite(root) || !await Directory(root).exists()) {
+    if (!await permission.canWrite(root) ||
+        !await (directoryExists?.call(root) ?? Directory(root).exists())) {
       return const CheckAttempt(
         started: false,
         outcome: '',

@@ -81,6 +81,8 @@
    - **What this is.** Looking at an old Result is replay of evidence. Running again is a new user-started Check with new authority and a new record.
    - **How to test.** Open a finished Result and confirm inspecting/replaying the transcript starts no process. Trigger Repeat Check and confirm a new run record, fresh timestamps, and that the old Result remains unchanged as history. Confirm Repeat is blocked when execution grant is missing.
 
+   // implemented and automatically tested; hands-on macOS acceptance pending
+
 **Feel and wow.** While a check runs, its cable carries sparse progress ticks derived from real output chunks. The Result kit shows the latest line and elapsed time; opening it reveals a stable terminal-like transcript. Cancellation changes the visible state immediately, then reports whether the process actually stopped. An exit 0 settles with a brief confirmation of the command result; a nonzero exit opens the first relevant diagnostic.
 
 **Acceptance.** The engineer can tell exactly what ran, where, with which authority, for how long, and how it exited. Timeout and cancellation stop the process tree or clearly report an uncertain stop; neither produces a pass. No command runs because a cable was merely connected. A check result can feed a subsequent **user-started** model turn only if visibly connected.
