@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "coding.check_result",
+  "displayName": "Check Result",
+  "description": "The latest check outcome; a user may cable it to LLM Context.",
+  "capabilities": [],
+  "objects": [
+    {"typeId": "box", "x": 0, "y": 0, "width": 280, "height": 120,
+      "props": {"skapieKit": "coding.check_result", "skapieRole": "frame"}},
+    {"typeId": "text", "x": 12, "y": 40, "width": 256, "height": 48,
+      "props": {"skapieKit": "coding.check_result", "skapieRole": "body", "content": "No check run yet", "fontSize": 13, "checkOutcome": ""}}
+  ]
+}

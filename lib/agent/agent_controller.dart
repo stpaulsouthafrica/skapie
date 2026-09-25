@@ -138,6 +138,19 @@ class AgentController extends ChangeNotifier {
 
   Future<void> flushLedger() => _ledgerWrites;
 
+  /// Check evidence shares the board ledger, but is scoped to its Result body.
+  RunRecord beginCheckRun(String resultBodyId, Map<String, Object?> details) {
+    final run = ledger.begin(bodyId: resultBodyId, kind: 'check');
+    appendCheckEvent(run.id, RunEventKind.checkStarted, details);
+    return run;
+  }
+
+  void appendCheckEvent(
+    String runId,
+    RunEventKind kind,
+    Map<String, Object?> payload,
+  ) => _note(runId, kind, payload);
+
   Future<void> loadLedger() async {
     final file = ledgerFile;
     if (file == null) {

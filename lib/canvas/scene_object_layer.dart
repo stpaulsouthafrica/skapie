@@ -11,6 +11,7 @@ import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
+import 'package:skapie/tools/check/check_board.dart';
 
 /// Below this zoom, kits read as a name and a status instead of port rows.
 const double kitOverviewZoom = 0.6;
@@ -486,6 +487,40 @@ class SceneObjectLayer extends StatelessWidget {
           _outputCaption(tokens, zoom, frame, label: 'In / Out'),
         if (kitIdOf(frame) == codingWriteScopeKitId)
           Positioned.fill(child: _writeScopeCard(tokens, zoom, frame)),
+        if (kitIdOf(frame) == codingCheckSpecKitId)
+          Positioned.fill(
+            child: _artifactCard(
+              tokens,
+              zoom,
+              frame,
+              icon: Icons.rule_folder_outlined,
+              color: tokens.accent,
+              headline: frame.props[checkPresetProp] == gitDiffCheckPreset
+                  ? 'Git diff --check'
+                  : 'Choose a check',
+              subtitle: 'Trusted preset · exact argv',
+              leading: '',
+              trailing: 'Spec',
+            ),
+          ),
+        if (kitIdOf(frame) == codingRunCheckKitId)
+          Positioned.fill(
+            child: _artifactCard(
+              tokens,
+              zoom,
+              frame,
+              icon: Icons.play_circle_outline,
+              color: tokens.accent,
+              headline: checkGate(_preview, frame.id).ready
+                  ? 'Ready for your Run'
+                  : 'Waiting for connections',
+              subtitle: 'Explicit effect · network allowed',
+              leading: 'Spec',
+              trailing: 'Result',
+            ),
+          ),
+        if (kitIdOf(frame) == codingCheckResultKitId)
+          Positioned.fill(child: _checkResultCard(tokens, zoom, frame)),
       ],
     );
   }
@@ -596,6 +631,39 @@ class SceneObjectLayer extends StatelessWidget {
           : 'Write access · separate grant',
       leading: '',
       trailing: 'Apply',
+    );
+  }
+
+  Widget _checkResultCard(PaintTokens tokens, double zoom, SceneObject frame) {
+    final outcome = _namedBody(frame)?.props['checkOutcome']?.toString() ?? '';
+    final color = outcome == 'exit_0'
+        ? tokens.success
+        : outcome == 'nonzero_exit' || outcome == 'infrastructure_error'
+        ? tokens.danger
+        : tokens.accent;
+    final headline = switch (outcome) {
+      'exit_0' => 'Exited 0',
+      'nonzero_exit' => 'Nonzero exit',
+      'timeout' => 'Timed out',
+      'cancelled' => 'Cancelled',
+      'infrastructure_error' => 'Could not run',
+      'running' => 'Running check…',
+      _ => 'No result yet',
+    };
+    return _artifactCard(
+      tokens,
+      zoom,
+      frame,
+      icon: outcome == 'exit_0'
+          ? Icons.check_circle_outline
+          : Icons.fact_check_outlined,
+      color: color,
+      headline: headline,
+      subtitle: outcome.isEmpty
+          ? 'Waiting for an explicit Run'
+          : 'Git diff --check',
+      leading: 'In',
+      trailing: 'Context',
     );
   }
 

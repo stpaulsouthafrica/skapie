@@ -502,6 +502,17 @@ String llmContextText(SceneDocument document, String llmBodyId) {
       parts.add(content);
     }
   }
+  for (final frame in document.objects) {
+    if (frame.props[skapieRoleProp] != 'frame' ||
+        kitIdOf(frame) != codingCheckResultKitId ||
+        !kitHasLink(frame, to: llmBodyId, port: llmContextPort)) {
+      continue;
+    }
+    final content = textKitContent(document, frame).trim();
+    if (content.isNotEmpty && content != 'No check run yet') {
+      parts.add(content);
+    }
+  }
   for (final body in llmBodies(document)) {
     if (!kitHasLink(body, to: llmBodyId, port: llmContextPort)) {
       continue;
@@ -692,6 +703,9 @@ void writeLlmReplyToTextKits({
 SceneObject? textKitBody(SceneDocument document, SceneObject frame) {
   for (final object in document.objects) {
     if (object.type != textTypeId) {
+      continue;
+    }
+    if (kitIdOf(object) != kitIdOf(frame)) {
       continue;
     }
     if (object.props[skapieRoleProp] == 'frame') {

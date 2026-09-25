@@ -293,6 +293,12 @@ class _HomeScreenState extends State<HomeScreen> {
         _add(codingApplyPatchKitId);
       case 'add-write-scope':
         _add(codingWriteScopeKitId);
+      case 'add-check-spec':
+        _add(codingCheckSpecKitId);
+      case 'add-run-check':
+        _add(codingRunCheckKitId);
+      case 'add-check-result':
+        _add(codingCheckResultKitId);
       case 'add-box':
         _add(boardBoxKitId);
       case 'add-text':
@@ -448,6 +454,15 @@ class _HomeScreenState extends State<HomeScreen> {
       const PopupMenuItem(
         value: codingWriteScopeKitId,
         child: Text('Write Scope'),
+      ),
+      const PopupMenuItem(
+        value: codingCheckSpecKitId,
+        child: Text('Check Spec'),
+      ),
+      const PopupMenuItem(value: codingRunCheckKitId, child: Text('Run Check')),
+      const PopupMenuItem(
+        value: codingCheckResultKitId,
+        child: Text('Check Result'),
       ),
       const PopupMenuItem(value: boardButtonKitId, child: Text('Button')),
       for (final kit in widget.kitApi.listKits())

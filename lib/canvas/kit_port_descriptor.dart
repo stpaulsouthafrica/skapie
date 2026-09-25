@@ -25,6 +25,12 @@ enum KitPortKind {
   applyIn,
   writeScopeOut,
   applyWriteScope,
+  checkSpecOut,
+  runCheckSpec,
+  runCheckWrite,
+  runCheckResult,
+  checkResultIn,
+  checkResultOut,
 }
 
 enum PortDirection { input, output }
@@ -53,7 +59,10 @@ enum PortValue {
   repository('Repository', PortRole.grant),
   writeScope('Write Scope', PortRole.grant),
   patchProposal('Proposal', PortRole.data),
-  reviewDecision('Review', PortRole.data);
+  reviewDecision('Review', PortRole.data),
+  checkSpec('Check Spec', PortRole.data),
+  checkResult('Check Result', PortRole.data),
+  checkSummary('Check Summary', PortRole.data);
 
   const PortValue(this.label, this.role);
 
@@ -319,6 +328,73 @@ const List<KitPortSpec> writeScopeKitPorts = [
   ),
 ];
 
+const List<KitPortSpec> checkSpecKitPorts = [
+  KitPortSpec(
+    id: 'out',
+    kind: KitPortKind.checkSpecOut,
+    label: 'Out',
+    direction: PortDirection.output,
+    value: PortValue.checkSpec,
+    placement: PortPlacement.footer(PortSide.right),
+    liveProp: checkPresetProp,
+    liveMessage: 'Choose a check',
+  ),
+];
+
+const List<KitPortSpec> runCheckKitPorts = [
+  KitPortSpec(
+    id: checkSpecPort,
+    kind: KitPortKind.runCheckSpec,
+    label: 'Spec',
+    direction: PortDirection.input,
+    value: PortValue.checkSpec,
+    placement: PortPlacement.footer(PortSide.left),
+    multiplicity: PortMultiplicity.one,
+    requiredGroup: checkSpecPort,
+    requiredMessage: 'Check Spec missing',
+  ),
+  KitPortSpec(
+    id: checkWritePort,
+    kind: KitPortKind.runCheckWrite,
+    label: 'Write',
+    direction: PortDirection.input,
+    value: PortValue.writeScope,
+    placement: PortPlacement.middle(PortSide.left),
+    multiplicity: PortMultiplicity.one,
+    requiredGroup: checkWritePort,
+    requiredMessage: 'Write Scope missing',
+  ),
+  KitPortSpec(
+    id: checkResultPort,
+    kind: KitPortKind.runCheckResult,
+    label: 'Result',
+    direction: PortDirection.output,
+    value: PortValue.checkResult,
+    placement: PortPlacement.footer(PortSide.right),
+    affectsRun: false,
+  ),
+];
+
+const List<KitPortSpec> checkResultKitPorts = [
+  KitPortSpec(
+    id: checkResultPort,
+    kind: KitPortKind.checkResultIn,
+    label: 'In',
+    direction: PortDirection.input,
+    value: PortValue.checkResult,
+    placement: PortPlacement.footer(PortSide.left),
+    affectsRun: false,
+  ),
+  KitPortSpec(
+    id: 'out',
+    kind: KitPortKind.checkResultOut,
+    label: 'Context',
+    direction: PortDirection.output,
+    value: PortValue.checkSummary,
+    placement: PortPlacement.footer(PortSide.right),
+  ),
+];
+
 const String _llmSink = 'sink';
 const String _llmSinkMessage = 'Needs Output or Conversation';
 
@@ -341,7 +417,7 @@ const List<KitPortSpec> llmKitPorts = [
     label: 'Context',
     direction: PortDirection.input,
     value: PortValue.text,
-    accepts: {PortValue.text, PortValue.reply},
+    accepts: {PortValue.text, PortValue.reply, PortValue.checkSummary},
     placement: PortPlacement.row(1, PortSide.left),
     peer: PortPeer.body,
   ),
@@ -389,6 +465,9 @@ const Map<String, List<KitPortSpec>> builtinKitPorts = {
   codingReviewDecisionKitId: reviewDecisionKitPorts,
   codingApplyPatchKitId: applyPatchKitPorts,
   codingWriteScopeKitId: writeScopeKitPorts,
+  codingCheckSpecKitId: checkSpecKitPorts,
+  codingRunCheckKitId: runCheckKitPorts,
+  codingCheckResultKitId: checkResultKitPorts,
 };
 
 final Map<KitPortKind, KitPortSpec> _specsByKind = {

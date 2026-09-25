@@ -54,6 +54,21 @@ const List<CommandAction> defaultCommandActions = [
     label: 'Add Write Scope',
     icon: KitIconKind.box,
   ),
+  CommandAction(
+    id: 'add-check-spec',
+    label: 'Add Check Spec',
+    icon: KitIconKind.box,
+  ),
+  CommandAction(
+    id: 'add-run-check',
+    label: 'Add Run Check',
+    icon: KitIconKind.button,
+  ),
+  CommandAction(
+    id: 'add-check-result',
+    label: 'Add Check Result',
+    icon: KitIconKind.box,
+  ),
   CommandAction(id: 'settings', label: 'Settings', icon: KitIconKind.settings),
 ];
 

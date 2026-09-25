@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "coding.run_check",
+  "displayName": "Run Check",
+  "description": "An explicit execution effect requiring a separate Write Scope.",
+  "capabilities": [],
+  "objects": [
+    {"typeId": "box", "x": 0, "y": 0, "width": 280, "height": 120,
+      "props": {"skapieKit": "coding.run_check", "skapieRole": "frame"}},
+    {"typeId": "text", "x": 12, "y": 40, "width": 256, "height": 48,
+      "props": {"skapieKit": "coding.run_check", "skapieRole": "body", "content": "Connect Spec, Write Scope, and Result", "fontSize": 13}}
+  ]
+}

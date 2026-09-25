@@ -21,6 +21,7 @@ import 'package:skapie/tools/attach.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/tools/patch/patch_effect_log.dart';
 import 'package:skapie/tools/patch/write_permission.dart';
+import 'package:skapie/tools/check/check_board.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 
 /// Clock time for a tool's last invocation. A previous day includes the date.
@@ -52,6 +53,7 @@ class InspectorPanel extends StatefulWidget {
     this.onCutCable,
     this.writePermission = const SystemPatchWritePermission(),
     this.effectLog,
+    this.checkRunner = const SystemCheckProcessRunner(),
   }) : kitApi =
            kitApi ?? KitApi(store: store, registry: createBuiltinRegistry());
 
@@ -62,6 +64,7 @@ class InspectorPanel extends StatefulWidget {
   final AgentController? controller;
   final PatchWritePermission writePermission;
   final PatchEffectLog? effectLog;
+  final CheckProcessRunner checkRunner;
 
   /// When set, Cut cable plays the board retraction instead of vanishing.
   final ValueChanged<SceneCable>? onCutCable;
@@ -92,6 +95,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
   String? _reviewError;
   String? _effectMessage;
   bool _effectBusy = false;
+  bool _checkBusy = false;
+  String? _checkMessage;
   late PatchEffectLog _effects;
 
   Future<void> _loadEffects() async {
@@ -625,6 +630,277 @@ class _InspectorPanelState extends State<InspectorPanel> {
     ]);
   }
 
+  Widget _checkSpecPanel(SceneObject frame) {
+    final chosen = frame.props[checkPresetProp] == gitDiffCheckPreset;
+    final tokens = PaintScope.of(context);
+    return _section('Check specification', [
+      _readOnly('Executable', 'Installed Git, resolved by Skapie'),
+      _readOnly('Arguments', 'diff --check'),
+      const SizedBox(height: 8),
+      Text(
+        'A trusted preset. There is no shell field and no model-supplied command.',
+        style: TextStyle(color: tokens.muted, fontSize: 11),
+      ),
+      const SizedBox(height: 9),
+      PaintButton(
+        key: const Key('choose-git-diff-check'),
+        label: chosen ? 'Git diff check chosen' : 'Choose Git diff check',
+        onPressed: chosen
+            ? null
+            : () => widget.kitApi.updateProps(frame.id, {
+                checkPresetProp: gitDiffCheckPreset,
+              }),
+      ),
+    ]);
+  }
+
+  Future<void> _startCheck(SceneObject frame) async {
+    final scope = connectedCheckWriteScope(widget.store.document, frame.id);
+    final root = scope?.props[writeScopePathProp]?.toString() ?? '';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Run Git diff check?'),
+        content: Text(
+          'Skapie will run installed Git with exactly: diff --check\n\n'
+          'Working folder: $root\n\n'
+          'This process has repository write scope. Network access is allowed by the app sandbox, though this check does not request network access.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Run check'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _checkBusy = true;
+      _checkMessage = 'Running bounded check…';
+    });
+    try {
+      final attempt = await invokeRunCheck(
+        kitApi: widget.kitApi,
+        runFrameId: frame.id,
+        permission: widget.writePermission,
+        runner: widget.checkRunner,
+        beginEvidence: widget.controller == null
+            ? null
+            : (bodyId, details) =>
+                  widget.controller!.beginCheckRun(bodyId, details),
+        appendEvidence: widget.controller?.appendCheckEvent,
+      );
+      if (mounted) {
+        setState(() => _checkMessage = attempt.message);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _checkMessage = 'Check could not finish: $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _checkBusy = false);
+      }
+    }
+  }
+
+  Future<void> _cancelCheck() async {
+    try {
+      final signalled = await widget.checkRunner.cancel();
+      if (mounted) {
+        setState(
+          () => _checkMessage = signalled
+              ? 'Stop requested; waiting for the process group to settle…'
+              : 'No running check was found.',
+        );
+      }
+    } catch (error) {
+      if (mounted) setState(() => _checkMessage = 'Stop uncertain: $error');
+    }
+  }
+
+  Future<void> _stopCheckOnDispose() async {
+    try {
+      await widget.checkRunner.cancel();
+    } catch (_) {
+      // The widget is gone; the native timeout still bounds the process.
+    }
+  }
+
+  Widget _runCheckPanel(SceneObject frame) {
+    final gate = checkGate(widget.store.document, frame.id);
+    final scope = connectedCheckWriteScope(widget.store.document, frame.id);
+    final root = scope?.props[writeScopePathProp]?.toString() ?? '';
+    final tokens = PaintScope.of(context);
+    return _section('Execution grant', [
+      _readOnly('Check', 'Installed Git · diff --check'),
+      _readOnly('Working folder', root.isEmpty ? 'Connect Write Scope' : root),
+      _readOnly('Network', 'Allowed by app sandbox'),
+      _readOnly('Time limit', '30 seconds'),
+      const SizedBox(height: 7),
+      Text(
+        'This check can have file effects. A working folder is not process isolation.',
+        style: TextStyle(color: tokens.muted, fontSize: 11),
+      ),
+      if (!gate.ready) ...[
+        const SizedBox(height: 7),
+        Text(gate.reason, style: TextStyle(color: tokens.danger, fontSize: 11)),
+      ],
+      const SizedBox(height: 10),
+      PaintButton(
+        key: const Key('run-check-action'),
+        label: _checkBusy ? 'Running…' : 'Run Git diff check…',
+        filled: true,
+        onPressed: gate.ready && !_checkBusy ? () => _startCheck(frame) : null,
+      ),
+      if (_checkBusy) ...[
+        const SizedBox(height: 8),
+        PaintButton(
+          key: const Key('cancel-check-action'),
+          label: 'Stop check',
+          onPressed: _cancelCheck,
+        ),
+      ],
+      if (_checkMessage != null) ...[
+        const SizedBox(height: 8),
+        Text(_checkMessage!, style: TextStyle(color: tokens.ink, fontSize: 11)),
+      ],
+    ]);
+  }
+
+  Widget _checkResultPanel(SceneObject frame) {
+    final body = checkResultBody(widget.store.document, frame.id);
+    final props = body?.props ?? const <String, Object?>{};
+    final outcome = props['checkOutcome']?.toString() ?? '';
+    final tokens = PaintScope.of(context);
+    final error = props['checkError']?.toString() ?? '';
+    final runs = body == null
+        ? const <RunRecord>[]
+        : widget.controller?.ledger
+                  .runsFor(body.id)
+                  .where((run) => run.kind == 'check')
+                  .toList() ??
+              const <RunRecord>[];
+    final latestRun = runs.lastOrNull;
+    final outputEvents = latestRun?.events
+        .where((event) => event.kind == RunEventKind.checkOutput)
+        .toList();
+    final latestOutput = outputEvents?.lastOrNull;
+    final latestOutputText = latestRun == null || latestOutput == null
+        ? ''
+        : widget.controller?.ledger.inspectText(latestRun, latestOutput) ?? '';
+    return _section('Check result', [
+      _readOnly(
+        'Outcome',
+        outcome.isEmpty ? 'No check run yet' : outcome.replaceAll('_', ' '),
+      ),
+      if (outcome.isNotEmpty) ...[
+        _readOnly('Command', 'git diff --check'),
+        _readOnly(
+          'Git status',
+          props['checkGitStateKnown'] == true
+              ? props['checkGitChanged'] == true
+                    ? 'Changed during check'
+                    : 'Unchanged'
+              : 'Final state unavailable',
+        ),
+        _readOnly('Network', 'Allowed by app sandbox'),
+        if (latestOutputText.isNotEmpty)
+          _readOnly(
+            'Latest redacted output',
+            latestOutputText.trim().length > 160
+                ? '${latestOutputText.trim().substring(0, 160)}…'
+                : latestOutputText.trim(),
+          ),
+        if (props['checkTruncated'] == true)
+          _readOnly('Output', 'Truncated at the safety limit'),
+        if (error.isNotEmpty) _readOnly('Issue', error),
+        if (props['checkStopUncertain'] == true)
+          Text(
+            'Stop is uncertain; inspect running processes.',
+            style: TextStyle(color: tokens.danger, fontSize: 11),
+          ),
+        const SizedBox(height: 8),
+        if (runs.isNotEmpty)
+          PaintButton(
+            key: const Key('open-check-ledger'),
+            label: 'Open check run ledger (${runs.length})',
+            onPressed: () => _openCheckLedger(runs),
+          ),
+        const SizedBox(height: 6),
+        Text(
+          'Exit 0 means only that this command exited 0. The LLM Context cable carries this short result, not the transcript.',
+          style: TextStyle(color: tokens.muted, fontSize: 11),
+        ),
+      ],
+    ]);
+  }
+
+  void _openCheckLedger(List<RunRecord> runs) {
+    final ledger = widget.controller?.ledger;
+    if (ledger == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Check run ledger'),
+        content: SizedBox(
+          width: 720,
+          height: 540,
+          child: ListView(
+            children: [
+              for (final run in runs.reversed)
+                ExpansionTile(
+                  key: Key('check-ledger-${run.id}'),
+                  title: Text(
+                    '${run.id} · ${run.events.lastOrNull?.payload['outcome']?.toString().replaceAll('_', ' ') ?? 'Running'}',
+                  ),
+                  subtitle: Text(
+                    run.events.firstOrNull?.at.toLocal().toString() ?? '',
+                  ),
+                  children: [
+                    for (final event in run.events)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(runEventEvidenceLine(event)),
+                            SelectableText(
+                              event.kind == RunEventKind.checkOutput
+                                  ? '${event.payload['phase']} ${event.payload['stream']} · ${event.payload['at'] ?? event.at.toIso8601String()}\n${ledger.inspectText(run, event) ?? ''}'
+                                  : [
+                                      'at: ${event.at.toIso8601String()}',
+                                      for (final entry in event.payload.entries)
+                                        '${entry.key}: ${ledger.inspectValue(run, event, entry.key) ?? ''}',
+                                    ].join('\n'),
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -663,6 +939,9 @@ class _InspectorPanelState extends State<InspectorPanel> {
 
   @override
   void dispose() {
+    if (_checkBusy) {
+      unawaited(_stopCheckOnDispose());
+    }
     _debounce?.cancel();
     widget.store.removeListener(_onStore);
     widget.selection.removeListener(_onSelection);
@@ -1114,6 +1393,12 @@ class _InspectorPanelState extends State<InspectorPanel> {
                       _writeScopePanel(frame),
                     if (kitIdOf(frame) == codingApplyPatchKitId)
                       _applyEffectPanel(frame),
+                    if (kitIdOf(frame) == codingCheckSpecKitId)
+                      _checkSpecPanel(frame),
+                    if (kitIdOf(frame) == codingRunCheckKitId)
+                      _runCheckPanel(frame),
+                    if (kitIdOf(frame) == codingCheckResultKitId)
+                      _checkResultPanel(frame),
                     if (llmBody == null &&
                         object.type != boxTypeId &&
                         !isWorldToolKit(object) &&
@@ -1121,7 +1406,10 @@ class _InspectorPanelState extends State<InspectorPanel> {
                         kitIdOf(object) != codingPatchProposalKitId &&
                         kitIdOf(object) != codingReviewDecisionKitId &&
                         kitIdOf(object) != codingApplyPatchKitId &&
-                        kitIdOf(object) != codingWriteScopeKitId)
+                        kitIdOf(object) != codingWriteScopeKitId &&
+                        kitIdOf(object) != codingCheckSpecKitId &&
+                        kitIdOf(object) != codingRunCheckKitId &&
+                        kitIdOf(object) != codingCheckResultKitId)
                       _section('Content', _typeFields(object)),
                     if (llmBody != null)
                       _section('Tools', [

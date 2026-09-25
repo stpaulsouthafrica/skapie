@@ -1104,7 +1104,10 @@ class CanvasViewportState extends State<CanvasViewport>
     if (kitId == codingPatchProposalKitId ||
         kitId == codingReviewDecisionKitId ||
         kitId == codingApplyPatchKitId ||
-        kitId == codingWriteScopeKitId) {
+        kitId == codingWriteScopeKitId ||
+        kitId == codingCheckSpecKitId ||
+        kitId == codingRunCheckKitId ||
+        kitId == codingCheckResultKitId) {
       return null;
     }
     if (!kitUsesTextPreview(kitId)) {
@@ -1156,7 +1159,10 @@ class CanvasViewportState extends State<CanvasViewport>
     if (kitId == codingPatchProposalKitId ||
         kitId == codingReviewDecisionKitId ||
         kitId == codingApplyPatchKitId ||
-        kitId == codingWriteScopeKitId) {
+        kitId == codingWriteScopeKitId ||
+        kitId == codingCheckSpecKitId ||
+        kitId == codingRunCheckKitId ||
+        kitId == codingCheckResultKitId) {
       return false;
     }
     if (isLlmKitObject(object) || kitUsesTextPreview(kitIdOf(object))) {

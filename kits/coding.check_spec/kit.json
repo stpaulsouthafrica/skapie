@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "coding.check_spec",
+  "displayName": "Check Spec",
+  "description": "Choose one trusted check. No shell text is accepted.",
+  "capabilities": [],
+  "objects": [
+    {"typeId": "box", "x": 0, "y": 0, "width": 280, "height": 120,
+      "props": {"skapieKit": "coding.check_spec", "skapieRole": "frame", "checkPreset": ""}},
+    {"typeId": "text", "x": 12, "y": 40, "width": 256, "height": 48,
+      "props": {"skapieKit": "coding.check_spec", "skapieRole": "body", "content": "Choose a check in Inspector", "fontSize": 13}}
+  ]
+}

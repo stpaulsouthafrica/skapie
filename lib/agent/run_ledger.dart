@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 /// Schema for [RunRecord] and [RunEvent]. Bump when the fields change.
-const int runRecordSchemaVersion = 1;
+const int runRecordSchemaVersion = 2;
 
 /// Longest string stored inside one event. Longer text is cut and marked.
 const int runPayloadTextLimit = 280;
@@ -36,6 +36,9 @@ enum RunEventKind {
   runCompleted,
   runFailed,
   runInterrupted,
+  checkStarted,
+  checkOutput,
+  checkFinished,
 }
 
 enum RunStatus { running, completed, failed, interrupted }
@@ -87,12 +90,14 @@ class RunRecord {
     required this.id,
     required this.bodyId,
     this.schemaVersion = runRecordSchemaVersion,
+    this.kind = 'agent',
     List<RunEvent> events = const [],
   }) : events = List.of(events);
 
   final int schemaVersion;
   final String id;
   final String bodyId;
+  final String kind;
   final List<RunEvent> events;
 
   RunStatus get status {
@@ -104,6 +109,12 @@ class RunRecord {
           return RunStatus.failed;
         case RunEventKind.runInterrupted:
           return RunStatus.interrupted;
+        case RunEventKind.checkFinished:
+          return event.payload['outcome'] == 'cancelled'
+              ? RunStatus.interrupted
+              : event.payload['outcome'] == 'exit_0'
+              ? RunStatus.completed
+              : RunStatus.failed;
         default:
           continue;
       }
@@ -117,6 +128,7 @@ class RunRecord {
     'schemaVersion': schemaVersion,
     'id': id,
     'bodyId': bodyId,
+    'kind': kind,
     'events': [for (final event in events) event.toJson()],
   };
 
@@ -126,6 +138,7 @@ class RunRecord {
       schemaVersion: json['schemaVersion'] as int? ?? runRecordSchemaVersion,
       id: json['id']?.toString() ?? '',
       bodyId: json['bodyId']?.toString() ?? '',
+      kind: json['kind']?.toString() ?? 'agent',
       events: [
         if (rawEvents is List)
           for (final item in rawEvents)
@@ -167,9 +180,9 @@ class RunLedger {
       if (run.bodyId == bodyId) run,
   ];
 
-  RunRecord begin({required String bodyId}) {
+  RunRecord begin({required String bodyId, String kind = 'agent'}) {
     _nextId++;
-    final run = RunRecord(id: 'run_$_nextId', bodyId: bodyId);
+    final run = RunRecord(id: 'run_$_nextId', bodyId: bodyId, kind: kind);
     _runs.add(run);
     return run;
   }
@@ -213,6 +226,13 @@ class RunLedger {
     if (full != null && full.length > runPayloadTextLimit) {
       _bodies['${run.id}:${event.sequence}'] = full;
     }
+    for (final entry in formatted.entries) {
+      if (entry.value is String &&
+          (entry.value as String).length > runPayloadTextLimit) {
+        _bodies['${run.id}:${event.sequence}:${entry.key}'] =
+            entry.value as String;
+      }
+    }
     onAppend?.call();
     return event;
   }
@@ -222,6 +242,10 @@ class RunLedger {
     return _bodies['${run.id}:${event.sequence}'] ??
         runEventEvidenceDetail(event);
   }
+
+  String? inspectValue(RunRecord run, RunEvent event, String key) =>
+      _bodies['${run.id}:${event.sequence}:$key'] ??
+      event.payload[key]?.toString();
 
   Map<String, Object?> toJson() => {
     'schemaVersion': runRecordSchemaVersion,
@@ -523,4 +547,7 @@ String runEventLabel(RunEventKind kind) => switch (kind) {
   RunEventKind.runCompleted => 'Run completed',
   RunEventKind.runFailed => 'Run failed',
   RunEventKind.runInterrupted => 'Run interrupted',
+  RunEventKind.checkStarted => 'Check started',
+  RunEventKind.checkOutput => 'Check output',
+  RunEventKind.checkFinished => 'Check finished',
 };

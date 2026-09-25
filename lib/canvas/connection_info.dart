@@ -6,6 +6,7 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
+import 'package:skapie/tools/check/check_board.dart';
 
 const int connectionPreviewLimit = 280;
 
@@ -160,6 +161,14 @@ String _preview(SceneDocument document, SceneCable cable, PortValue value) {
           ? ''
           : reviewDecisionOf(document, reviewFrame.id);
       return decision.isEmpty ? 'No decision yet' : decision;
+    case PortValue.checkSpec:
+      return source?.props[checkPresetProp] == gitDiffCheckPreset
+          ? 'Trusted check: installed Git · diff --check'
+          : 'Choose the trusted check first';
+    case PortValue.checkResult:
+      return 'An explicit Run Check writes the outcome here';
+    case PortValue.checkSummary:
+      return source == null ? '' : textKitContent(document, source);
   }
 }
 

@@ -4,6 +4,7 @@ import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
+import 'package:skapie/tools/check/check_board.dart';
 import 'package:skapie/tools/world/kits.dart';
 
 const String demoNoteCardKitId = 'demo.note-card';
@@ -22,6 +23,13 @@ const String codingPatchProposalKitId = 'coding.patch_proposal';
 const String codingReviewDecisionKitId = 'coding.review_decision';
 const String codingApplyPatchKitId = 'coding.apply_patch';
 const String codingWriteScopeKitId = 'coding.write_scope';
+const String codingCheckSpecKitId = 'coding.check_spec';
+const String codingRunCheckKitId = 'coding.run_check';
+const String codingCheckResultKitId = 'coding.check_result';
+const String checkPresetProp = 'checkPreset';
+const String checkSpecPort = 'checkSpec';
+const String checkWritePort = 'checkWrite';
+const String checkResultPort = 'checkResult';
 const String writeScopePathProp = 'writeScopePath';
 const String writeScopePort = 'writeScope';
 const String proposalIdProp = 'proposalId';
@@ -685,5 +693,6 @@ KitApi createAppKitApi({
   api.registerKit(harnessToolsRecipe);
   registerWorldToolKits(api);
   registerPatchKits(api);
+  registerCheckKits(api);
   return api;
 }
