@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tools.propose_patch",
   "displayName": "Propose Patch",
-  "description": "Propose a code change. Creates a proposal artifact; does not write files.",
+  "description": "Propose one exact text replacement. Creates a proposal artifact; does not write files.",
   "capabilities": [],
   "objects": [
     {
@@ -14,7 +14,8 @@
       "props": {
         "skapieKit": "tools.propose_patch",
         "skapieRole": "frame",
-        "description": "Propose a code change. Creates a proposal artifact; does not write files."
+        "description": "Propose one exact text replacement. Creates a proposal artifact; does not write files.",
+        "requiresRepository": true
       }
     },
     {

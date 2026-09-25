@@ -45,7 +45,7 @@ These are four separate board pieces. Wiring them never writes the repository.
 
 | Kit id | Kind | Role |
 |---|---|---|
-| `tools.propose_patch` | Tool grant | The model may call `propose_patch`. The result is written into a cabled Patch Proposal artifact. The call does not approve or apply. |
+| `tools.propose_patch` | Tool grant | The model may call `propose_patch` with one repository-relative path, the exact existing text, and the replacement. The host reads that UTF-8 file, fingerprints it, and stores a display diff on the cabled Patch Proposal. A model-supplied base hash is ignored. The call does not approve or apply. |
 | `coding.patch_proposal` | Artifact | Structured proposal data. Not a tool and not offered to the model. |
 | `coding.review_decision` | User kit | Holds the engineer's decision. A model's Propose call cannot create an Accept. |
 | `coding.apply_patch` | Effect | Writes only after a valid review decision. Connecting a cable does not apply. Apply stays inert until that decision exists. |

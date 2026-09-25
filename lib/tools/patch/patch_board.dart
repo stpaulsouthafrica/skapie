@@ -1,11 +1,15 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/kit_api/kit_package.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/repository/repository_permission.dart';
 import 'package:skapie/tools/tool.dart';
+
+const int proposalTextBound = 256 * 1024;
 
 class PatchApplyGate {
   const PatchApplyGate.inert(this.reason) : inert = true;
@@ -31,7 +35,7 @@ Map<String, Object?> get proposePatchKitJson => const {
   'schemaVersion': kitPackageSchemaVersion,
   'id': proposePatchKitId,
   'displayName': 'Propose Patch',
-  'description': 'Propose a code change. Creates a proposal artifact; does not write files.',
+  'description': 'Propose one exact text replacement. Creates a proposal artifact; does not write files.',
   'capabilities': <Object?>[],
   'objects': [
     {
@@ -43,7 +47,8 @@ Map<String, Object?> get proposePatchKitJson => const {
       'props': {
         skapieKitProp: proposePatchKitId,
         skapieRoleProp: 'frame',
-        'description': 'Propose a code change. Creates a proposal artifact; does not write files.',
+        'description': 'Propose one exact text replacement. Creates a proposal artifact; does not write files.',
+        'requiresRepository': true,
       },
     },
     {
@@ -228,6 +233,134 @@ String reviewDecisionOf(SceneDocument document, String reviewFrameId) {
       '';
 }
 
+Map<String, Object?> _refused(String reason) => {'ok': false, 'reason': reason};
+
+String _byteFingerprint(List<int> bytes) {
+  var hash = 0x811c9dc5;
+  for (final byte in bytes) {
+    hash ^= byte;
+    hash = (hash * 0x01000193) & 0xFFFFFFFF;
+  }
+  return hash.toRadixString(16).padLeft(8, '0');
+}
+
+String _displayDiff(String path, String before, String after) {
+  final oldLines = const LineSplitter().convert(before);
+  final newLines = const LineSplitter().convert(after);
+  final body = StringBuffer()
+    ..writeln('--- a/$path')
+    ..writeln('+++ b/$path')
+    ..writeln('@@ -1,${oldLines.length} +1,${newLines.length} @@');
+  for (final line in oldLines) {
+    body.writeln('-$line');
+  }
+  for (final line in newLines) {
+    body.writeln('+$line');
+  }
+  return body.toString();
+}
+
+/// One existing UTF-8 file, one exact substring. Reads and fingerprints the
+/// file, then derives a display diff. Does not write.
+Future<Map<String, Object?>> proposeTextReplacement({
+  required String root,
+  required RepositoryPermission permission,
+  required Map<String, Object?> args,
+}) async {
+  if (args.containsKey('patch') ||
+      args.containsKey('files') ||
+      args.containsKey('hunks')) {
+    return _refused('Only one exact text replacement is accepted.');
+  }
+  final relative = args['path']?.toString() ?? '';
+  final oldText = args['oldText']?.toString() ?? '';
+  final newText = args['newText']?.toString() ?? '';
+  if (oldText.isEmpty) {
+    return _refused('The existing text anchor is empty.');
+  }
+  if (oldText.length > proposalTextBound ||
+      newText.length > proposalTextBound) {
+    return _refused('The anchor or replacement exceeds the text bound.');
+  }
+  final parts = relative.replaceAll('\\', '/').split('/');
+  if (root.trim().isEmpty ||
+      relative.trim().isEmpty ||
+      relative.startsWith('/') ||
+      relative.contains('\u0000') ||
+      parts.any((part) => part == '..' || part == '.' || part.isEmpty)) {
+    return _refused('Path is outside the repository scope.');
+  }
+  if (!await permission.canRead(root)) {
+    return _refused('Repository access expired. Choose its folder again.');
+  }
+  final rootDir = Directory(root);
+  if (!await rootDir.exists()) {
+    return _refused('Repository folder is missing.');
+  }
+  final canonicalRoot = await rootDir.resolveSymbolicLinks();
+  final file = File(
+    '$canonicalRoot${Platform.pathSeparator}${parts.join(Platform.pathSeparator)}',
+  );
+  final type = await FileSystemEntity.type(file.path, followLinks: false);
+  if (type == FileSystemEntityType.notFound) {
+    return _refused('The file is missing, so the content is stale.');
+  }
+  if (type == FileSystemEntityType.link) {
+    return _refused('Symlink targets are not accepted.');
+  }
+  if (type != FileSystemEntityType.file) {
+    return _refused('Only an existing regular file is accepted.');
+  }
+  final canonical = await file.resolveSymbolicLinks();
+  final prefix = '$canonicalRoot${Platform.pathSeparator}';
+  if (!canonical.startsWith(prefix)) {
+    return _refused('Path is outside the repository scope.');
+  }
+  final opened = File(canonical);
+  if (await opened.length() > 2 * 1024 * 1024) {
+    return _refused('File exceeds the 2 MB read limit.');
+  }
+  final bytes = await opened.readAsBytes();
+  if (bytes.contains(0)) {
+    return _refused('Binary files are not accepted.');
+  }
+  String content;
+  try {
+    content = utf8.decode(bytes);
+  } on FormatException {
+    return _refused('Only UTF-8 text files are accepted.');
+  }
+  final first = content.indexOf(oldText);
+  if (first < 0) {
+    return _refused('The existing text is not in the file, so it is stale.');
+  }
+  if (content.indexOf(oldText, first + oldText.length) >= 0) {
+    return _refused('The existing text matches more than once.');
+  }
+  final newline = content.contains('\r\n') ? 'crlf' : 'lf';
+  final styledNew = newline == 'crlf'
+      ? newText.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n')
+      : newText.replaceAll('\r\n', '\n');
+  final replacement = content.replaceRange(
+    first,
+    first + oldText.length,
+    styledNew,
+  );
+  final mode = (await opened.stat()).mode;
+  final fingerprint = _byteFingerprint(bytes);
+  return {
+    'ok': true,
+    'path': parts.join('/'),
+    'baseFingerprint': fingerprint,
+    'newline': newline,
+    'mode': mode,
+    'oldText': oldText,
+    'newText': styledNew,
+    'replacement': replacement,
+    'diff': _displayDiff(parts.join('/'), content, replacement),
+  };
+}
+
 String proposalFingerprintFor(Map<String, Object?> payload) {
   final canonical = jsonEncode(payload);
   var hash = 0x811c9dc5;
@@ -261,12 +394,23 @@ void writePatchProposal({
       continue;
     }
     final note = proposal['note']?.toString() ?? '';
+    final diff = proposal['diff']?.toString() ?? '';
     final id = proposal['proposalId']?.toString() ?? '';
     kitApi.updateProps(body.id, {
       proposalIdProp: id,
       proposalFingerprintProp: proposal['fingerprint']?.toString() ?? '',
       'note': note,
-      'content': note.trim().isEmpty ? 'Proposal $id' : note,
+      'path': proposal['path']?.toString() ?? '',
+      'baseFingerprint': proposal['baseFingerprint']?.toString() ?? '',
+      'newline': proposal['newline']?.toString() ?? '',
+      'mode': proposal['mode'],
+      'diff': diff,
+      'oldText': proposal['oldText']?.toString() ?? '',
+      'newText': proposal['newText']?.toString() ?? '',
+      'replacement': proposal['replacement']?.toString() ?? '',
+      'content': diff.trim().isEmpty
+          ? (note.trim().isEmpty ? 'Proposal $id' : note)
+          : diff,
     });
   }
 }
@@ -274,26 +418,58 @@ void writePatchProposal({
 AgentTool proposePatchTool({
   required KitApi kitApi,
   required String proposeFrameId,
+  String repositoryPath = '',
+  RepositoryPermission permission = const SystemRepositoryPermission(),
 }) {
   return AgentTool(
     name: proposePatchToolName,
-    description: 'Propose a code change as a reviewable artifact. Does not write files or approve the proposal.',
+    description: 'Propose one exact text replacement in an existing repository file. Does not write files or approve the proposal.',
     parameters: jsonSchemaObject(
       properties: {
+        'path': {
+          'type': 'string',
+          'description': 'Repository-relative path of an existing UTF-8 file',
+        },
+        'oldText': {
+          'type': 'string',
+          'description': 'Exact existing text to replace, one match only',
+        },
+        'newText': {
+          'type': 'string',
+          'description': 'Replacement text for that one match',
+        },
         'note': {
           'type': 'string',
           'description': 'What this proposal is about',
         },
       },
+      required: const ['path', 'oldText', 'newText'],
     ),
     run: (args) async {
       final note = args['note']?.toString() ?? '';
-      final payload = {'note': note};
+      final replacement = await proposeTextReplacement(
+        root: repositoryPath,
+        permission: permission,
+        args: args,
+      );
+      if (replacement['ok'] != true) {
+        return replacement;
+      }
+      final payload = {
+        'path': replacement['path'],
+        'oldText': replacement['oldText'],
+        'newText': replacement['newText'],
+        'baseFingerprint': replacement['baseFingerprint'],
+        'newline': replacement['newline'],
+        'mode': replacement['mode'],
+        'note': note,
+      };
       final proposal = <String, Object?>{
         'ok': true,
         'proposalId': newSceneId('pp'),
         'fingerprint': proposalFingerprintFor(payload),
         'note': note,
+        ...replacement,
       };
       writePatchProposal(
         kitApi: kitApi,

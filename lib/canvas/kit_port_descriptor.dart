@@ -222,6 +222,18 @@ const List<KitPortSpec> worldToolKitPorts = [
 ];
 
 const List<KitPortSpec> proposePatchKitPorts = [
+  KitPortSpec(
+    id: repositoryPort,
+    kind: KitPortKind.toolRepository,
+    label: 'Repository',
+    direction: PortDirection.input,
+    value: PortValue.repository,
+    placement: PortPlacement.middle(PortSide.left),
+    multiplicity: PortMultiplicity.one,
+    requiresProp: 'requiresRepository',
+    requiredGroup: repositoryPort,
+    requiredMessage: 'Repository grant missing',
+  ),
   toolOutPort,
   KitPortSpec(
     id: 'result',

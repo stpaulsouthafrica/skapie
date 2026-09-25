@@ -64,9 +64,10 @@ const List<WorldToolKitSpec> worldToolKitSpecs = [
   ),
   WorldToolKitSpec(
     proposePatchToolName,
-    'Propose a code change. Creates a proposal artifact; does not write files.',
+    'Propose one exact text replacement in an existing file. Does not write.',
     displayName: 'Propose Patch',
     frameHeight: proposePatchFrameHeight,
+    requiresRepository: true,
   ),
 ];
 

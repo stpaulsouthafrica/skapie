@@ -151,7 +151,8 @@ LlmToolOffer llmToolOffer({
       selectedId: object.id,
     );
     final path = frame == null ? '' : repositoryPathForTool(document, frame.id);
-    if (repositoryToolNames.contains(name) && path.isEmpty) {
+    if ((repositoryToolNames.contains(name) || name == proposePatchToolName) &&
+        path.isEmpty) {
       filtered.add(
         FilteredTool(name: name, reason: 'Repository grant missing'),
       );
@@ -165,7 +166,12 @@ LlmToolOffer llmToolOffer({
           permission: repositoryPermission,
         ) ??
         (name == proposePatchToolName && frame != null
-            ? proposePatchTool(kitApi: kitApi, proposeFrameId: frame.id)
+            ? proposePatchTool(
+                kitApi: kitApi,
+                proposeFrameId: frame.id,
+                repositoryPath: path,
+                permission: repositoryPermission,
+              )
             : null);
     if (tool == null) {
       filtered.add(FilteredTool(name: name, reason: 'Unknown tool'));
