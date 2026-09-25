@@ -49,6 +49,11 @@ const List<CommandAction> defaultCommandActions = [
     label: 'Add Apply Patch',
     icon: KitIconKind.box,
   ),
+  CommandAction(
+    id: 'add-write-scope',
+    label: 'Add Write Scope',
+    icon: KitIconKind.box,
+  ),
   CommandAction(id: 'settings', label: 'Settings', icon: KitIconKind.settings),
 ];
 

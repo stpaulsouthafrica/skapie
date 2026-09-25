@@ -37,19 +37,20 @@ World tools remain individual kits under `kits/tools.<name>/` and runners under 
 | `update_frame`, `update_props`, `set_locked` | Edit scene objects through `KitApi`. |
 | `save_kit`, `reload_packages`, `register_kit` | Manage kit recipes and packages. |
 
-The palette offers **Tool: ...** entries, plus **Patch Proposal**, **Review Decision**, and **Apply Patch**. You can cable a tool's Output to the LLM's Tools port or use **Attach to LLM** / the inspector's Allowed connections list. Cutting a cable removes that connection. `harness.tools` remains a stub roster, not a grant. Unknown `toolName` is shown as an error on the kit and is omitted from the request.
+The palette offers **Tool: ...** entries, plus **Patch Proposal**, **Review Decision**, **Write Scope**, and **Apply Patch**. You can cable a tool's Output to the LLM's Tools port or use **Attach to LLM** / the inspector's Allowed connections list. Cutting a cable removes that connection. `harness.tools` remains a stub roster, not a grant. Unknown `toolName` is shown as an error on the kit and is omitted from the request.
 
 ## Patch proposal, review, and apply
 
-These are four separate board pieces. Wiring them never writes the repository.
+The proposal flow has four parts plus a separately selected Write Scope grant. Wiring them never writes the repository.
 
 | Kit id | Kind | Role |
 |---|---|---|
 | `tools.propose_patch` | Tool grant | The model may call `propose_patch` with one repository-relative path, the exact existing text, and the replacement. The host reads that UTF-8 file, fingerprints it, and stores a display diff on the cabled Patch Proposal. A model-supplied base hash is ignored. The call does not approve or apply. |
-| `coding.patch_proposal` | Artifact | Structured proposal data. Not a tool and not offered to the model. |
-| `coding.review_decision` | User kit | Holds the engineer's decision. A model's Propose call cannot create an Accept. |
-| `coding.apply_patch` | Effect | Writes only after a valid review decision. Connecting a cable does not apply. Apply stays inert until that decision exists. |
+| `coding.patch_proposal` | Artifact | Read-only file summary on the board; double-click or use Inspector for a focused colored diff. Not a model tool. |
+| `coding.review_decision` | User kit | Accept or Reject settles for that exact proposal. Reconsider is explicit. A changed proposal invalidates the old decision. |
+| `coding.write_scope` | Grant | The user selects a folder for write access through a separate macOS bookmark. The Repository read bookmark does not satisfy it. |
+| `coding.apply_patch` | Effect | A user-started action checks the accepted decision, live write grant, path, file hash, permissions, and exact replacement before writing one file. It records the preimage and observed diff; Revert is a separate hash-checked action. |
 
-Cable Propose Result → Proposal In, Proposal Out → Review In, and Review Out → Apply In. The existing Repository read grant is not write authority.
+Cable Propose Result → Proposal In, Proposal Out → Review In, Review Out → Apply In, and Write Scope → Apply Write. Press Apply explicitly after Accept. If the write grant is unavailable, Export Proposal remains available in Patch Proposal Inspector. Effect records live beside the board scene in `scene.json.patch-effects.json` (schema version 1), outside scene undo. The app makes no multi-file atomicity claim. Native macOS folder selection and write access still need hands-on acceptance on the release build.
 
 The runner list is registered in app code. A user can compose and save kit arrangements today; declaring a new `toolName` in `kit.json` does not install a runner. Typed ports and a user-facing capability contract are planned in the [Phase 11 roadmap](phase_11_roadmap.md).

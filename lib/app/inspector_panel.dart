@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/app/full_screen_text_editor.dart';
+import 'package:skapie/app/patch_diff_viewer.dart';
 import 'package:skapie/app/connection_inspector.dart';
 import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/app/llm_request_information.dart';
@@ -16,6 +18,9 @@ import 'package:skapie/registry/builtin_types.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
+import 'package:skapie/tools/patch/patch_board.dart';
+import 'package:skapie/tools/patch/patch_effect_log.dart';
+import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 
 /// Clock time for a tool's last invocation. A previous day includes the date.
@@ -45,6 +50,8 @@ class InspectorPanel extends StatefulWidget {
     this.lastLlmBodyId,
     this.controller,
     this.onCutCable,
+    this.writePermission = const SystemPatchWritePermission(),
+    this.effectLog,
   }) : kitApi =
            kitApi ?? KitApi(store: store, registry: createBuiltinRegistry());
 
@@ -53,6 +60,8 @@ class InspectorPanel extends StatefulWidget {
   final KitApi kitApi;
   final String? lastLlmBodyId;
   final AgentController? controller;
+  final PatchWritePermission writePermission;
+  final PatchEffectLog? effectLog;
 
   /// When set, Cut cable plays the board retraction instead of vanishing.
   final ValueChanged<SceneCable>? onCutCable;
@@ -80,10 +89,549 @@ class _InspectorPanelState extends State<InspectorPanel> {
       widget.controller?.repositoryPermission ??
       const SystemRepositoryPermission();
   String? _repositoryError;
+  String? _reviewError;
+  String? _effectMessage;
+  bool _effectBusy = false;
+  late PatchEffectLog _effects;
+
+  Future<void> _loadEffects() async {
+    try {
+      await _effects.load();
+      if (mounted) setState(() {});
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _effectMessage = 'Could not read effect history: $error',
+        );
+      }
+    }
+  }
+
+  Future<void> _chooseWriteScope(SceneObject frame) async {
+    try {
+      final path = await widget.writePermission.chooseDirectory();
+      if (path == null || path.isEmpty) return;
+      widget.kitApi.updateProps(frame.id, {writeScopePathProp: path});
+      if (mounted) setState(() => _effectMessage = null);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _effectMessage = 'Write grant failed: $error');
+      }
+    }
+  }
+
+  Future<void> _exportProposal(SceneObject body) async {
+    final path = body.props['path']?.toString() ?? 'patch';
+    try {
+      final exported = await widget.writePermission.exportProposal(
+        name: '${path.split('/').last}.proposal.json',
+        text:
+            '${const JsonEncoder.withIndent('  ').convert({'schemaVersion': 1, 'proposalId': body.props[proposalIdProp], 'fingerprint': body.props[proposalFingerprintProp], 'repositoryPath': body.props['repositoryPath'], 'path': body.props['path'], 'baseFingerprint': body.props['baseFingerprint'], 'oldText': body.props['oldText'], 'newText': body.props['newText'], 'diff': body.props['diff']})}\n',
+      );
+      if (mounted && exported != null) {
+        setState(() => _effectMessage = 'Exported proposal to $exported');
+      }
+    } catch (error) {
+      if (mounted) setState(() => _effectMessage = 'Export failed: $error');
+    }
+  }
+
+  Future<void> _applyPatch(SceneObject frame) async {
+    final review = connectedReviewFrame(widget.store.document, frame.id);
+    final proposal = review == null
+        ? null
+        : connectedProposalFrame(widget.store.document, review.id);
+    final body = proposal == null
+        ? null
+        : patchProposalBody(widget.store.document, proposal.id);
+    final path = body?.props['path']?.toString() ?? 'this file';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Apply accepted patch?'),
+        content: Text(
+          'Skapie will verify and write $path. This is a repository effect.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Apply patch'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _effectBusy = true;
+      _effectMessage = 'Verifying file…';
+    });
+    final result = await invokeApplyPatch(
+      kitApi: widget.kitApi,
+      applyFrameId: frame.id,
+      permission: widget.writePermission,
+      effects: _effects,
+    );
+    if (mounted) {
+      setState(() {
+        _effectBusy = false;
+        _effectMessage = result.reason;
+      });
+    }
+  }
+
+  Future<void> _revertPatch(String effectId, String writeScopePath) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Revert this file effect?'),
+        content: const Text(
+          'Skapie will restore the saved preimage only if the file still matches the applied result.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Revert file'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _effectBusy = true;
+      _effectMessage = 'Checking file before Revert…';
+    });
+    final result = await invokeRevertPatch(
+      effects: _effects,
+      effectId: effectId,
+      permission: widget.writePermission,
+      writeScopePath: writeScopePath,
+    );
+    if (mounted) {
+      setState(() {
+        _effectBusy = false;
+        _effectMessage = result.reason;
+      });
+    }
+  }
+
+  void _review(String decision, SceneObject frame) {
+    final recorded = recordReviewDecision(
+      kitApi: widget.kitApi,
+      reviewFrameId: frame.id,
+      decision: decision,
+    );
+    setState(() {
+      _reviewError = recorded ? null : 'This decision is settled. Reconsider it explicitly or review a new proposal.';
+    });
+  }
+
+  Future<void> _reconsider(SceneObject frame) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reconsider this decision?'),
+        content: const Text(
+          'This clears the recorded decision. You will need to inspect and choose again.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep decision'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reconsider'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      reconsiderReviewDecision(kitApi: widget.kitApi, reviewFrameId: frame.id);
+      setState(() => _reviewError = null);
+    }
+  }
+
+  Widget _decisionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+    required Key key,
+  }) => Expanded(
+    child: Material(
+      color: color.withValues(alpha: 0.16),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        key: key,
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          height: 44,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.65)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 17, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _patchPreview(SceneObject frame) {
+    final body = patchProposalBody(widget.store.document, frame.id);
+    final path = body?.props['path']?.toString() ?? '';
+    final diff = body?.props['diff']?.toString() ?? '';
+    final counts = patchDiffCounts(diff);
+    final tokens = PaintScope.of(context);
+    return _section('Patch proposal', [
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: tokens.accent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: tokens.hairline),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.description_outlined,
+                  size: 20,
+                  color: tokens.accent,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    path.isEmpty ? 'Waiting for a proposal' : path,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: tokens.ink,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              path.isEmpty
+                  ? 'Connect Propose Patch and ask for one file change.'
+                  : '${counts.added} added  ·  ${counts.removed} removed  ·  1 file',
+              style: TextStyle(color: tokens.muted, fontSize: 12),
+            ),
+            if (path.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Text(
+                validPatchProposal(body)
+                    ? 'Ready for your review'
+                    : 'Proposal changed; request a fresh proposal',
+                style: TextStyle(
+                  color: validPatchProposal(body)
+                      ? tokens.accent
+                      : tokens.danger,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      if (diff.isNotEmpty)
+        PaintButton(
+          key: const Key('preview-patch-diff'),
+          label: 'Inspect colored diff',
+          onPressed: () => showPatchDiffViewer(
+            context: context,
+            path: path,
+            diff: diff,
+            proposalId: body?.props[proposalIdProp]?.toString() ?? '',
+          ),
+        ),
+      if (body != null && path.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        PaintButton(
+          key: const Key('export-patch-proposal'),
+          label: 'Export proposal…',
+          onPressed: () => _exportProposal(body),
+        ),
+      ],
+    ]);
+  }
+
+  Widget _patchReview(SceneObject frame) {
+    final proposal = connectedProposalFrame(widget.store.document, frame.id);
+    final body = proposal == null
+        ? null
+        : patchProposalBody(widget.store.document, proposal.id);
+    final valid = validPatchProposal(body);
+    final decision = reviewDecisionOf(widget.store.document, frame.id);
+    final tokens = PaintScope.of(context);
+    final matches =
+        valid &&
+        reviewDecisionBody(
+              widget.store.document,
+              frame.id,
+            )?.props[proposalIdProp] ==
+            body?.props[proposalIdProp] &&
+        reviewDecisionBody(
+              widget.store.document,
+              frame.id,
+            )?.props[proposalFingerprintProp] ==
+            body?.props[proposalFingerprintProp];
+    final settled = matches && decision.isNotEmpty;
+    final applied =
+        settled &&
+        _effects.records.any(
+          (record) =>
+              record['kind'] == 'apply' &&
+              record['state'] == 'applied' &&
+              record['proposalId'] == body?.props[proposalIdProp] &&
+              record['proposalFingerprint'] ==
+                  body?.props[proposalFingerprintProp],
+        );
+    final statusColor = decision == 'accept' ? tokens.success : tokens.danger;
+    return _section('Review', [
+      _readOnly(
+        'File',
+        body?.props['path']?.toString() ?? 'Connect a proposal',
+      ),
+      const SizedBox(height: 8),
+      if (settled)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.14),
+            border: Border.all(color: statusColor.withValues(alpha: 0.6)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                decision == 'accept'
+                    ? Icons.check_circle_outline
+                    : Icons.cancel_outlined,
+                color: statusColor,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  decision == 'accept'
+                      ? 'Accepted · ready for separate Apply'
+                      : 'Rejected · file remains unchanged',
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        )
+      else
+        _readOnly('Decision', 'Awaiting your choice'),
+      const SizedBox(height: 10),
+      if (valid) ...[
+        PaintButton(
+          key: const Key('review-open-diff'),
+          label: 'Inspect colored diff',
+          onPressed: () => showPatchDiffViewer(
+            context: context,
+            path: body!.props['path']?.toString() ?? '',
+            diff: body.props['diff']?.toString() ?? '',
+            proposalId: body.props[proposalIdProp]?.toString() ?? '',
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (!settled)
+          Row(
+            children: [
+              _decisionButton(
+                key: const Key('review-reject'),
+                label: 'Reject',
+                icon: Icons.close,
+                color: tokens.danger,
+                onPressed: () => _review('reject', frame),
+              ),
+              const SizedBox(width: 10),
+              _decisionButton(
+                key: const Key('review-accept'),
+                label: 'Accept',
+                icon: Icons.check,
+                color: tokens.success,
+                onPressed: () => _review('accept', frame),
+              ),
+            ],
+          )
+        else if (!applied)
+          TextButton(
+            key: const Key('review-reconsider'),
+            onPressed: () => _reconsider(frame),
+            child: const Text('Reconsider decision…'),
+          )
+        else
+          Text(
+            'Applied decisions stay recorded. Use Revert on Apply Patch.',
+            style: TextStyle(color: tokens.muted, fontSize: 11),
+          ),
+      ],
+      if (_reviewError != null) Text(_reviewError!),
+      const SizedBox(height: 8),
+      Text(
+        'Your choice is recorded. Only a separate Apply can write the file.',
+        style: TextStyle(color: tokens.muted, fontSize: 11),
+      ),
+    ]);
+  }
+
+  Widget _writeScopePanel(SceneObject frame) {
+    final tokens = PaintScope.of(context);
+    final path = frame.props[writeScopePathProp]?.toString() ?? '';
+    return _section('Write grant', [
+      _readOnly('Folder', path.isEmpty ? 'No folder selected' : path),
+      const SizedBox(height: 8),
+      Text(
+        'This is a separate permission. The Repository read grant cannot write.',
+        style: TextStyle(color: tokens.muted, fontSize: 11),
+      ),
+      const SizedBox(height: 10),
+      PaintButton(
+        key: const Key('choose-write-scope'),
+        label: path.isEmpty ? 'Choose write folder…' : 'Choose another folder…',
+        onPressed: () => _chooseWriteScope(frame),
+      ),
+      if (path.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        TextButton(
+          key: const Key('remove-write-scope'),
+          onPressed: () =>
+              widget.kitApi.updateProps(frame.id, {writeScopePathProp: ''}),
+          child: const Text('Remove folder from this board'),
+        ),
+      ],
+    ]);
+  }
+
+  Widget _applyEffectPanel(SceneObject frame) {
+    final tokens = PaintScope.of(context);
+    final gate = applyPatchGate(widget.store.document, frame.id);
+    final scope = connectedWriteScopeFrame(widget.store.document, frame.id);
+    final scopePath = scope?.props[writeScopePathProp]?.toString() ?? '';
+    final ready = !gate.inert && scopePath.isNotEmpty;
+    final last = _effects.latestApplyFor(frame.id);
+    final reverted = last == null
+        ? false
+        : _effects.wasReverted(last['id']?.toString() ?? '');
+    return _section('Repository effect', [
+      _readOnly(
+        'Review',
+        gate.inert ? gate.reason : 'Accepted proposal connected',
+      ),
+      _readOnly(
+        'Write Scope',
+        scopePath.isEmpty ? 'Connect a Write Scope' : scopePath,
+      ),
+      const SizedBox(height: 10),
+      PaintButton(
+        key: const Key('apply-patch-action'),
+        label: _effectBusy ? 'Working…' : 'Verify and apply patch…',
+        filled: true,
+        onPressed: ready && !_effectBusy ? () => _applyPatch(frame) : null,
+      ),
+      if (last != null) ...[
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: (reverted ? tokens.accent : tokens.success).withValues(
+              alpha: 0.12,
+            ),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Text(
+            reverted
+                ? 'Reverted · original file restored'
+                : 'Applied · preimage and observed diff recorded',
+            style: TextStyle(
+              color: reverted ? tokens.accent : tokens.success,
+              fontSize: 12,
+            ),
+          ),
+        ),
+        if ((last['observedDiff']?.toString() ?? '').isNotEmpty) ...[
+          const SizedBox(height: 8),
+          PaintButton(
+            key: const Key('open-observed-diff'),
+            label: 'Open observed diff',
+            onPressed: () => showPatchDiffViewer(
+              context: context,
+              path: last['path']?.toString() ?? '',
+              diff: last['observedDiff']?.toString() ?? '',
+              proposalId: last['proposalId']?.toString() ?? '',
+              observed: true,
+            ),
+          ),
+        ],
+        if (!reverted) ...[
+          const SizedBox(height: 8),
+          PaintButton(
+            key: const Key('revert-patch-action'),
+            label: 'Revert this file…',
+            onPressed: scopePath.isNotEmpty && !_effectBusy
+                ? () => _revertPatch(last['id']!.toString(), scopePath)
+                : null,
+          ),
+        ],
+      ],
+      if (_effectMessage != null) ...[
+        const SizedBox(height: 9),
+        Text(
+          _effectMessage!,
+          style: TextStyle(color: tokens.ink, fontSize: 11),
+        ),
+      ],
+      const SizedBox(height: 9),
+      Text(
+        'Board Undo does not undo file writes.',
+        style: TextStyle(color: tokens.muted, fontSize: 11),
+      ),
+    ]);
+  }
 
   @override
   void initState() {
     super.initState();
+    _effects =
+        widget.effectLog ??
+        PatchEffectLog.besideScene(widget.store.sceneFilePath);
+    _loadEffects();
     widget.store.addListener(_onStore);
     widget.selection.addListener(_onSelection);
     widget.controller?.addListener(_onAgent);
@@ -97,6 +645,10 @@ class _InspectorPanelState extends State<InspectorPanel> {
     if (oldWidget.store != widget.store) {
       oldWidget.store.removeListener(_onStore);
       widget.store.addListener(_onStore);
+      _effects =
+          widget.effectLog ??
+          PatchEffectLog.besideScene(widget.store.sceneFilePath);
+      _loadEffects();
     }
     if (oldWidget.selection != widget.selection) {
       oldWidget.selection.removeListener(_onSelection);
@@ -554,10 +1106,22 @@ class _InspectorPanelState extends State<InspectorPanel> {
                             ),
                           ),
                       ]),
+                    if (kitIdOf(frame) == codingPatchProposalKitId)
+                      _patchPreview(frame),
+                    if (kitIdOf(frame) == codingReviewDecisionKitId)
+                      _patchReview(frame),
+                    if (kitIdOf(frame) == codingWriteScopeKitId)
+                      _writeScopePanel(frame),
+                    if (kitIdOf(frame) == codingApplyPatchKitId)
+                      _applyEffectPanel(frame),
                     if (llmBody == null &&
                         object.type != boxTypeId &&
                         !isWorldToolKit(object) &&
-                        kitIdOf(object) != codingRepositoryKitId)
+                        kitIdOf(object) != codingRepositoryKitId &&
+                        kitIdOf(object) != codingPatchProposalKitId &&
+                        kitIdOf(object) != codingReviewDecisionKitId &&
+                        kitIdOf(object) != codingApplyPatchKitId &&
+                        kitIdOf(object) != codingWriteScopeKitId)
                       _section('Content', _typeFields(object)),
                     if (llmBody != null)
                       _section('Tools', [

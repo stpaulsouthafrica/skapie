@@ -19,8 +19,10 @@ import 'package:skapie/canvas/keyboard_connect.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/app/conversation_kit_viewer.dart';
 import 'package:skapie/app/text_kit_editor.dart';
+import 'package:skapie/app/patch_diff_viewer.dart';
 import 'package:skapie/canvas/scene_object_layer.dart';
 import 'package:skapie/canvas/selection_controller.dart';
+import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
@@ -416,6 +418,25 @@ class CanvasViewportState extends State<CanvasViewport>
     _lastTapId = hit.id;
     _lastTapStamp = event.timeStamp;
     if (isDouble) {
+      final frame = kitFrameForSelection(
+        document: widget.store.document,
+        selectedId: hit.id,
+      );
+      if (frame != null && kitIdOf(frame) == codingPatchProposalKitId) {
+        final body = patchProposalBody(widget.store.document, frame.id);
+        final diff = body?.props['diff']?.toString() ?? '';
+        if (diff.isNotEmpty) {
+          widget.selection.cancelMove();
+          _dragKind = _DragKind.none;
+          showPatchDiffViewer(
+            context: context,
+            path: body!.props['path']?.toString() ?? '',
+            diff: diff,
+            proposalId: body.props[proposalIdProp]?.toString() ?? '',
+          );
+          return;
+        }
+      }
       final previewBody = _previewKitBody(hit);
       if (previewBody != null) {
         widget.selection.cancelMove();
@@ -1080,6 +1101,12 @@ class CanvasViewportState extends State<CanvasViewport>
 
   SceneObject? _previewKitBody(SceneObject hit) {
     final kitId = kitIdOf(hit);
+    if (kitId == codingPatchProposalKitId ||
+        kitId == codingReviewDecisionKitId ||
+        kitId == codingApplyPatchKitId ||
+        kitId == codingWriteScopeKitId) {
+      return null;
+    }
     if (!kitUsesTextPreview(kitId)) {
       return null;
     }
@@ -1123,6 +1150,13 @@ class CanvasViewportState extends State<CanvasViewport>
 
   bool _canInlineEdit(SceneObject object) {
     if (object.type != textTypeId) {
+      return false;
+    }
+    final kitId = kitIdOf(object);
+    if (kitId == codingPatchProposalKitId ||
+        kitId == codingReviewDecisionKitId ||
+        kitId == codingApplyPatchKitId ||
+        kitId == codingWriteScopeKitId) {
       return false;
     }
     if (isLlmKitObject(object) || kitUsesTextPreview(kitIdOf(object))) {

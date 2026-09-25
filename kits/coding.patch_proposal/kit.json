@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "coding.patch_proposal",
   "displayName": "Patch Proposal",
-  "description": "Structured proposal data. Not a tool.",
+  "description": "A read-only, one-file patch artifact with a focused diff preview.",
   "capabilities": [],
   "objects": [
     {

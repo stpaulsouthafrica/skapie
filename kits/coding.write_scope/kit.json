@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "coding.apply_patch",
-  "displayName": "Apply Patch",
-  "description": "Explicitly verifies and writes one file after Accept and a separate Write Scope grant.",
+  "id": "coding.write_scope",
+  "displayName": "Write Scope",
+  "description": "A separately selected folder with repository write access.",
   "capabilities": [],
   "objects": [
     {
@@ -12,8 +12,9 @@
       "width": 280,
       "height": 120,
       "props": {
-        "skapieKit": "coding.apply_patch",
-        "skapieRole": "frame"
+        "skapieKit": "coding.write_scope",
+        "skapieRole": "frame",
+        "writeScopePath": ""
       }
     },
     {
@@ -23,9 +24,9 @@
       "width": 256,
       "height": 48,
       "props": {
-        "content": "Verify and apply one accepted file change",
+        "content": "Choose a folder to grant write access",
         "fontSize": 13,
-        "skapieKit": "coding.apply_patch",
+        "skapieKit": "coding.write_scope",
         "skapieRole": "body"
       }
     }

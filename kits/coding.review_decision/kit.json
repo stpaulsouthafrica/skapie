@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "coding.review_decision",
   "displayName": "Review Decision",
-  "description": "A user-owned Accept or Reject. Connecting it does not apply.",
+  "description": "A settled user Accept or Reject. Reconsidering requires an explicit action.",
   "capabilities": [],
   "objects": [
     {

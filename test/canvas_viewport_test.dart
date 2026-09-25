@@ -502,53 +502,60 @@ void main() {
     );
   });
 
-  testWidgets('double-click a patch proposal opens a full-screen editor', (
+  testWidgets('review decision never opens a text editor on double-click', (
     tester,
   ) async {
     final store = SceneStore();
     final kitApi = createAppKitApi(store: store);
     kitApi.instantiate(
-      codingPatchProposalKitId,
-      origin: const Offset(-140, -75),
+      codingReviewDecisionKitId,
+      origin: const Offset(-140, -60),
     );
-    final selection = SelectionController();
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: CanvasViewport(
-            store: store,
-            kitApi: kitApi,
-            selection: selection,
-          ),
+          body: CanvasViewport(store: store, kitApi: kitApi),
         ),
       ),
     );
-
     final center = tester.getCenter(find.byType(CanvasViewport));
     await tester.tapAt(center);
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tapAt(center);
     await tester.pump();
-
-    expect(find.byKey(const Key('text-kit-editor')), findsOneWidget);
     expect(find.byKey(const Key('inline-text-edit')), findsNothing);
-    await tester.enterText(
-      find.byKey(const Key('text-kit-editor-field')),
-      'rename foo to bar',
-    );
-    await tester.tap(find.byKey(const Key('text-kit-editor-close')));
-    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('text-kit-editor')), findsNothing);
+  });
 
-    expect(
-      store.document.objects
-          .firstWhere(
-            (object) =>
-                object.props[skapieKitProp] == codingPatchProposalKitId &&
-                object.props[skapieRoleProp] == 'body',
-          )
-          .props['content'],
-      'rename foo to bar',
+  testWidgets('double-click proposal opens the dedicated read-only diff', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final ids = kitApi.instantiate(
+      codingPatchProposalKitId,
+      origin: const Offset(-140, -60),
     );
+    kitApi.updateProps(ids.last, {
+      'path': 'lib/sample.dart',
+      'diff': '--- a/lib/sample.dart\n+++ b/lib/sample.dart\n@@ -1 +1 @@\n-old\n+new\n',
+      'content': 'proposal',
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(store: store, kitApi: kitApi),
+        ),
+      ),
+    );
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.tapAt(center);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(center);
+    await tester.pump();
+    expect(find.byKey(const Key('patch-diff-viewer')), findsOneWidget);
+    expect(find.text('lib/sample.dart'), findsWidgets);
+    expect(find.byKey(const Key('text-kit-editor')), findsNothing);
   });
 
   testWidgets('double-click a conversation kit opens a chat view', (

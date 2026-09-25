@@ -128,6 +128,11 @@ String _preview(SceneDocument document, SceneCable cable, PortValue value) {
       return path.isEmpty
           ? 'No folder chosen. The grant is not live.'
           : 'Read access to $path';
+    case PortValue.writeScope:
+      final path = source?.props[writeScopePathProp]?.toString().trim() ?? '';
+      return path.isEmpty
+          ? 'No write folder chosen. The grant is not live.'
+          : 'Selected write scope: $path';
     case PortValue.patchProposal:
       final proposalFrame =
           (source != null && kitIdOf(source) == codingPatchProposalKitId)

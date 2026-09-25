@@ -10,6 +10,7 @@ import 'package:skapie/paint/kit_icon.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/patch/patch_board.dart';
 
 /// Below this zoom, kits read as a name and a status instead of port rows.
 const double kitOverviewZoom = 0.6;
@@ -133,10 +134,7 @@ class SceneObjectLayer extends StatelessWidget {
     final t = _overviewT;
     final kitChild = isKitObject(object) && role != 'frame';
     final hide =
-        isLlmBody ||
-        isPreviewBody ||
-        role == 'grant' ||
-        (t >= 1 && kitChild);
+        isLlmBody || isPreviewBody || role == 'grant' || (t >= 1 && kitChild);
     final paintedHeight = object.id == resizeFrameId && resizeHeight != null
         ? resizeHeight!
         : object.height;
@@ -467,40 +465,221 @@ class SceneObjectLayer extends StatelessWidget {
             ),
           ),
         if (kitIdOf(frame) == codingPatchProposalKitId)
-          Positioned.fill(
-            child: _previewFooter(
-              tokens,
-              zoom,
-              frame,
-              content: _bodyContent(frame, codingPatchProposalKitId),
-              leading: 'In',
-              trailing: 'Out',
-            ),
-          ),
+          Positioned.fill(child: _patchArtifactCard(tokens, zoom, frame)),
         if (kitIdOf(frame) == codingReviewDecisionKitId)
-          Positioned.fill(
-            child: _previewFooter(
-              tokens,
-              zoom,
-              frame,
-              content: _bodyContent(frame, codingReviewDecisionKitId),
-              leading: 'In',
-              trailing: 'Out',
-            ),
-          ),
+          Positioned.fill(child: _reviewArtifactCard(tokens, zoom, frame)),
         if (kitIdOf(frame) == codingApplyPatchKitId)
           Positioned.fill(
-            child: _previewFooter(
+            child: _artifactCard(
               tokens,
               zoom,
               frame,
-              content: _bodyContent(frame, codingApplyPatchKitId),
-              leading: 'In',
-              trailing: '',
+              icon: Icons.playlist_add_check_circle_outlined,
+              color: tokens.accent,
+              headline: 'Separate file action',
+              subtitle: 'Verify → write → observe',
+              leading: 'Review',
+              trailing: 'Write',
             ),
           ),
         if (kitIdOf(frame) == codingRepositoryKitId)
           _outputCaption(tokens, zoom, frame, label: 'In / Out'),
+        if (kitIdOf(frame) == codingWriteScopeKitId)
+          Positioned.fill(child: _writeScopeCard(tokens, zoom, frame)),
+      ],
+    );
+  }
+
+  SceneObject? _namedBody(SceneObject frame) {
+    for (final object in objects) {
+      if (object.props[skapieRoleProp] == 'body' &&
+          kitIdOf(object) == kitIdOf(frame) &&
+          kitChildBelongsToFrame(object, frame)) {
+        return object;
+      }
+    }
+    return null;
+  }
+
+  Widget _patchArtifactCard(
+    PaintTokens tokens,
+    double zoom,
+    SceneObject frame,
+  ) {
+    final body = _namedBody(frame);
+    final path = body?.props['path']?.toString() ?? '';
+    final diff = body?.props['diff']?.toString() ?? '';
+    final added = diff
+        .split('\n')
+        .where((line) => line.startsWith('+') && !line.startsWith('+++'))
+        .length;
+    final removed = diff
+        .split('\n')
+        .where((line) => line.startsWith('-') && !line.startsWith('---'))
+        .length;
+    return _artifactCard(
+      tokens,
+      zoom,
+      frame,
+      icon: Icons.description_outlined,
+      color: tokens.accent,
+      headline: path.isEmpty ? 'Waiting for a proposal' : path.split('/').last,
+      subtitle: path.isEmpty
+          ? 'A proposed file change will appear here'
+          : '+$added added    −$removed removed  ·  1 file',
+      leading: 'In',
+      trailing: 'Out',
+    );
+  }
+
+  Widget _reviewArtifactCard(
+    PaintTokens tokens,
+    double zoom,
+    SceneObject frame,
+  ) {
+    final reviewBody = _namedBody(frame);
+    final proposal = connectedProposalFrame(_preview, frame.id);
+    final proposalBody = proposal == null
+        ? null
+        : patchProposalBody(_preview, proposal.id);
+    final matches =
+        validPatchProposal(proposalBody) &&
+        reviewBody?.props[proposalIdProp] ==
+            proposalBody?.props[proposalIdProp] &&
+        reviewBody?.props[proposalFingerprintProp] ==
+            proposalBody?.props[proposalFingerprintProp];
+    final decision = matches
+        ? reviewBody?.props[reviewDecisionProp]?.toString() ?? ''
+        : '';
+    final accepted = decision == 'accept';
+    final rejected = decision == 'reject';
+    return _artifactCard(
+      tokens,
+      zoom,
+      frame,
+      icon: accepted
+          ? Icons.check_circle_outline
+          : rejected
+          ? Icons.cancel_outlined
+          : Icons.rule_outlined,
+      color: accepted
+          ? tokens.success
+          : rejected
+          ? tokens.danger
+          : tokens.accent,
+      headline: accepted
+          ? 'Accepted'
+          : rejected
+          ? 'Rejected'
+          : 'Awaiting review',
+      subtitle: accepted
+          ? 'Approved for a separate Apply'
+          : rejected
+          ? 'This proposal will not be applied'
+          : 'Inspect the diff, then decide',
+      leading: 'In',
+      trailing: 'Out',
+    );
+  }
+
+  Widget _writeScopeCard(PaintTokens tokens, double zoom, SceneObject frame) {
+    final path = frame.props[writeScopePathProp]?.toString() ?? '';
+    return _artifactCard(
+      tokens,
+      zoom,
+      frame,
+      icon: path.isEmpty ? Icons.lock_outline : Icons.folder_open_outlined,
+      color: path.isEmpty ? tokens.muted : tokens.accent,
+      headline: path.isEmpty ? 'No write folder' : path.split('/').last,
+      subtitle: path.isEmpty
+          ? 'Choose a folder in Inspector'
+          : 'Write access · separate grant',
+      leading: '',
+      trailing: 'Apply',
+    );
+  }
+
+  Widget _artifactCard(
+    PaintTokens tokens,
+    double zoom,
+    SceneObject frame, {
+    required IconData icon,
+    required Color color,
+    required String headline,
+    required String subtitle,
+    required String leading,
+    required String trailing,
+  }) {
+    return Stack(
+      children: [
+        Positioned(
+          left: 12 * zoom,
+          right: 12 * zoom,
+          top: 37 * zoom,
+          child: Row(
+            children: [
+              Container(
+                width: 32 * zoom,
+                height: 32 * zoom,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8 * zoom),
+                  border: Border.all(color: color.withValues(alpha: 0.48)),
+                ),
+                child: Icon(icon, size: 18 * zoom, color: color),
+              ),
+              SizedBox(width: 9 * zoom),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      headline,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: tokens.ink,
+                        fontSize: 13 * zoom,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 3 * zoom),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: color, fontSize: 10 * zoom),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Positioned(
+          left: 10 * zoom,
+          right: 10 * zoom,
+          bottom: 27 * zoom,
+          child: Container(height: zoom, color: tokens.hairline),
+        ),
+        Positioned(
+          left: 16 * zoom,
+          right: 16 * zoom,
+          bottom: 8 * zoom,
+          child: Row(
+            children: [
+              Text(
+                leading,
+                style: TextStyle(color: tokens.muted, fontSize: 11 * zoom),
+              ),
+              const Spacer(),
+              Text(
+                trailing,
+                style: TextStyle(color: tokens.muted, fontSize: 11 * zoom),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }

@@ -3,7 +3,9 @@ import FlutterMacOS
 
 class MainFlutterWindow: NSWindow {
   private let bookmarkKey = "SkapieRepositoryBookmarks"
+  private let writeBookmarkKey = "SkapieWriteScopeBookmarks"
   private var activeRepositories: [String: URL] = [:]
+  private var activeWriteScopes: [String: URL] = [:]
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -31,6 +33,21 @@ class MainFlutterWindow: NSWindow {
           return
         }
         result(self.restoreRepository(path))
+      case "chooseWriteDirectory":
+        self.chooseWriteDirectory(result)
+      case "restoreWriteDirectory":
+        guard let path = call.arguments as? String else {
+          result(false)
+          return
+        }
+        result(self.restoreWriteDirectory(path))
+      case "exportPatchProposal":
+        guard let args = call.arguments as? [String: String],
+              let name = args["name"], let text = args["text"] else {
+          result(FlutterError(code: "export_args", message: "Missing proposal", details: nil))
+          return
+        }
+        self.exportPatchProposal(name: name, text: text, result: result)
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -42,6 +59,89 @@ class MainFlutterWindow: NSWindow {
   deinit {
     for url in activeRepositories.values {
       url.stopAccessingSecurityScopedResource()
+    }
+    for url in activeWriteScopes.values {
+      url.stopAccessingSecurityScopedResource()
+    }
+  }
+
+  private func chooseWriteDirectory(_ result: @escaping FlutterResult) {
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.allowsMultipleSelection = false
+    panel.canCreateDirectories = false
+    panel.prompt = "Grant Write Access"
+    guard panel.runModal() == .OK, let url = panel.url else {
+      result(nil)
+      return
+    }
+    do {
+      let bookmark = try url.bookmarkData(
+        options: .withSecurityScope,
+        includingResourceValuesForKeys: nil,
+        relativeTo: nil
+      )
+      guard activateWriteScope(url) else {
+        result(FlutterError(code: "write_access", message: "Could not access selected folder for writing", details: nil))
+        return
+      }
+      var saved = UserDefaults.standard.dictionary(forKey: writeBookmarkKey) ?? [:]
+      saved[url.path] = bookmark
+      UserDefaults.standard.set(saved, forKey: writeBookmarkKey)
+      result(url.path)
+    } catch {
+      result(FlutterError(code: "write_bookmark", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func restoreWriteDirectory(_ path: String) -> Bool {
+    if activeWriteScopes[path] != nil { return true }
+    guard let saved = UserDefaults.standard.dictionary(forKey: writeBookmarkKey),
+          let bookmark = saved[path] as? Data else { return false }
+    do {
+      var stale = false
+      let url = try URL(
+        resolvingBookmarkData: bookmark,
+        options: .withSecurityScope,
+        relativeTo: nil,
+        bookmarkDataIsStale: &stale
+      )
+      guard url.path == path, activateWriteScope(url) else { return false }
+      if stale {
+        let updated = try url.bookmarkData(
+          options: .withSecurityScope,
+          includingResourceValuesForKeys: nil,
+          relativeTo: nil
+        )
+        var next = saved
+        next[path] = updated
+        UserDefaults.standard.set(next, forKey: writeBookmarkKey)
+      }
+      return true
+    } catch { return false }
+  }
+
+  private func activateWriteScope(_ url: URL) -> Bool {
+    if activeWriteScopes[url.path] != nil { return true }
+    guard url.startAccessingSecurityScopedResource() else { return false }
+    activeWriteScopes[url.path] = url
+    return true
+  }
+
+  private func exportPatchProposal(name: String, text: String, result: @escaping FlutterResult) {
+    let panel = NSSavePanel()
+    panel.nameFieldStringValue = URL(fileURLWithPath: name).lastPathComponent
+    panel.prompt = "Export Proposal"
+    guard panel.runModal() == .OK, let url = panel.url else {
+      result(nil)
+      return
+    }
+    do {
+      try text.write(to: url, atomically: true, encoding: .utf8)
+      result(url.path)
+    } catch {
+      result(FlutterError(code: "export_failed", message: error.localizedDescription, details: nil))
     }
   }
 

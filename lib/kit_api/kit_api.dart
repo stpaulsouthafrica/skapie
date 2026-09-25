@@ -21,6 +21,9 @@ const String proposePatchKitId = 'tools.propose_patch';
 const String codingPatchProposalKitId = 'coding.patch_proposal';
 const String codingReviewDecisionKitId = 'coding.review_decision';
 const String codingApplyPatchKitId = 'coding.apply_patch';
+const String codingWriteScopeKitId = 'coding.write_scope';
+const String writeScopePathProp = 'writeScopePath';
+const String writeScopePort = 'writeScope';
 const String proposalIdProp = 'proposalId';
 const String proposalFingerprintProp = 'fingerprint';
 const String reviewDecisionProp = 'decision';
@@ -581,6 +584,9 @@ String kitNameStem(String kitId) {
   }
   if (kitId == codingApplyPatchKitId) {
     return 'Apply Patch';
+  }
+  if (kitId == codingWriteScopeKitId) {
+    return 'Write Scope';
   }
   if (kitId.startsWith('harness.')) {
     return kitId.substring('harness.'.length);

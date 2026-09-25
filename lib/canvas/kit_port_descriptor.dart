@@ -23,6 +23,8 @@ enum KitPortKind {
   reviewIn,
   reviewOut,
   applyIn,
+  writeScopeOut,
+  applyWriteScope,
 }
 
 enum PortDirection { input, output }
@@ -49,6 +51,7 @@ enum PortValue {
   transcript('Transcript', PortRole.data),
   tool('Tool', PortRole.capability),
   repository('Repository', PortRole.grant),
+  writeScope('Write Scope', PortRole.grant),
   patchProposal('Proposal', PortRole.data),
   reviewDecision('Review', PortRole.data);
 
@@ -292,6 +295,28 @@ const List<KitPortSpec> applyPatchKitPorts = [
     value: PortValue.reviewDecision,
     placement: PortPlacement.footer(PortSide.left),
   ),
+  KitPortSpec(
+    id: writeScopePort,
+    kind: KitPortKind.applyWriteScope,
+    label: 'Write',
+    direction: PortDirection.input,
+    value: PortValue.writeScope,
+    placement: PortPlacement.middle(PortSide.left),
+    multiplicity: PortMultiplicity.one,
+  ),
+];
+
+const List<KitPortSpec> writeScopeKitPorts = [
+  KitPortSpec(
+    id: 'out',
+    kind: KitPortKind.writeScopeOut,
+    label: 'Apply',
+    direction: PortDirection.output,
+    value: PortValue.writeScope,
+    placement: PortPlacement.footer(PortSide.right),
+    liveProp: writeScopePathProp,
+    liveMessage: 'Choose a write folder',
+  ),
 ];
 
 const String _llmSink = 'sink';
@@ -363,6 +388,7 @@ const Map<String, List<KitPortSpec>> builtinKitPorts = {
   codingPatchProposalKitId: patchProposalKitPorts,
   codingReviewDecisionKitId: reviewDecisionKitPorts,
   codingApplyPatchKitId: applyPatchKitPorts,
+  codingWriteScopeKitId: writeScopeKitPorts,
 };
 
 final Map<KitPortKind, KitPortSpec> _specsByKind = {

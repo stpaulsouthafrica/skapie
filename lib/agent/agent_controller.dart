@@ -427,7 +427,23 @@ class AgentController extends ChangeNotifier {
                   int? elapsedMs,
                   String? error,
                 }) {
-                  if (gate.cancelled || !finished) {
+                  if (gate.cancelled) {
+                    return;
+                  }
+                  if (!finished) {
+                    // HTTP models emit their start through the request observer,
+                    // which also captures the actual request body.
+                    if (turnModel is OpenAiCompatibleAgentModel ||
+                        turnModel is OpenAiResponsesAgentModel ||
+                        turnModel is OpenAiMessagesAgentModel) {
+                      return;
+                    }
+                    _note(
+                      runId,
+                      RunEventKind.modelRequestStarted,
+                      callFacts,
+                      _modelRoute(bodyId),
+                    );
                     return;
                   }
                   _note(

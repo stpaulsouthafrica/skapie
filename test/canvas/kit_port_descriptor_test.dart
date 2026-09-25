@@ -47,6 +47,7 @@ void main() {
       origin: const Offset(400, 600),
     );
     kitApi.instantiate(codingApplyPatchKitId, origin: const Offset(800, 600));
+    kitApi.instantiate(codingWriteScopeKitId, origin: const Offset(800, 800));
     connectTextToLlm(
       kitApi: kitApi,
       textObjectId: text.first,

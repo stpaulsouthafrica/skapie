@@ -291,6 +291,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _add(codingReviewDecisionKitId);
       case 'add-apply-patch':
         _add(codingApplyPatchKitId);
+      case 'add-write-scope':
+        _add(codingWriteScopeKitId);
       case 'add-box':
         _add(boardBoxKitId);
       case 'add-text':
@@ -442,6 +444,10 @@ class _HomeScreenState extends State<HomeScreen> {
       const PopupMenuItem(
         value: codingApplyPatchKitId,
         child: Text('Apply Patch'),
+      ),
+      const PopupMenuItem(
+        value: codingWriteScopeKitId,
+        child: Text('Write Scope'),
       ),
       const PopupMenuItem(value: boardButtonKitId, child: Text('Button')),
       for (final kit in widget.kitApi.listKits())

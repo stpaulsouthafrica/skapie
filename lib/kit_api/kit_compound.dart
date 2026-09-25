@@ -34,7 +34,8 @@ bool kitUsesTextPreview(String? kitId) {
       kitId == harnessConversationKitId ||
       kitId == codingPatchProposalKitId ||
       kitId == codingReviewDecisionKitId ||
-      kitId == codingApplyPatchKitId;
+      kitId == codingApplyPatchKitId ||
+      kitId == codingWriteScopeKitId;
 }
 
 bool kitChildBelongsToFrame(SceneObject child, SceneObject frame) {

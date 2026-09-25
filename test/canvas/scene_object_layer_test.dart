@@ -416,7 +416,7 @@ void main() {
       ),
     );
 
-    expect(find.text('No proposal yet'), findsOneWidget);
+    expect(find.text('Waiting for a proposal'), findsOneWidget);
     expect(find.text('In'), findsOneWidget);
     expect(find.text('Out'), findsOneWidget);
   });
