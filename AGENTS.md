@@ -11,3 +11,4 @@ On every turn, name the layer first: KIT PACKAGE (`kits/<id>/`) or HOST/core (`l
 -No vibe slop. Keep any prose simple and informative. Do not be technical, write in plain terms.
 -At the end of every response, simply add a sheep emoji to acknowledge you read my rules.
 -Do not give me any fancy over engineered testing homework, keep the tests simple and straight forward.
+-Gracefully stop your work if the 5h usage drop to 5% or below.
