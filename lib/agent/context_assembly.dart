@@ -290,7 +290,7 @@ ContextAssembly assembleContext({
         layer: ContextLayer.tools,
         provenance: ContextProvenance.toolOutput,
         sourceKitId: frame == null ? tool.name : (kitIdOf(frame) ?? tool.name),
-        sourceId: frameId ?? '',
+        sourceId: tool.name,
         text: tool.description,
         order: ++order,
         reason: 'Cabled to Tools',
@@ -298,11 +298,15 @@ ContextAssembly assembleContext({
     );
   }
   for (final filtered in offer.filtered) {
+    final frameId = toolFrameIdForName(document, llmBodyId, filtered.name);
+    final frame = frameId == null ? null : document.objectById(frameId);
     exclusions.add(
       ContextExclusion(
         layer: ContextLayer.tools,
-        sourceKitId: filtered.name,
-        sourceId: '',
+        sourceKitId: frame == null
+            ? filtered.name
+            : (kitIdOf(frame) ?? filtered.name),
+        sourceId: filtered.name,
         reason: filtered.reason,
       ),
     );

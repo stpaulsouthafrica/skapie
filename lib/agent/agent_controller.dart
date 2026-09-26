@@ -526,7 +526,12 @@ class AgentController extends ChangeNotifier {
     final unavailable = <FilteredTool>[
       for (final exclusion in assembly.exclusions)
         if (exclusion.layer == ContextLayer.tools)
-          FilteredTool(name: exclusion.sourceKitId, reason: exclusion.reason),
+          FilteredTool(
+            name: exclusion.sourceId.isEmpty
+                ? exclusion.sourceKitId
+                : exclusion.sourceId,
+            reason: exclusion.reason,
+          ),
     ];
     final attached = <AgentTool>[];
     for (final tool in assembly.tools) {
@@ -544,15 +549,14 @@ class AgentController extends ChangeNotifier {
       'model': model ?? '',
       'provider': provider,
     };
-    if (attached.isEmpty) {
-      _note(
-        runId,
-        RunEventKind.contextAssembled,
-        contextProvenancePayload(assembly),
-        _modelRoute(bodyId),
-      );
-      await flushLedger();
-    }
+    _note(
+      runId,
+      RunEventKind.contextAssembled,
+      contextProvenancePayload(assembly),
+      _modelRoute(bodyId),
+    );
+    await flushLedger();
+    var modelRequests = 0;
     agentHttpRequestObserver = (request) {
       if (!gate.cancelled && !gate.paused) {
         _transition(runId, RunPhase.modelWait);
@@ -586,12 +590,18 @@ class AgentController extends ChangeNotifier {
                     if (!gate.cancelled && !gate.paused) {
                       _transition(runId, RunPhase.modelWait);
                     }
-                    _note(
-                      runId,
-                      RunEventKind.contextAssembled,
-                      contextProvenanceForMessages(messages, tools: tools),
-                      _modelRoute(bodyId),
-                    );
+                    // The first request is the board assembly already noted
+                    // above. Later requests add tool results, so note those.
+                    modelRequests++;
+                    if (modelRequests > 1) {
+                      _note(
+                        runId,
+                        RunEventKind.contextAssembled,
+                        contextProvenanceForMessages(messages, tools: tools),
+                        _modelRoute(bodyId),
+                      );
+                      await flushLedger();
+                    }
                     // HTTP models emit their start through the request observer,
                     // which also captures the actual request body.
                     if (turnModel is OpenAiCompatibleAgentModel ||

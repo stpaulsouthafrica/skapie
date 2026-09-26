@@ -231,6 +231,19 @@ void main() {
         RunEventKind.runCompleted,
       ],
     );
+
+    final contexts = controller
+        .latestRunFor(llm.last)!
+        .events
+        .where((event) => event.kind == RunEventKind.contextAssembled)
+        .toList();
+    expect(contexts, hasLength(2));
+    expect(contexts.first.payload['sources'], contains('tools:tools.list_kits'));
+    expect(
+      (contexts.last.payload['sources'] as List)
+          .any((source) => '$source'.startsWith('toolOutput:tool:')),
+      isTrue,
+    );
   });
 
   test('a failed model call ends as failed', () async {

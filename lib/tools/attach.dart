@@ -108,11 +108,13 @@ List<AgentTool> worldToolsForLlm({
   required String llmBodyId,
   RepositoryPermission repositoryPermission =
       const SystemRepositoryPermission(),
+  bool recordErrors = true,
 }) {
   return llmToolOffer(
     kitApi: kitApi,
     llmBodyId: llmBodyId,
     repositoryPermission: repositoryPermission,
+    recordErrors: recordErrors,
   ).tools;
 }
 

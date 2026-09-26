@@ -72,6 +72,7 @@ class _LlmRequestInformationState extends State<LlmRequestInformation> {
       attachedTools: worldToolsForLlm(
         kitApi: widget.kitApi,
         llmBodyId: widget.body.id,
+        recordErrors: false,
       ),
       presetId: runtime.presetId,
       baseUrl: runtime.baseUrl,
