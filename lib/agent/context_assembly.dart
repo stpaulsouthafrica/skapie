@@ -332,7 +332,9 @@ ContextAssembly assembleContext({
         sourceId: tool.name,
         text: tool.description,
         order: ++order,
-        reason: repositoryToolNames.contains(tool.name)
+        reason:
+            repositoryToolNames.contains(tool.name) ||
+                tool.name == proposePatchToolName
             ? 'Cabled to Tools; access checked at dispatch'
             : 'Cabled to Tools',
       ),
