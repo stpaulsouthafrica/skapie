@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -5,11 +6,26 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/run_checkpoint.dart';
+import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
+
+class _PendingModel implements AgentModel {
+  final started = Completer<void>();
+  final release = Completer<AgentModelReply>();
+
+  @override
+  Future<AgentModelReply> complete({
+    required List<AgentMessage> messages,
+    List<AgentTool> tools = const [],
+  }) {
+    started.complete();
+    return release.future;
+  }
+}
 
 class _SpyCheckpointStore extends RunCheckpointStore {
   _SpyCheckpointStore() : super(file: null);
@@ -203,6 +219,29 @@ void main() {
     );
     await reloaded.load();
     expect(reloaded.isDismissed(resumed.id), isTrue);
+  });
+
+  test('a resumed session counts carried turns against the limit', () async {
+    final session = AgentSession(
+      model: ScriptedAgentModel([const AgentModelReply(content: 'done')]),
+      kitApi: api,
+      limits: const RunLimits(modelTurns: 2),
+      startModelTurns: 2,
+    );
+    await expectLater(
+      session.sendUser('go'),
+      throwsA(
+        isA<RunLimitReached>().having((e) => e.name, 'name', 'model turns'),
+      ),
+    );
+  });
+
+  test('stop propagates to a waiting model', () async {
+    final gate = Completer<void>();
+    final session = AgentSession(model: _PendingModel(), kitApi: api);
+    final pending = session.sendUser('go', cancellation: gate.future);
+    gate.complete();
+    await expectLater(pending, throwsA(isA<AgentRunInterrupted>()));
   });
 
   test('an effect with no result reloads as uncertain', () async {

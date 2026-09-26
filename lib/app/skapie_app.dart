@@ -3,6 +3,8 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/agent/run_checkpoint.dart';
+import 'package:skapie/tools/patch/effect_recovery.dart';
+import 'package:skapie/tools/patch/patch_effect_log.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/home_screen.dart';
 import 'package:skapie/app/canvas_shortcut_settings.dart';
@@ -117,6 +119,9 @@ class _SkapieAppState extends State<SkapieApp> {
       checkpointStore: checkpointStore,
     );
     await nextController.loadLedger();
+    await reconcilePendingEffects(
+      PatchEffectLog.besideScene(nextStore.sceneFilePath),
+    );
     nextController.rememberCatalog(_controller.catalogModels);
     if (!mounted) {
       return;

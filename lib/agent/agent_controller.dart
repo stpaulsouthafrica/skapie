@@ -236,21 +236,25 @@ class AgentController extends ChangeNotifier {
   }
 
   /// Continue a paused or interrupted run. A new segment links to the old one.
+  /// Does nothing when the input is empty, so the offer stays.
   Future<void> resumeRun(String bodyId) async {
     if (runningBodyId != null) return;
     final runs = ledger.runsFor(bodyId);
     final previous = runs.isEmpty ? null : runs.last;
-    _dismissedRecovery.add(previous?.id ?? '');
     final checkpoint = previous == null
         ? null
         : checkpointStore?.forRun(previous.id);
     final prompt = llmCableInput(kitApi.store.document, bodyId).trim();
-    await _run(
-      prompt: prompt,
-      bodyId: bodyId,
-      resumedFrom: previous?.id,
-      checkpoint: checkpoint,
-    );
+    try {
+      await _run(
+        prompt: prompt,
+        bodyId: bodyId,
+        resumedFrom: previous?.id,
+        checkpoint: checkpoint,
+      );
+    } catch (_) {
+      // The kit shows the failure; leave the recovery offer in place.
+    }
   }
 
   /// Rerun against the current board and repository. A fresh run, no link.
@@ -445,26 +449,27 @@ class AgentController extends ChangeNotifier {
   );
 
   /// Selection-scoped vanilla completion onto one compound LLM kit body.
-  Future<void> sendUser(String text, {String? targetBodyId}) {
-    return _run(prompt: text.trim(), bodyId: targetBodyId?.trim() ?? '');
+  Future<void> sendUser(String text, {String? targetBodyId}) async {
+    await _run(prompt: text.trim(), bodyId: targetBodyId?.trim() ?? '');
   }
 
   /// Shared run start. Resume passes [resumedFrom] and a saved [checkpoint].
-  Future<void> _run({
+  /// Returns true when a run actually started.
+  Future<bool> _run({
     required String prompt,
     required String bodyId,
     String? resumedFrom,
     RunCheckpoint? checkpoint,
   }) async {
     if (runningBodyId != null) {
-      return;
+      return false;
     }
     if (prompt.isEmpty || bodyId.isEmpty) {
-      return;
+      return false;
     }
     final target = kitApi.store.document.objectById(bodyId);
     if (target == null) {
-      return;
+      return false;
     }
     runningBodyId = bodyId;
     final gate = _RunCancel();
@@ -534,7 +539,7 @@ class AgentController extends ChangeNotifier {
           'error': blockers.first.message,
           'category': 'invalidGraph',
         }, into);
-        return;
+        return false;
       }
       _note(run.id, RunEventKind.graphValidated, {'ok': true}, into);
       _saveCheckpoint(
@@ -624,9 +629,10 @@ class AgentController extends ChangeNotifier {
       notifyListeners();
     }
     if (failure != null && !gate.cancelled) {
-      if (gate.paused) return;
+      if (gate.paused) return true;
       Error.throwWithStackTrace(failure, failureTrace ?? StackTrace.current);
     }
+    return true;
   }
 
   RunRoute _modelRoute(String bodyId) {
@@ -809,6 +815,9 @@ class AgentController extends ChangeNotifier {
           tools: attached,
           limits: limits,
           maxToolIterations: limits.effectiveModelTurns,
+          startModelTurns: modelTurnsUsed,
+          startToolCalls: toolCallsUsed,
+          startOutputChars: outputCharsUsed,
           includeTools: true,
           systemPrompt: systemText.trim().isEmpty ? '' : systemText.trim(),
           history: [

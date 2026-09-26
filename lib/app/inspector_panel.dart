@@ -118,7 +118,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
     try {
       await _effects.load();
       // Settle any apply left in flight by a quit, against the files on disk.
-      await reconcilePendingApplies(_effects);
+      await reconcilePendingEffects(_effects);
       if (mounted) setState(() {});
     } catch (error) {
       if (mounted) {

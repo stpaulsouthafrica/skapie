@@ -216,8 +216,6 @@ class RunCheckpointStore {
     }
   }
 
-  List<RunCheckpoint> get checkpoints => List.unmodifiable(_byRun.values);
-
   RunCheckpoint? forRun(String runId) => _byRun[runId];
 
   /// True when the user already chose End for this run.
@@ -227,17 +225,6 @@ class RunCheckpointStore {
     await load();
     _dismissed.add(runId);
     await _persist();
-  }
-
-  RunCheckpoint? latestFor(String bodyId) {
-    RunCheckpoint? latest;
-    for (final checkpoint in _byRun.values) {
-      if (checkpoint.bodyId != bodyId) continue;
-      if (latest == null || checkpoint.at.isAfter(latest.at)) {
-        latest = checkpoint;
-      }
-    }
-    return latest;
   }
 
   Future<void> save(RunCheckpoint checkpoint) async {

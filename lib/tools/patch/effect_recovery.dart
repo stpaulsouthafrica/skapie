@@ -3,18 +3,20 @@ import 'dart:io';
 import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/tools/patch/patch_effect_log.dart';
 
-/// Apply records written before the file was touched. Their outcome is not yet
-/// known and must be reconciled against the repository before any retry.
-List<Map<String, Object?>> pendingApplyRecords(PatchEffectLog log) => [
+/// Apply or revert records written before the file was touched. Their outcome
+/// is not yet known and must be reconciled against the repository.
+List<Map<String, Object?>> pendingEffectRecords(PatchEffectLog log) => [
   for (final record in log.records)
-    if (record['kind'] == 'apply' && record['state'] == 'prepared') record,
+    if ((record['kind'] == 'apply' || record['kind'] == 'revert') &&
+        record['state'] == 'prepared')
+      record,
 ];
 
 enum PreparedOutcome { applied, notApplied, uncertain }
 
-/// Compare a prepared apply's expected and previous fingerprints to the file on
-/// disk. Reading the repository is the only way to know what happened.
-Future<PreparedOutcome> reconcilePreparedApply(
+/// Compare a prepared effect's expected and previous fingerprints to the file
+/// on disk. Reading the repository is the only way to know what happened.
+Future<PreparedOutcome> reconcilePreparedEffect(
   Map<String, Object?> record,
 ) async {
   final root = record['root']?.toString() ?? '';
@@ -39,10 +41,10 @@ Future<PreparedOutcome> reconcilePreparedApply(
 }
 
 /// Settle every prepared record and return how many were inspected.
-Future<int> reconcilePendingApplies(PatchEffectLog log) async {
-  final pending = pendingApplyRecords(log);
+Future<int> reconcilePendingEffects(PatchEffectLog log) async {
+  final pending = pendingEffectRecords(log);
   for (final record in pending) {
-    final outcome = await reconcilePreparedApply(record);
+    final outcome = await reconcilePreparedEffect(record);
     final state = switch (outcome) {
       PreparedOutcome.applied => 'applied',
       PreparedOutcome.notApplied => 'not_applied',

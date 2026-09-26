@@ -160,6 +160,9 @@ class AgentSession {
     this.includeTools = true,
     List<AgentTool>? tools,
     List<AgentMessage> history = const [],
+    this.startModelTurns = 0,
+    this.startToolCalls = 0,
+    this.startOutputChars = 0,
   }) : id = id ?? 'agent_${DateTime.now().microsecondsSinceEpoch}',
        _tools = tools ?? createWorldTools(kitApi),
        _messages = [
@@ -180,6 +183,11 @@ class AgentSession {
   final RunLimits limits;
   final bool includeTools;
   final List<AgentTool> _tools;
+
+  /// Counters carried from a checkpoint on resume. Limits include these.
+  final int startModelTurns;
+  final int startToolCalls;
+  final int startOutputChars;
   late final AgentToolDispatcher _dispatcher;
   final List<AgentMessage> _messages;
   final StreamController<AgentEvent> _events =
@@ -217,7 +225,7 @@ class AgentSession {
 
     final watch = Stopwatch()..start();
     var toolCalls = 0;
-    var outputChars = 0;
+    var outputChars = startOutputChars;
     final modelLimit = limits.effectiveModelTurns == 0
         ? 0
         : maxToolIterations == 0 ||
@@ -239,7 +247,7 @@ class AgentSession {
     }
 
     try {
-      for (var i = 0; ; i++) {
+      for (var i = startModelTurns; ; i++) {
         if (modelLimit > 0 && i >= modelLimit) {
           throw const RunLimitReached('model turns');
         }
@@ -247,16 +255,28 @@ class AgentSession {
         checkTime();
         await beforeModel?.call();
         stopIfCancelled();
-        await onPhase?.call(RunPhase.modelWait, i + 1, toolCalls);
+        await onPhase?.call(
+          RunPhase.modelWait,
+          i + 1,
+          startToolCalls + toolCalls,
+        );
         stopIfCancelled();
         checkTime();
         final request = model.complete(
           messages: List.unmodifiable(_messages),
           tools: includeTools ? List.unmodifiable(_tools) : const <AgentTool>[],
         );
-        final reply = await (limits.elapsed == Duration.zero
+        final raced = cancellation == null
             ? request
-            : request.timeout(
+            : Future.any<AgentModelReply>([
+                request,
+                cancellation.then<AgentModelReply>(
+                  (_) => throw const AgentRunInterrupted(),
+                ),
+              ]);
+        final reply = await (limits.elapsed == Duration.zero
+            ? raced
+            : raced.timeout(
                 limits.elapsed - watch.elapsed,
                 onTimeout: () => throw const RunLimitReached('elapsed time'),
               ));
@@ -289,11 +309,16 @@ class AgentSession {
         for (final call in calls) {
           stopIfCancelled();
           checkTime();
-          if (limits.toolCalls > 0 && toolCalls >= limits.toolCalls) {
+          if (limits.toolCalls > 0 &&
+              startToolCalls + toolCalls >= limits.toolCalls) {
             throw const RunLimitReached('tool calls');
           }
           toolCalls++;
-          await onPhase?.call(RunPhase.toolWait, i + 1, toolCalls);
+          await onPhase?.call(
+            RunPhase.toolWait,
+            i + 1,
+            startToolCalls + toolCalls,
+          );
           stopIfCancelled();
           final denial = await toolDenial?.call(call.name);
           stopIfCancelled();

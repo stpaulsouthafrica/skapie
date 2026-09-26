@@ -5,6 +5,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/agent/run_checkpoint.dart';
+import 'package:skapie/tools/patch/effect_recovery.dart';
+import 'package:skapie/tools/patch/patch_effect_log.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/skapie_app.dart';
@@ -175,5 +177,8 @@ Future<AgentController> bootstrapAgentController({
     checkpointStore: checkpointStore,
   );
   await controller.loadLedger();
+  await reconcilePendingEffects(
+    PatchEffectLog.besideScene(kitApi.store.sceneFilePath),
+  );
   return controller;
 }

@@ -27,8 +27,8 @@ void main() {
       'expectedFingerprint': expected,
     });
 
-    expect(pendingApplyRecords(log), hasLength(1));
-    expect(await reconcilePendingApplies(log), 1);
+    expect(pendingEffectRecords(log), hasLength(1));
+    expect(await reconcilePendingEffects(log), 1);
     expect(log.records.single['state'], 'applied');
 
     // A file still holding the old bytes is safe: nothing was written.
@@ -42,7 +42,7 @@ void main() {
       'beforeFingerprint': before,
       'expectedFingerprint': expected,
     });
-    await reconcilePendingApplies(log);
+    await reconcilePendingEffects(log);
     expect(
       log.records.firstWhere((r) => r['id'] == 'e2')['state'],
       'not_applied',
@@ -59,7 +59,7 @@ void main() {
       'beforeFingerprint': before,
       'expectedFingerprint': expected,
     });
-    await reconcilePendingApplies(log);
+    await reconcilePendingEffects(log);
     expect(
       log.records.firstWhere((r) => r['id'] == 'e3')['state'],
       'write_uncertain',
