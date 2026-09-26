@@ -631,6 +631,22 @@ String _detailValue(Object? value) {
   return text.substring(0, runPayloadTextLimit);
 }
 
+/// Read-only replay of a stored run. No process runs for this.
+String formatRunReplay(RunRecord run) {
+  final buffer = StringBuffer('Run ${run.id}');
+  if (run.resumedFrom != null) {
+    buffer.write(' · resumed from ${run.resumedFrom}');
+  }
+  buffer.write('\nStatus: ${run.status.name}');
+  for (final event in run.events) {
+    buffer.write('\n${runEventSummary(event)}');
+    for (final line in runEventDetailLines(event)) {
+      buffer.write('\n   $line');
+    }
+  }
+  return buffer.toString();
+}
+
 String runEventLabel(RunEventKind kind) => switch (kind) {
   RunEventKind.runRequested => 'Run requested',
   RunEventKind.graphValidated => 'Graph validated',

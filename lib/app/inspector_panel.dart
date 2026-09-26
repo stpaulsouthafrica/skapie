@@ -1826,6 +1826,51 @@ class _InspectorPanelState extends State<InspectorPanel> {
     );
   }
 
+  /// Replay, Resume, and Rerun mean three different things. Keep them apart.
+  /// Replay only looks. Resume continues a checkpoint. Rerun starts fresh.
+  Widget _runActions(
+    String bodyId,
+    RunRecord run,
+    AgentController controller,
+    PaintTokens tokens,
+  ) {
+    final resumable =
+        (run.status == RunStatus.paused ||
+            run.status == RunStatus.interrupted) &&
+        controller.checkpointStore?.forRun(run.id) != null;
+    return Wrap(
+      key: const Key('run-actions'),
+      spacing: 4,
+      children: [
+        TextButton(
+          key: const Key('run-action-replay'),
+          onPressed: () => showFullScreenTextEditor(
+            context: context,
+            title: 'Replay · ${run.id}',
+            text: formatRunReplay(run),
+            readOnly: true,
+            syntax: EditorSyntax.plain,
+            surfaceKey: const Key('run-replay-fullscreen'),
+            closeKey: const Key('run-replay-close'),
+          ),
+          child: Text('Replay', style: TextStyle(color: tokens.accent)),
+        ),
+        TextButton(
+          key: const Key('run-action-resume'),
+          onPressed: resumable
+              ? () => controller.resumeRun(bodyId, fromRunId: run.id)
+              : null,
+          child: Text('Resume', style: TextStyle(color: tokens.accent)),
+        ),
+        TextButton(
+          key: const Key('run-action-rerun'),
+          onPressed: () => controller.rerunRun(bodyId),
+          child: Text('Rerun', style: TextStyle(color: tokens.muted)),
+        ),
+      ],
+    );
+  }
+
   Widget _runEvidence(String bodyId, AgentController controller) {
     final runs = controller.ledger.runsFor(bodyId);
     RunRecord? run;
@@ -1931,6 +1976,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
                 ],
               ),
         children: [
+          if (run != null) _runActions(bodyId, run, controller, tokens),
           if (controller.ledger.historyWarning)
             Text(
               'Run history is large. Older runs are kept.',

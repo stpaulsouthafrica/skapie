@@ -237,10 +237,12 @@ class AgentController extends ChangeNotifier {
 
   /// Continue a paused or interrupted run. A new segment links to the old one.
   /// Does nothing when the input is empty, so the offer stays.
-  Future<void> resumeRun(String bodyId) async {
+  Future<void> resumeRun(String bodyId, {String? fromRunId}) async {
     if (runningBodyId != null) return;
     final runs = ledger.runsFor(bodyId);
-    final previous = runs.isEmpty ? null : runs.last;
+    final previous = fromRunId == null
+        ? (runs.isEmpty ? null : runs.last)
+        : ledger.runById(fromRunId);
     final checkpoint = previous == null
         ? null
         : checkpointStore?.forRun(previous.id);

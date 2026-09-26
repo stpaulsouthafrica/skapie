@@ -244,6 +244,21 @@ void main() {
     await expectLater(pending, throwsA(isA<AgentRunInterrupted>()));
   });
 
+  test('rerun starts a fresh run without a resume link', () async {
+    final controller = buildController();
+    await controller.sendUser('one', targetBodyId: llmBody);
+    await controller.flushLedger();
+    final first = controller.latestRunFor(llmBody)!;
+    expect(first.resumedFrom, isNull);
+
+    await controller.rerunRun(llmBody);
+    await controller.flushLedger();
+    final second = controller.latestRunFor(llmBody)!;
+    expect(second.id, isNot(first.id));
+    expect(second.resumedFrom, isNull);
+    expect(second.status, RunStatus.completed);
+  });
+
   test('an effect with no result reloads as uncertain', () async {
     final dir = await Directory.systemTemp.createTemp('skapie-uncertain-');
     addTearDown(() => dir.delete(recursive: true));
