@@ -108,8 +108,11 @@ class _ConversationKitViewer extends StatelessWidget {
         if (turns.length > 2)
           TextButton(
             key: const Key('conversation-kit-compact'),
-            onPressed: () =>
-                compactOldestTurns(kitApi: kitApi, bodyId: bodyId),
+            onPressed: () => compactOldestTurns(
+              kitApi: kitApi,
+              bodyId: bodyId,
+              turns: turns,
+            ),
             child: Text('Compact', style: TextStyle(color: tokens.accent)),
           ),
         if (turns.isNotEmpty)

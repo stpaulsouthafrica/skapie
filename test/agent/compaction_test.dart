@@ -39,7 +39,17 @@ void main() {
       ],
     });
 
-    expect(compactOldestTurns(kitApi: api, bodyId: conversation.last, keep: 2), true);
+    expect(
+      compactOldestTurns(
+        kitApi: api,
+        bodyId: conversation.last,
+        turns: conversationTurnsOf(
+          api.store.document.objectById(conversation.last)!,
+        ),
+        keep: 2,
+      ),
+      true,
+    );
     final body = api.store.document.objectById(conversation.last)!;
     final compaction = conversationCompactionOf(body)!;
     expect(compaction.fromTurn, 0);
@@ -91,7 +101,14 @@ void main() {
       ],
     });
     expect(
-      compactOldestTurns(kitApi: api, bodyId: conversation.last, keep: 2),
+      compactOldestTurns(
+        kitApi: api,
+        bodyId: conversation.last,
+        turns: conversationTurnsOf(
+          api.store.document.objectById(conversation.last)!,
+        ),
+        keep: 2,
+      ),
       true,
     );
 
@@ -107,8 +124,7 @@ void main() {
     expect(history.map((turn) => turn.content), ['new ask', 'new answer']);
   });
 
-  test('a read result becomes a bounded excerpt with a line range', () {
-    final excerpt = contextExcerptFromRead(
+  test('a read result becomes a bounded excerpt with a line range', () {    final excerpt = contextExcerptFromRead(
       callId: 'c1',
       toolName: 'repo_read_file',
       result: const {
@@ -219,6 +235,42 @@ void main() {
     final item = assembly.itemsFor(ContextLayer.excerpts).single;
     expect(item.sourceRange, 'note.txt:1-3');
     expect(item.provenance, ContextProvenance.repositoryText);
+  });
+
+  test('excerpts past the budget are omitted with a reason', () {
+    final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final big = 'x' * (contextExcerptCharBudget ~/ 2);
+    final excerpts = [
+      for (var i = 0; i < 3; i++)
+        ContextExcerpt(
+          toolName: 'repo_read_file',
+          sourceKitId: 'tools.repo_read_file',
+          sourceId: 'c$i',
+          text: big,
+          path: 'file$i.txt',
+          lineStart: 1,
+          lineEnd: 5,
+        ),
+    ];
+    final assembly = assembleContext(
+      kitApi: api,
+      llmBodyId: llm.last,
+      taskInput: 'go',
+      excerpts: excerpts,
+    );
+    expect(assembly.itemsFor(ContextLayer.excerpts), hasLength(2));
+    expect(assembly.omittedExcerpts, 1);
+    expect(assembly.isTruncated, isTrue);
+    expect(
+      assembly.exclusions.any(
+        (item) => item.reason.contains('excerpt budget'),
+      ),
+      isTrue,
+    );
+    expect(
+      contextProvenancePayload(assembly)['omittedExcerpts'],
+      1,
+    );
   });
 }
 

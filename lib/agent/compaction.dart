@@ -1,4 +1,3 @@
-import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
@@ -103,14 +102,10 @@ void clearConversationCompaction({
 bool compactOldestTurns({
   required KitApi kitApi,
   required String bodyId,
+  required List<ConversationTurn> turns,
   int keep = 2,
   int perTurn = 140,
 }) {
-  final body = kitApi.store.document.objectById(bodyId);
-  if (body == null) {
-    return false;
-  }
-  final turns = conversationTurnsOf(body);
   if (turns.length <= keep) {
     return false;
   }

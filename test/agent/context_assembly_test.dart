@@ -54,7 +54,7 @@ void main() {
 
     final toolItem = assembly.itemsFor(ContextLayer.tools).single;
     expect(toolItem.sourceRange, 'tools.list_kits');
-    expect(toolItem.provenance, ContextProvenance.toolOutput);
+    expect(toolItem.provenance, ContextProvenance.toolDefinition);
     expect(assembly.tools.map((tool) => tool.name), contains('list_kits'));
   });
 

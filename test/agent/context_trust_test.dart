@@ -74,7 +74,7 @@ void main() {
     expect(byLayer[ContextLayer.instructions], {
       ContextProvenance.boardInstruction,
     });
-    expect(byLayer[ContextLayer.tools], {ContextProvenance.toolOutput});
+    expect(byLayer[ContextLayer.tools], {ContextProvenance.toolDefinition});
     expect(byLayer[ContextLayer.excerpts], {
       ContextProvenance.repositoryText,
     });

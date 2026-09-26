@@ -240,7 +240,7 @@ void main() {
     expect(contexts, hasLength(2));
     expect(
       contexts.first.payload['sources'],
-      contains('toolOutput:tools:tools.list_kits'),
+      contains('toolDefinition:tools:tools.list_kits'),
     );
     expect(
       (contexts.last.payload['sources'] as List)

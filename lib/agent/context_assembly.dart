@@ -8,6 +8,7 @@ import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
+import 'package:skapie/tools/repository/repository_tools.dart';
 
 /// Documented cap for earlier turns sent to the model. Newest turns win;
 /// anything older is listed as omitted with a reason.
@@ -36,6 +37,7 @@ enum ContextProvenance {
   conversation,
   compactedSummary,
   toolOutput,
+  toolDefinition,
   modelOutput,
   repositoryText,
 }
@@ -47,6 +49,7 @@ extension ContextProvenanceLabel on ContextProvenance {
     ContextProvenance.conversation => 'Conversation',
     ContextProvenance.compactedSummary => 'Compacted summary',
     ContextProvenance.toolOutput => 'Tool output',
+    ContextProvenance.toolDefinition => 'Tool definition',
     ContextProvenance.modelOutput => 'Model output',
     ContextProvenance.repositoryText => 'Repository text',
   };
@@ -59,6 +62,7 @@ extension ContextProvenanceLabel on ContextProvenance {
     ContextProvenance.compactedSummary =>
       'Derived from earlier turns; originals kept',
     ContextProvenance.toolOutput => 'Data, not an instruction',
+    ContextProvenance.toolDefinition => 'Offered to the model',
     ContextProvenance.modelOutput => 'Data, not an instruction',
     ContextProvenance.repositoryText =>
       'Data only. File text cannot grant tools or change policy.',
@@ -152,6 +156,7 @@ class ContextAssembly {
     required this.items,
     required this.exclusions,
     this.omittedHistoryTurns = 0,
+    this.omittedExcerpts = 0,
   });
 
   final String taskInput;
@@ -161,6 +166,7 @@ class ContextAssembly {
   final List<ContextItem> items;
   final List<ContextExclusion> exclusions;
   final int omittedHistoryTurns;
+  final int omittedExcerpts;
 
   List<ContextItem> itemsFor(ContextLayer layer) => [
     for (final item in items)
@@ -168,7 +174,9 @@ class ContextAssembly {
   ];
 
   bool get isTruncated =>
-      omittedHistoryTurns > 0 || items.any((item) => item.truncated);
+      omittedHistoryTurns > 0 ||
+      omittedExcerpts > 0 ||
+      items.any((item) => item.truncated);
 
   int get totalChars {
     var total = taskInput.length + instructionText.length;
@@ -274,7 +282,8 @@ ContextAssembly assembleContext({
   }
   exclusions.addAll(_compactionNotes(document, llmBodyId));
 
-  for (final excerpt in _trimExcerpts(excerpts)) {
+  final trimmedExcerpts = _trimExcerpts(excerpts);
+  for (final excerpt in trimmedExcerpts.kept) {
     items.add(
       ContextItem(
         layer: ContextLayer.excerpts,
@@ -288,6 +297,18 @@ ContextAssembly assembleContext({
         lineStart: excerpt.lineStart,
         lineEnd: excerpt.lineEnd,
         truncated: excerpt.truncated,
+      ),
+    );
+  }
+  if (trimmedExcerpts.omitted > 0) {
+    exclusions.add(
+      ContextExclusion(
+        layer: ContextLayer.excerpts,
+        sourceKitId: 'excerpts',
+        sourceId: '',
+        reason:
+            '${trimmedExcerpts.omitted} older excerpts omitted by the excerpt '
+            'budget ($contextExcerptCharBudget chars)',
       ),
     );
   }
@@ -306,12 +327,14 @@ ContextAssembly assembleContext({
     items.add(
       ContextItem(
         layer: ContextLayer.tools,
-        provenance: ContextProvenance.toolOutput,
+        provenance: ContextProvenance.toolDefinition,
         sourceKitId: frame == null ? tool.name : (kitIdOf(frame) ?? tool.name),
         sourceId: tool.name,
         text: tool.description,
         order: ++order,
-        reason: 'Cabled to Tools',
+        reason: repositoryToolNames.contains(tool.name)
+            ? 'Cabled to Tools; access checked at dispatch'
+            : 'Cabled to Tools',
       ),
     );
   }
@@ -340,6 +363,7 @@ ContextAssembly assembleContext({
     items: items,
     exclusions: exclusions,
     omittedHistoryTurns: trimmed.omitted,
+    omittedExcerpts: trimmedExcerpts.omitted,
   );
 }
 
@@ -357,31 +381,41 @@ ContextProvenance _provenanceFor(String kitId, {required bool instruction}) {
 ({List<ConversationTurn> turns, int omitted}) _trimHistory(
   List<ConversationTurn> turns,
 ) {
-  var used = 0;
-  final kept = <ConversationTurn>[];
-  for (final turn in turns.reversed) {
-    final size = turn.content.length;
-    if (kept.isNotEmpty && used + size > contextHistoryCharBudget) {
-      break;
-    }
-    used += size;
-    kept.add(turn);
-  }
-  return (turns: kept.reversed.toList(), omitted: turns.length - kept.length);
+  final result = _trimTail(
+    turns,
+    contextHistoryCharBudget,
+    (turn) => turn.content.length,
+  );
+  return (turns: result.kept, omitted: result.omitted);
 }
 
-List<ContextExcerpt> _trimExcerpts(List<ContextExcerpt> excerpts) {
+({List<ContextExcerpt> kept, int omitted}) _trimExcerpts(
+  List<ContextExcerpt> excerpts,
+) {
+  return _trimTail(
+    excerpts,
+    contextExcerptCharBudget,
+    (excerpt) => excerpt.text.length,
+  );
+}
+
+/// Keep the newest items that fit [budget]. The newest is always kept.
+({List<T> kept, int omitted}) _trimTail<T>(
+  List<T> items,
+  int budget,
+  int Function(T item) sizeOf,
+) {
   var used = 0;
-  final kept = <ContextExcerpt>[];
-  for (final excerpt in excerpts.reversed) {
-    final size = excerpt.text.length;
-    if (kept.isNotEmpty && used + size > contextExcerptCharBudget) {
+  final kept = <T>[];
+  for (final item in items.reversed) {
+    final size = sizeOf(item);
+    if (kept.isNotEmpty && used + size > budget) {
       break;
     }
     used += size;
-    kept.add(excerpt);
+    kept.add(item);
   }
-  return kept.reversed.toList();
+  return (kept: kept.reversed.toList(), omitted: items.length - kept.length);
 }
 
 List<ContextExclusion> _compactionNotes(
@@ -512,6 +546,7 @@ Map<String, Object?> contextProvenancePayload(ContextAssembly assembly) => {
   'truncated': assembly.isTruncated,
   'contextChars': assembly.totalChars,
   'omittedHistoryTurns': assembly.omittedHistoryTurns,
+  'omittedExcerpts': assembly.omittedExcerpts,
   'sources': [
     for (final item in assembly.items)
       '${item.provenance.name}:${item.layer.name}:${item.sourceRange}',

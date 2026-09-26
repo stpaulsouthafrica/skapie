@@ -21,14 +21,8 @@ String formatConversationTranscript(List<ConversationTurn> turns) {
 }
 
 void clearConversation({required KitApi kitApi, required String bodyId}) {
-  kitApi.updateProps(bodyId, {
-    turnsProp: <Object?>[],
-    'content': '',
-    compactedSummaryProp: '',
-    compactedFromProp: 0,
-    compactedToProp: 0,
-    compactedAtProp: '',
-  });
+  kitApi.updateProps(bodyId, {turnsProp: <Object?>[], 'content': ''});
+  clearConversationCompaction(kitApi: kitApi, bodyId: bodyId);
 }
 
 SceneObject? conversationBody(SceneDocument document, SceneObject frame) {
