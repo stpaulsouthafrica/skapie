@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/model_refusal.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/providers/vanilla_extract.dart';
 
@@ -184,6 +185,7 @@ Map<String, Object?> responsesAgentBody({
 }
 
 AgentModelReply responsesReplyFromBody(Map<dynamic, dynamic> body) {
+  rejectResponsesRefusal(body);
   final text = extractResponsesOutputText(body);
   final output = body['output'];
   if (output is! List) {

@@ -66,7 +66,7 @@ class RunLimits {
   final bool extraTurnAfterFailedCheck;
 
   int get effectiveModelTurns =>
-      modelTurns + (extraTurnAfterFailedCheck ? 1 : 0);
+      modelTurns == 0 ? 0 : modelTurns + (extraTurnAfterFailedCheck ? 1 : 0);
 
   Map<String, Object?> toJson() => {
     'modelTurns': modelTurns,
@@ -87,7 +87,7 @@ class RunLimitReached implements Exception {
 
 int _bounded(Object? value, int fallback, int maximum) {
   final parsed = value is int ? value : int.tryParse('$value');
-  return parsed == null ? fallback : parsed.clamp(1, maximum);
+  return parsed == null ? fallback : parsed.clamp(0, maximum);
 }
 
 /// A Run Control affects only the LLM it is cabled to. Existing boards use

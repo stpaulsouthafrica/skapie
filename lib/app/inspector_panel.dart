@@ -1990,6 +1990,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
                 AgentToolActivityState.running => 'Running',
                 AgentToolActivityState.completed => 'Completed',
                 AgentToolActivityState.failed => 'Failed',
+                AgentToolActivityState.uncertain => 'Outcome uncertain',
               }, style: TextStyle(color: tokens.muted, fontSize: 11)),
               children: [
                 Align(

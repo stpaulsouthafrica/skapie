@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/agent/model_refusal.dart';
 import 'package:skapie/agent/run_control.dart';
 
 enum RunErrorKind {
@@ -18,6 +19,7 @@ enum RunErrorKind {
 }
 
 RunErrorKind classifyRunError(Object error) {
+  if (error is ModelRefusalException) return RunErrorKind.modelRefusal;
   if (error is RunLimitReached) return RunErrorKind.limit;
   if (error is TimeoutException) return RunErrorKind.timeout;
   if (error is SocketException ||

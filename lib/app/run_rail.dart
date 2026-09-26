@@ -72,6 +72,16 @@ class _RunRailState extends State<RunRail> {
         ? Duration.zero
         : run.events.last.at.difference(run.events.first.at);
     final remaining = limits.elapsed - elapsed;
+    final turnLimit = limits.effectiveModelTurns == 0
+        ? 'off'
+        : '${limits.effectiveModelTurns}';
+    final toolLimit = limits.toolCalls == 0 ? 'off' : '${limits.toolCalls}';
+    final outputRemaining = limits.outputChars == 0
+        ? 'output limit off'
+        : '${(limits.outputChars - chars).clamp(0, limits.outputChars)} chars left';
+    final timeRemaining = limits.elapsed == Duration.zero
+        ? 'time limit off'
+        : '${remaining.inSeconds.clamp(0, limits.elapsed.inSeconds)}s left';
     final state = active
         ? switch (controller.runPhase) {
             RunPhase.validating => 'Validating',
@@ -87,11 +97,11 @@ class _RunRailState extends State<RunRail> {
         .firstOrNull;
     final reason = stop?.payload['limit'] ?? stop?.payload['category'];
     return Text(
-      '$state · turn $turns/${limits.effectiveModelTurns} · '
-      'tools $calls/${limits.toolCalls} · '
-      '${(limits.outputChars - chars).clamp(0, limits.outputChars)} chars left · '
+      '$state · turn $turns/$turnLimit · '
+      'tools $calls/$toolLimit · '
+      '$outputRemaining · '
       '${elapsed.inSeconds}s elapsed · '
-      '${remaining.inSeconds.clamp(0, limits.elapsed.inSeconds)}s left'
+      '$timeRemaining'
       '${reason == null ? '' : ' · $reason'}',
       key: const Key('run-rail'),
       style: Theme.of(context).textTheme.bodySmall,

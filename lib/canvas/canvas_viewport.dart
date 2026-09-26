@@ -587,6 +587,13 @@ class CanvasViewportState extends State<CanvasViewport>
     _lastTapStamp = event.timeStamp;
     if (isDouble &&
         hitFrame != null &&
+        kitIdOf(hitFrame) == harnessRunControlKitId) {
+      widget.selection.select(hitFrame.id);
+      _dragKind = _DragKind.none;
+      return;
+    }
+    if (isDouble &&
+        hitFrame != null &&
         (kitIdOf(hitFrame) == codingRepositoryKitId ||
             kitIdOf(hitFrame) == codingWriteScopeKitId)) {
       widget.selection.select(hitFrame.id);

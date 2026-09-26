@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/model_refusal.dart';
 
 class AgentHttpException implements Exception {
   AgentHttpException(this.message, {this.statusCode, this.body, this.url});
@@ -161,6 +162,7 @@ Map<String, Object?> openAiChatCompletionBody({
 }
 
 AgentModelReply openaiReplyFromMessage(Map<String, Object?> message) {
+  rejectMessageRefusal(message);
   final rawCalls = message['tool_calls'];
   final content = message['content'];
   final text = content is String ? content : '';
@@ -313,6 +315,7 @@ class OpenAiCompatibleAgentModel implements AgentModel {
     if (choice is! Map) {
       throw AgentHttpException('Invalid choice in chat completions response');
     }
+    rejectChatRefusal(choice);
     final message = choice['message'];
     if (message is! Map) {
       throw AgentHttpException('Invalid message in chat completions response');

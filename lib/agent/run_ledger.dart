@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 /// Schema for [RunRecord] and [RunEvent]. Bump when the fields change.
-const int runRecordSchemaVersion = 3;
+const int runRecordSchemaVersion = 4;
 
 /// Longest string stored inside one event. Longer text is cut and marked.
 const int runPayloadTextLimit = 280;
@@ -34,6 +34,7 @@ enum RunEventKind {
   modelRequestFinished,
   toolCallStarted,
   toolCallFinished,
+  toolCallUncertain,
   runCompleted,
   runFailed,
   runInterrupted,
@@ -549,6 +550,7 @@ String runEventLabel(RunEventKind kind) => switch (kind) {
   RunEventKind.modelRequestFinished => 'Model request finished',
   RunEventKind.toolCallStarted => 'Tool call started',
   RunEventKind.toolCallFinished => 'Tool call finished',
+  RunEventKind.toolCallUncertain => 'Tool outcome uncertain',
   RunEventKind.runCompleted => 'Run completed',
   RunEventKind.runFailed => 'Run failed',
   RunEventKind.runInterrupted => 'Run interrupted',

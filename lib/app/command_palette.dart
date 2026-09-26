@@ -69,6 +69,11 @@ const List<CommandAction> defaultCommandActions = [
     label: 'Add Check Result',
     icon: KitIconKind.box,
   ),
+  CommandAction(
+    id: 'add-run-control',
+    label: 'Add Run Control',
+    icon: KitIconKind.button,
+  ),
   CommandAction(id: 'settings', label: 'Settings', icon: KitIconKind.settings),
 ];
 

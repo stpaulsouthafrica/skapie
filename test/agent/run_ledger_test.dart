@@ -345,6 +345,39 @@ void main() {
     await dir.delete(recursive: true);
   });
 
+  test('uncertain tool result survives a ledger reload', () async {
+    final dir = await Directory.systemTemp.createTemp('skapie-uncertain-tool');
+    addTearDown(() => dir.delete(recursive: true));
+    final file = RunLedgerFile(File('${dir.path}/board.json.runs.json'));
+    final ledger = RunLedger();
+    final run = ledger.begin(bodyId: 'llm');
+    ledger.append(run.id, RunEventKind.toolCallStarted, {
+      'name': 'slow',
+      'callId': 'call-1',
+    });
+    ledger.append(run.id, RunEventKind.toolCallUncertain, {
+      'name': 'slow',
+      'callId': 'call-1',
+      'reason': 'Elapsed time limit reached',
+    });
+    ledger.append(run.id, RunEventKind.runFailed, {'limit': 'elapsed time'});
+    await file.write(ledger);
+
+    final loaded = RunLedger();
+    await file.loadInto(loaded);
+    final saved = loaded.runs.single;
+    expect(saved.status, RunStatus.failed);
+    expect(
+      saved.events.map((event) => event.kind),
+      containsAllInOrder([
+        RunEventKind.toolCallStarted,
+        RunEventKind.toolCallUncertain,
+        RunEventKind.runFailed,
+      ]),
+    );
+    expect(saved.events[1].payload['callId'], 'call-1');
+  });
+
   test('a large history warns and does not drop events', () {
     final ledger = RunLedger(historyWarnBytes: 80);
     final run = ledger.begin(bodyId: 'llm');

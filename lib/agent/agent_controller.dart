@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/conversation_kit.dart';
@@ -23,7 +25,7 @@ import 'package:skapie/tools/attach.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 import 'package:skapie/tools/repository/repository_tools.dart';
 
-enum AgentToolActivityState { running, completed, failed }
+enum AgentToolActivityState { running, completed, failed, uncertain }
 
 class AgentToolActivity {
   const AgentToolActivity({
@@ -135,6 +137,7 @@ class AgentController extends ChangeNotifier {
       return;
     }
     gate.cancelled = true;
+    gate.signal.complete();
     _transition(runId, RunPhase.cancelling);
   }
 
@@ -143,6 +146,7 @@ class AgentController extends ChangeNotifier {
     final runId = _activeRunId;
     if (gate == null || runId == null || gate.cancelled || gate.paused) return;
     gate.paused = true;
+    gate.signal.complete();
     _transition(runId, RunPhase.cancelling, reason: 'Pause requested');
   }
 
@@ -537,8 +541,8 @@ class AgentController extends ChangeNotifier {
       }
     }
     final callFacts = <String, Object?>{
-      'offeredTools': offer.names,
-      'toolSchemaDigest': offer.schemaDigest,
+      'offeredTools': [for (final tool in attached) tool.name],
+      'toolSchemaDigest': toolSchemaDigest(attached),
       'filteredTools': [for (final tool in unavailable) tool.toJson()],
       'model': model ?? '',
       'provider': provider,
@@ -628,6 +632,7 @@ class AgentController extends ChangeNotifier {
           await turn.sendUser(
             prompt,
             isCancelled: () => gate.cancelled || gate.paused,
+            cancellation: gate.signal.future,
             beforeModel: () async {
               final blockers = [
                 for (final issue in validateBoard(
@@ -738,18 +743,17 @@ class AgentController extends ChangeNotifier {
           );
           throw StateError('No vanilla client');
         }
-        reply = await client
-            .complete(
-              userText: prompt,
-              systemText: systemText,
-              history: history,
-            )
-            .timeout(
-              limits.elapsed,
-              onTimeout: () {
-                throw const RunLimitReached('elapsed time');
-              },
-            );
+        final request = client.complete(
+          userText: prompt,
+          systemText: systemText,
+          history: history,
+        );
+        reply = await (limits.elapsed == Duration.zero
+            ? request
+            : request.timeout(
+                limits.elapsed,
+                onTimeout: () => throw const RunLimitReached('elapsed time'),
+              ));
         watch.stop();
         lastDiagnostic = client.lastDiagnostic;
         plainElapsed = watch.elapsedMilliseconds;
@@ -786,7 +790,9 @@ class AgentController extends ChangeNotifier {
     if (gate.cancelled || gate.paused) {
       return;
     }
-    if (failure == null && (reply?.length ?? 0) > limits.outputChars) {
+    if (failure == null &&
+        limits.outputChars > 0 &&
+        (reply?.length ?? 0) > limits.outputChars) {
       failure = const RunLimitReached('output volume');
     }
     if (attached.isEmpty && reply != null) {
@@ -934,6 +940,28 @@ class AgentController extends ChangeNotifier {
       }
       activeToolFrameId = null;
       notifyListeners();
+    } else if (event is AgentToolUncertain) {
+      if (runId != null) {
+        _note(runId, RunEventKind.toolCallUncertain, {
+          'name': event.call.name,
+          'callId': event.call.id,
+          'reason': event.reason,
+        });
+      }
+      final index = activities.lastIndexWhere(
+        (activity) => activity.callId == event.call.id,
+      );
+      if (index >= 0) {
+        activities[index] = AgentToolActivity(
+          callId: event.call.id,
+          name: event.call.name,
+          argumentsJson: event.call.argumentsJson,
+          state: AgentToolActivityState.uncertain,
+          result: event.reason,
+        );
+      }
+      activeToolFrameId = null;
+      notifyListeners();
     }
   }
 
@@ -997,6 +1025,7 @@ AgentModel _modelForKit(AgentModel current, String? model) {
 class _RunCancel {
   var cancelled = false;
   var paused = false;
+  final signal = Completer<void>();
 }
 
 /// Records one model request around each [AgentModel.complete] in a tool loop.

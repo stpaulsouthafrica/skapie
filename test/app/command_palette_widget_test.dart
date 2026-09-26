@@ -70,6 +70,43 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsOneWidget);
   });
 
+  testWidgets('palette search places Run Control without attaching tools', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    await pumpHome(tester, store: store, kitApi: kitApi);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.enterText(
+      find.descendant(
+        of: find.byKey(const Key('command-palette-search')),
+        matching: find.byType(TextField),
+      ),
+      'run control',
+    );
+    await tester.pump();
+    expect(find.text('Add Run Control'), findsOneWidget);
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(find.byKey(const Key('command-palette')), findsNothing);
+    final objects = store.document.objects;
+    expect(objects, hasLength(2));
+    expect(
+      objects.every(
+        (object) => object.props[skapieKitProp] == harnessRunControlKitId,
+      ),
+      isTrue,
+    );
+    final ports = kitPorts(store.document);
+    expect(ports.any((port) => port.kind == KitPortKind.runControlOut), isTrue);
+    expect(
+      ports.any((port) => port.kind == KitPortKind.runCheckFeedback),
+      isTrue,
+    );
+  });
+
   testWidgets('space in the inspector types a space', (tester) async {
     final store = SceneStore();
     final kitApi = createAppKitApi(store: store);

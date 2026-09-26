@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/agent.dart';
@@ -75,6 +76,37 @@ void main() {
       ),
     );
     expect(find.text('Model turns'), findsOneWidget);
+    expect(find.text('Controls cabled LLM'), findsNothing);
+    final first = tester.getRect(
+      find.byKey(const ValueKey('run-control-modelTurns-8')),
+    );
+    final second = tester.getRect(
+      find.byKey(const ValueKey('run-control-toolCalls-16')),
+    );
+    expect(second.top - first.bottom, greaterThan(20));
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(first.center);
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(
+      find.textContaining('Set to 0 to disable this limit.'),
+      findsOneWidget,
+    );
+    await mouse.moveTo(Offset.zero);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(const ValueKey('run-control-modelTurns-8')),
+      '0',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(
+      api.store.document.objectById(control.first)?.props['modelTurns'],
+      0,
+    );
     await tester.tap(find.byKey(const ValueKey('run-control-rule-off')));
     await tester.pumpAndSettle();
     expect(find.text('Allow one more turn'), findsOneWidget);

@@ -1,4 +1,5 @@
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/agent/model_refusal.dart';
 
 String openaiResponsesUrl(String baseUrl) {
   return '${openaiNormalizedBaseUrl(baseUrl)}/responses';
@@ -9,6 +10,7 @@ String anthropicMessagesUrl(String baseUrl) {
 }
 
 String extractResponsesOutputText(Map<dynamic, dynamic> body) {
+  rejectResponsesRefusal(body);
   final shortcut = body['output_text'];
   if (shortcut is String && shortcut.trim().isNotEmpty) {
     return shortcut;
@@ -58,6 +60,7 @@ String extractResponsesOutputText(Map<dynamic, dynamic> body) {
 }
 
 String extractAnthropicMessageText(Map<dynamic, dynamic> body) {
+  rejectAnthropicRefusal(body);
   final content = body['content'];
   if (content is String) {
     return content;

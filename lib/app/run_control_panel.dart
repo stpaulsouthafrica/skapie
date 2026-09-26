@@ -31,8 +31,8 @@ class RunControlPanel extends StatelessWidget {
 
   void _setLimit(String key, String raw, int maximum) {
     final value = int.tryParse(raw.trim());
-    if (value == null || value < 1) return;
-    kitApi.updateProps(frame.id, {key: value.clamp(1, maximum)});
+    if (value == null || value < 0) return;
+    kitApi.updateProps(frame.id, {key: value.clamp(0, maximum)});
     _refreshCard();
   }
 
@@ -54,12 +54,32 @@ class RunControlPanel extends StatelessWidget {
     });
   }
 
-  Widget _limit(String key, String label, int maximum) => TextFormField(
-    key: ValueKey('run-control-$key-${frame.props[key]}'),
-    initialValue: '${frame.props[key]}',
-    keyboardType: TextInputType.number,
-    decoration: InputDecoration(labelText: label, isDense: true),
-    onFieldSubmitted: (value) => _setLimit(key, value, maximum),
+  Widget _limit(String key, String label, String help, int maximum) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Tooltip(
+      message: '$help Set to 0 to disable this limit.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13)),
+          const SizedBox(height: 4),
+          TextFormField(
+            key: ValueKey('run-control-$key-${frame.props[key]}'),
+            initialValue: '${frame.props[key]}',
+            keyboardType: TextInputType.number,
+            style: const TextStyle(fontSize: 16),
+            decoration: const InputDecoration(
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+            ),
+            onFieldSubmitted: (value) => _setLimit(key, value, maximum),
+          ),
+        ],
+      ),
+    ),
   );
 
   @override
@@ -77,34 +97,60 @@ class RunControlPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          target == null ? 'Cable LLM to start a run' : 'Controls cabled LLM',
+        if (target == null) ...[
+          const Text('Cable an LLM to start a run'),
+          const SizedBox(height: 12),
+        ],
+        _limit('modelTurns', 'Model turns', 'Maximum model requests.', 100),
+        _limit('toolCalls', 'Tool calls', 'Maximum tool calls.', 500),
+        _limit('elapsedSeconds', 'Elapsed seconds', 'Maximum run time.', 3600),
+        _limit(
+          'outputChars',
+          'Output characters',
+          'Maximum generated text and tool output.',
+          1000000,
         ),
-        _limit('modelTurns', 'Model turns', 100),
-        _limit('toolCalls', 'Tool calls', 500),
-        _limit('elapsedSeconds', 'Elapsed seconds', 3600),
-        _limit('outputChars', 'Output characters', 1000000),
-        DropdownButtonFormField<String>(
-          key: ValueKey('run-control-rule-${frame.props['failedCheckRule']}'),
-          initialValue: frame.props['failedCheckRule'] == 'oneMoreTurn'
-              ? 'oneMoreTurn'
-              : 'off',
-          decoration: const InputDecoration(labelText: 'Failed check rule'),
-          items: const [
-            DropdownMenuItem(value: 'off', child: Text('Off')),
-            DropdownMenuItem(
-              value: 'oneMoreTurn',
-              child: Text('Allow one more turn'),
-            ),
-          ],
-          onChanged: (value) {
-            if (value != null) {
-              kitApi.updateProps(frame.id, {'failedCheckRule': value});
-              _refreshCard();
-            }
-          },
+        Tooltip(
+          message: 'Allow one extra model turn after a cabled failed check.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Failed check rule', style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                key: ValueKey(
+                  'run-control-rule-${frame.props['failedCheckRule']}',
+                ),
+                initialValue: frame.props['failedCheckRule'] == 'oneMoreTurn'
+                    ? 'oneMoreTurn'
+                    : 'off',
+                style: const TextStyle(fontSize: 16),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'off', child: Text('Off')),
+                  DropdownMenuItem(
+                    value: 'oneMoreTurn',
+                    child: Text('Allow one more turn'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    kitApi.updateProps(frame.id, {'failedCheckRule': value});
+                    _refreshCard();
+                  }
+                },
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
         if (runningHere)
           Row(
             children: [

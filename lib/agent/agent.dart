@@ -125,6 +125,14 @@ class AgentToolFinished extends AgentEvent {
   final bool denied;
 }
 
+/// The tool was dispatched, but its result was not observed.
+class AgentToolUncertain extends AgentEvent {
+  const AgentToolUncertain(this.call, this.reason);
+
+  final AgentToolCall call;
+  final String reason;
+}
+
 class AgentTurnFinished extends AgentEvent {
   const AgentTurnFinished();
 }
@@ -188,6 +196,7 @@ class AgentSession {
   Future<void> sendUser(
     String text, {
     bool Function()? isCancelled,
+    Future<void>? cancellation,
     Future<void> Function()? beforeModel,
     Future<String?> Function(String name)? toolDenial,
     Future<void> Function()? afterToolResult,
@@ -209,11 +218,14 @@ class AgentSession {
     final watch = Stopwatch()..start();
     var toolCalls = 0;
     var outputChars = 0;
-    final modelLimit = limits.effectiveModelTurns < maxToolIterations
+    final modelLimit = limits.effectiveModelTurns == 0
+        ? 0
+        : maxToolIterations == 0 ||
+              limits.effectiveModelTurns < maxToolIterations
         ? limits.effectiveModelTurns
         : maxToolIterations;
     void checkTime() {
-      if (watch.elapsed >= limits.elapsed) {
+      if (limits.elapsed > Duration.zero && watch.elapsed >= limits.elapsed) {
         throw const RunLimitReached('elapsed time');
       }
     }
@@ -221,13 +233,16 @@ class AgentSession {
     void countOutput(String value) {
       outputChars += value.length;
       onOutput?.call(outputChars);
-      if (outputChars > limits.outputChars) {
+      if (limits.outputChars > 0 && outputChars > limits.outputChars) {
         throw const RunLimitReached('output volume');
       }
     }
 
     try {
-      for (var i = 0; i < modelLimit; i++) {
+      for (var i = 0; ; i++) {
+        if (modelLimit > 0 && i >= modelLimit) {
+          throw const RunLimitReached('model turns');
+        }
         stopIfCancelled();
         checkTime();
         await beforeModel?.call();
@@ -235,23 +250,25 @@ class AgentSession {
         await onPhase?.call(RunPhase.modelWait, i + 1, toolCalls);
         stopIfCancelled();
         checkTime();
-        final reply = await model
-            .complete(
-              messages: List.unmodifiable(_messages),
-              tools: includeTools
-                  ? List.unmodifiable(_tools)
-                  : const <AgentTool>[],
-            )
-            .timeout(
-              limits.elapsed - watch.elapsed,
-              onTimeout: () {
-                throw const RunLimitReached('elapsed time');
-              },
-            );
+        final request = model.complete(
+          messages: List.unmodifiable(_messages),
+          tools: includeTools ? List.unmodifiable(_tools) : const <AgentTool>[],
+        );
+        final reply = await (limits.elapsed == Duration.zero
+            ? request
+            : request.timeout(
+                limits.elapsed - watch.elapsed,
+                onTimeout: () => throw const RunLimitReached('elapsed time'),
+              ));
         stopIfCancelled();
         checkTime();
         countOutput(reply.content);
         final calls = reply.toolCalls;
+        if (calls != null) {
+          for (final call in calls) {
+            countOutput(call.argumentsJson);
+          }
+        }
         if (calls == null || calls.isEmpty) {
           final assistant = AgentMessage(
             role: AgentRole.assistant,
@@ -272,7 +289,7 @@ class AgentSession {
         for (final call in calls) {
           stopIfCancelled();
           checkTime();
-          if (toolCalls >= limits.toolCalls) {
+          if (limits.toolCalls > 0 && toolCalls >= limits.toolCalls) {
             throw const RunLimitReached('tool calls');
           }
           toolCalls++;
@@ -284,9 +301,42 @@ class AgentSession {
           await beforeToolDispatch?.call();
           stopIfCancelled();
           checkTime();
-          final result = denial == null
-              ? await _dispatcher.dispatch(call.name, call.argumentsJson)
-              : AgentToolResult(toolError(denial));
+          final AgentToolResult result;
+          if (denial != null) {
+            result = AgentToolResult(toolError(denial));
+          } else {
+            try {
+              final dispatch = _dispatcher.dispatch(
+                call.name,
+                call.argumentsJson,
+              );
+              final pending = cancellation == null
+                  ? dispatch
+                  : Future.any<AgentToolResult>([
+                      dispatch,
+                      cancellation.then<AgentToolResult>(
+                        (_) => throw const AgentRunInterrupted(),
+                      ),
+                    ]);
+              result = await (limits.elapsed == Duration.zero
+                  ? pending
+                  : pending.timeout(
+                      limits.elapsed - watch.elapsed,
+                      onTimeout: () =>
+                          throw const RunLimitReached('elapsed time'),
+                    ));
+            } on AgentRunInterrupted {
+              _events.add(AgentToolUncertain(call, 'Stop or pause requested'));
+              await afterToolResult?.call();
+              rethrow;
+            } on RunLimitReached {
+              _events.add(
+                AgentToolUncertain(call, 'Elapsed time limit reached'),
+              );
+              await afterToolResult?.call();
+              rethrow;
+            }
+          }
           _events.add(AgentToolFinished(call, result, denied: denial != null));
           await afterToolResult?.call();
           stopIfCancelled();
@@ -301,7 +351,6 @@ class AgentSession {
           _events.add(AgentMessageAppended(toolMessage));
         }
       }
-      throw const RunLimitReached('model turns');
     } on AgentRunInterrupted {
       rethrow;
     } catch (error) {

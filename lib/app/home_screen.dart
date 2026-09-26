@@ -296,6 +296,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _addCodingWorkflowStarter();
       case 'add-llm':
         _add(harnessLlmKitId);
+      case 'add-run-control':
+        _add(harnessRunControlKitId);
       case 'add-conversation':
         _add(harnessConversationKitId);
       case 'add-repository':

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/agent/model_refusal.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 
 Map<String, Object?> vanillaCompletionBody({
@@ -115,6 +116,7 @@ class VanillaCompletionClient implements VanillaSurfaceClient {
     if (choice is! Map) {
       throw AgentHttpException('Invalid choice in chat completions response');
     }
+    rejectChatRefusal(choice);
     final message = choice['message'];
     if (message is! Map) {
       throw AgentHttpException('Invalid message in chat completions response');

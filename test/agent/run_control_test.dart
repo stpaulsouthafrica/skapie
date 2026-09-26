@@ -120,6 +120,41 @@ void main() {
     );
   });
 
+  test('zero disables each run limit', () async {
+    final replies = [
+      for (var index = 0; index < 9; index++)
+        AgentModelReply(
+          content: '',
+          toolCalls: [
+            AgentToolCall(
+              id: 'call-$index',
+              name: 'list_kits',
+              argumentsJson: '{}',
+            ),
+          ],
+        ),
+      const AgentModelReply(content: 'done'),
+    ];
+    final model = ScriptedAgentModel(replies);
+    const limits = RunLimits(
+      modelTurns: 0,
+      toolCalls: 0,
+      elapsed: Duration.zero,
+      outputChars: 0,
+      extraTurnAfterFailedCheck: true,
+    );
+    final session = AgentSession(
+      model: model,
+      kitApi: api,
+      limits: limits,
+      maxToolIterations: 0,
+    );
+    await session.sendUser('list');
+    expect(model.completeCount, 10);
+    expect(session.messages.last.content, 'done');
+    expect(limits.effectiveModelTurns, 0);
+  });
+
   test(
     'failed-check rule permits exactly one additional model request',
     () async {
@@ -264,6 +299,58 @@ void main() {
     expect(run.status, RunStatus.failed);
   });
 
+  test('ledger offer matches tools left after the grant check', () async {
+    final permission = _ToggleRepositoryPermission()..allowed = false;
+    final controller = AgentController(
+      kitApi: api,
+      session: AgentSession(model: const FakeAgentModel(), kitApi: api),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      repositoryPermission: permission,
+    );
+    final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final repository = api.instantiate(
+      codingRepositoryKitId,
+      origin: const Offset(0, 400),
+    );
+    final tool = api.instantiate(
+      'tools.repo_list_files',
+      origin: const Offset(400, 400),
+    );
+    api.updateProps(repository.first, {repositoryPathProp: '/example'});
+    cable(
+      repository.first,
+      KitPortKind.repositoryOut,
+      tool.first,
+      KitPortKind.toolRepository,
+    );
+    cable(tool.first, KitPortKind.toolOut, llm.first, KitPortKind.llmTools);
+    final conversation = api.instantiate(
+      harnessConversationKitId,
+      origin: const Offset(800, 0),
+    );
+    cable(
+      llm.first,
+      KitPortKind.llmConversation,
+      conversation.first,
+      KitPortKind.conversationIn,
+    );
+
+    await controller.sendUser('list files', targetBodyId: llm.last);
+    final run = controller.latestRunFor(llm.last)!;
+    expect(run.status, RunStatus.completed);
+    final started = run.events.firstWhere(
+      (event) => event.kind == RunEventKind.modelRequestStarted,
+    );
+    expect(started.payload['offeredTools'], isEmpty);
+    expect(started.payload['toolSchemaDigest'], toolSchemaDigest([]));
+    expect(started.payload['filteredTools'], [
+      {
+        'name': 'repo_list_files',
+        'reason': 'Repository access expired for repo_list_files',
+      },
+    ]);
+  });
+
   test('elapsed time and output volume stop a session', () async {
     final hold = Completer<AgentModelReply>();
     final timed = AgentSession(
@@ -290,6 +377,135 @@ void main() {
         isA<RunLimitReached>().having((e) => e.name, 'name', 'output volume'),
       ),
     );
+  });
+
+  test(
+    'a pending tool hits the deadline and leaves an uncertain outcome',
+    () async {
+      final pending = Completer<Map<String, Object?>>();
+      final started = Completer<void>();
+      var calls = 0;
+      final session = AgentSession(
+        model: ScriptedAgentModel([
+          const AgentModelReply(
+            content: '',
+            toolCalls: [
+              AgentToolCall(id: 'slow', name: 'slow', argumentsJson: '{}'),
+            ],
+          ),
+        ]),
+        kitApi: api,
+        limits: const RunLimits(elapsed: Duration(milliseconds: 50)),
+        tools: [
+          AgentTool(
+            name: 'slow',
+            description: 'A pending effect',
+            run: (_) {
+              calls++;
+              started.complete();
+              return pending.future;
+            },
+          ),
+        ],
+      );
+      final events = <AgentEvent>[];
+      session.events.listen(events.add);
+      final run = session.sendUser('wait');
+      await started.future;
+      await expectLater(
+        run,
+        throwsA(
+          isA<RunLimitReached>().having(
+            (error) => error.name,
+            'limit',
+            'elapsed time',
+          ),
+        ),
+      );
+      expect(calls, 1);
+      expect(events.whereType<AgentToolUncertain>(), hasLength(1));
+      expect(events.whereType<AgentToolFinished>(), isEmpty);
+      pending.complete({'ok': true});
+      await Future<void>.delayed(Duration.zero);
+      expect(events.whereType<AgentToolFinished>(), isEmpty);
+    },
+  );
+
+  test('stopping a pending tool settles with uncertain outcome', () async {
+    final pending = Completer<Map<String, Object?>>();
+    final started = Completer<void>();
+    final stop = Completer<void>();
+    final session = AgentSession(
+      model: ScriptedAgentModel([
+        const AgentModelReply(
+          content: '',
+          toolCalls: [
+            AgentToolCall(id: 'slow', name: 'slow', argumentsJson: '{}'),
+          ],
+        ),
+      ]),
+      kitApi: api,
+      tools: [
+        AgentTool(
+          name: 'slow',
+          description: 'A pending effect',
+          run: (_) {
+            started.complete();
+            return pending.future;
+          },
+        ),
+      ],
+    );
+    final events = <AgentEvent>[];
+    session.events.listen(events.add);
+    final run = session.sendUser('wait', cancellation: stop.future);
+    await started.future;
+    stop.complete();
+    await expectLater(run, throwsA(isA<AgentRunInterrupted>()));
+    expect(events.whereType<AgentToolUncertain>(), hasLength(1));
+    expect(events.whereType<AgentToolFinished>(), isEmpty);
+    pending.complete({'ok': true});
+  });
+
+  test('model tool arguments count against output before dispatch', () async {
+    var called = false;
+    final session = AgentSession(
+      model: ScriptedAgentModel([
+        const AgentModelReply(
+          content: '',
+          toolCalls: [
+            AgentToolCall(
+              id: 'oversize',
+              name: 'slow',
+              argumentsJson: '{"text":"larger than budget"}',
+            ),
+          ],
+        ),
+      ]),
+      kitApi: api,
+      limits: const RunLimits(outputChars: 10),
+      tools: [
+        AgentTool(
+          name: 'slow',
+          description: 'Must not run',
+          run: (_) async {
+            called = true;
+            return {'ok': true};
+          },
+        ),
+      ],
+    );
+    await expectLater(
+      session.sendUser('wait'),
+      throwsA(
+        isA<RunLimitReached>().having(
+          (error) => error.name,
+          'limit',
+          'output volume',
+        ),
+      ),
+    );
+    expect(called, isFalse);
   });
 
   test(
