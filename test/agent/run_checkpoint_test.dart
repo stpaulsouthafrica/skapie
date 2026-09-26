@@ -42,7 +42,11 @@ void main() {
       origin: const Offset(800, 0),
     );
     api.updateProps(input.last, {'content': 'do the thing'});
-    connectTextToLlm(kitApi: api, textObjectId: input.first, llmBodyId: llm.last);
+    connectTextToLlm(
+      kitApi: api,
+      textObjectId: input.first,
+      llmBodyId: llm.last,
+    );
     addKitLink(
       kitApi: api,
       objectId: llm.last,
@@ -55,11 +59,11 @@ void main() {
 
   AgentController buildController({RunCheckpointStore? store}) =>
       AgentController(
-    kitApi: api,
-    session: AgentSession(model: const FakeAgentModel(), kitApi: api),
-    runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
-    checkpointStore: store ?? spy,
-  );
+        kitApi: api,
+        session: AgentSession(model: const FakeAgentModel(), kitApi: api),
+        runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+        checkpointStore: store ?? spy,
+      );
 
   test('a checkpoint is small and does not hold the scene', () async {
     final dir = await Directory.systemTemp.createTemp('skapie-checkpoint-');
@@ -122,7 +126,11 @@ void main() {
 
     expect(
       spy.saved.map((checkpoint) => checkpoint.boundary),
-      containsAll([RunBoundary.graphValidated, RunBoundary.modelResult, RunBoundary.toolResult]),
+      containsAll([
+        RunBoundary.graphValidated,
+        RunBoundary.modelResult,
+        RunBoundary.toolResult,
+      ]),
     );
     expect(spy.removed, contains(controller.latestRunFor(llmBody)!.id));
     expect(
@@ -199,9 +207,6 @@ void main() {
     ledger.append(run.id, RunEventKind.toolCallStarted, {'callId': 'c1'});
     ledger.closeIncompleteRuns();
     expect(runRecordEffectUncertain(run), isTrue);
-    expect(
-      run.events.last.payload['uncertain'],
-      isTrue,
-    );
+    expect(run.events.last.payload['uncertain'], isTrue);
   });
 }

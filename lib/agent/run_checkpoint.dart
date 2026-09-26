@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:skapie/agent/run_control.dart';
+import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/shared/text_digest.dart';
 
@@ -80,8 +81,8 @@ class RunCheckpoint {
       orElse: () => RunBoundary.started,
     );
     return RunCheckpoint(
-      schemaVersion: migrated['schemaVersion'] as int? ??
-          runCheckpointSchemaVersion,
+      schemaVersion:
+          migrated['schemaVersion'] as int? ?? runCheckpointSchemaVersion,
       runId: migrated['runId']?.toString() ?? '',
       bodyId: migrated['bodyId']?.toString() ?? '',
       phase: migrated['phase']?.toString() ?? RunPhase.ready.name,
@@ -92,7 +93,8 @@ class RunCheckpoint {
       graphRevision: migrated['graphRevision']?.toString() ?? '',
       pendingOperationId: migrated['pendingOperationId']?.toString(),
       resumedFrom: migrated['resumedFrom']?.toString(),
-      at: DateTime.tryParse(migrated['at']?.toString() ?? '')?.toUtc() ??
+      at:
+          DateTime.tryParse(migrated['at']?.toString() ?? '')?.toUtc() ??
           DateTime.now().toUtc(),
     );
   }
@@ -127,9 +129,43 @@ class RecoveryNotice {
   final bool resumable;
 }
 
-/// Digest of the board objects and cables. A resume can tell if the graph moved.
-String graphRevision(SceneDocument document) =>
-    fnv1aHex(jsonEncode(document.toJson()));
+/// Digest of the board shape: kit identity, cables, and the props that grant or
+/// route work. Reply text, coordinates, and last-use stamps stay out, so a
+/// resume is not flagged changed by ordinary activity.
+String graphRevision(SceneDocument document) {
+  final buffer = StringBuffer();
+  for (final object in document.objects) {
+    buffer
+      ..write(object.id)
+      ..write('|')
+      ..write(object.type)
+      ..write('|')
+      ..write(object.props[skapieKitProp] ?? '')
+      ..write('|')
+      ..write(object.props[skapieRoleProp] ?? '')
+      ..write('|');
+    final links = object.props[linksProp];
+    if (links is List) {
+      for (final link in links) {
+        if (link is Map) {
+          buffer.write('${link['to']}:${link['port']},');
+        }
+      }
+    }
+    for (final key in const [
+      'toolName',
+      'requiresRepository',
+      'repositoryPath',
+      writeScopePathProp,
+      'checkPreset',
+    ]) {
+      final value = object.props[key];
+      if (value != null) buffer.write('$key=$value;');
+    }
+    buffer.write('\n');
+  }
+  return fnv1aHex(buffer.toString());
+}
 
 /// Saved checkpoints beside a board. Never written into scene.json.
 class RunCheckpointStore {
@@ -153,11 +189,21 @@ class RunCheckpointStore {
     if (target == null || !await target.exists()) {
       return;
     }
-    final text = await target.readAsString();
+    String text;
+    try {
+      text = await target.readAsString();
+    } on FileSystemException {
+      return;
+    }
     if (text.trim().isEmpty) {
       return;
     }
-    final decoded = jsonDecode(text);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(text);
+    } on FormatException {
+      return;
+    }
     if (decoded is Map) {
       replaceFromJson(Map<String, Object?>.from(decoded));
     }

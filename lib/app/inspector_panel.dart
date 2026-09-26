@@ -733,6 +733,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
             : (bodyId, details) =>
                   widget.controller!.beginCheckRun(bodyId, details),
         appendEvidence: widget.controller?.appendCheckEvent,
+        flushEvidence: widget.controller?.flushLedger,
         onRunRequested: widget.onCheckRunRequested,
       );
       if (mounted) {

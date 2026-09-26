@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 /// Schema for [RunRecord] and [RunEvent]. Bump when the fields change.
-const int runRecordSchemaVersion = 4;
+/// Older files are lifted by [migrateRunRecordJson]; unknown event kinds are
+/// skipped so a newer file cannot stop an older build from opening.
+const int runRecordSchemaVersion = 5;
 
 /// Longest string stored inside one event. Longer text is cut and marked.
 const int runPayloadTextLimit = 280;
@@ -182,20 +184,43 @@ class RunRecord {
   };
 
   static RunRecord fromJson(Map<String, Object?> json) {
+    return fromMigrated(migrateRunRecordJson(json));
+  }
+
+  /// Reads the lifted shape. Events with an unknown kind are skipped so a file
+  /// written by a newer build still opens.
+  static RunRecord fromMigrated(Map<String, Object?> json) {
     final rawEvents = json['events'];
+    final events = <RunEvent>[];
+    if (rawEvents is List) {
+      for (final item in rawEvents) {
+        if (item is! Map) continue;
+        try {
+          events.add(RunEvent.fromJson(Map<String, Object?>.from(item)));
+        } on FormatException {
+          continue;
+        }
+      }
+    }
     return RunRecord(
       schemaVersion: json['schemaVersion'] as int? ?? runRecordSchemaVersion,
       id: json['id']?.toString() ?? '',
       bodyId: json['bodyId']?.toString() ?? '',
       kind: json['kind']?.toString() ?? 'agent',
       resumedFrom: json['resumedFrom']?.toString(),
-      events: [
-        if (rawEvents is List)
-          for (final item in rawEvents)
-            if (item is Map) RunEvent.fromJson(Map<String, Object?>.from(item)),
-      ],
+      events: events,
     );
   }
+}
+
+/// Lift an older run record to the current shape. Version 4 added no field
+/// changes that need remapping; add cases here when a version does.
+Map<String, Object?> migrateRunRecordJson(Map<String, Object?> json) {
+  final version = json['schemaVersion'] as int? ?? 0;
+  if (version >= runRecordSchemaVersion) {
+    return json;
+  }
+  return {...json, 'schemaVersion': runRecordSchemaVersion};
 }
 
 /// Saved log of executions. Not part of the scene document.
@@ -388,7 +413,12 @@ class RunLedgerFile {
     if (text.trim().isEmpty) {
       return;
     }
-    final decoded = jsonDecode(text);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(text);
+    } on FormatException {
+      return;
+    }
     if (decoded is Map) {
       ledger.replaceFromJson(Map<String, Object?>.from(decoded));
       ledger.closeIncompleteRuns();

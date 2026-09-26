@@ -169,6 +169,12 @@ class AgentController extends ChangeNotifier {
   RunRecord beginCheckRun(String resultBodyId, Map<String, Object?> details) {
     final run = ledger.begin(bodyId: resultBodyId, kind: 'check');
     appendCheckEvent(run.id, RunEventKind.checkStarted, details);
+    _saveCheckpoint(
+      runId: run.id,
+      bodyId: resultBodyId,
+      boundary: RunBoundary.started,
+      pendingOperationId: run.id,
+    );
     return run;
   }
 
@@ -176,7 +182,16 @@ class AgentController extends ChangeNotifier {
     String runId,
     RunEventKind kind,
     Map<String, Object?> payload,
-  ) => _note(runId, kind, payload);
+  ) {
+    _note(runId, kind, payload);
+    if (kind == RunEventKind.checkFinished) {
+      _saveCheckpoint(
+        runId: runId,
+        bodyId: ledger.runById(runId)?.bodyId ?? '',
+        boundary: RunBoundary.checkResult,
+      );
+    }
+  }
 
   Future<void> loadLedger() async {
     await checkpointStore?.load();
@@ -224,7 +239,9 @@ class AgentController extends ChangeNotifier {
     final runs = ledger.runsFor(bodyId);
     final previous = runs.isEmpty ? null : runs.last;
     _dismissedRecovery.add(previous?.id ?? '');
-    final checkpoint = previous == null ? null : checkpointStore?.forRun(previous.id);
+    final checkpoint = previous == null
+        ? null
+        : checkpointStore?.forRun(previous.id);
     final prompt = llmCableInput(kitApi.store.document, bodyId).trim();
     await _run(
       prompt: prompt,
@@ -329,7 +346,8 @@ class AgentController extends ChangeNotifier {
     _ledgerWrites = _ledgerWrites.then((_) => store.save(checkpoint));
   }
 
-  void _transition(String runId, RunPhase phase, {String? reason}) {    if (!runPhaseCanMove(runPhase, phase)) {
+  void _transition(String runId, RunPhase phase, {String? reason}) {
+    if (!runPhaseCanMove(runPhase, phase)) {
       throw StateError(
         'Invalid run transition: ${runPhase.name} → ${phase.name}',
       );
@@ -480,6 +498,8 @@ class AgentController extends ChangeNotifier {
         'from': resumedFrom,
         'modelTurns': modelTurnsUsed,
         'toolCalls': toolCallsUsed,
+        'graphChanged':
+            checkpoint != null && checkpoint.graphRevision != _graphRevision,
       }, into);
     }
     _transition(run.id, RunPhase.validating);
@@ -585,6 +605,8 @@ class AgentController extends ChangeNotifier {
           const {},
           routeForReply(document: kitApi.store.document, bodyId: bodyId),
         );
+        _removeCheckpoint(run.id);
+      } else {
         _removeCheckpoint(run.id);
       }
       _runUse[bodyId]?.finishedAt = DateTime.now();
