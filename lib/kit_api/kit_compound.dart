@@ -32,6 +32,7 @@ bool isKitObject(SceneObject object) => kitIdOf(object) != null;
 bool kitUsesTextPreview(String? kitId) {
   return kitId == boardTextKitId ||
       kitId == harnessConversationKitId ||
+      kitId == codingRepositoryKitId ||
       kitId == codingPatchProposalKitId ||
       kitId == codingReviewDecisionKitId ||
       kitId == codingApplyPatchKitId ||
@@ -183,7 +184,7 @@ void removeKitSelection({required KitApi kitApi, required String selectedId}) {
 }
 
 Color kitAccentColor(SceneObject object) {
-  return _parseColor(
+  return parseKitColor(
     object.props[kitAccentProp]?.toString(),
     PaintTokens.champagne,
   );
@@ -196,9 +197,12 @@ Color kitFillColor(SceneObject object, PaintTokens tokens) {
     return tokens.panel.withValues(alpha: 0.85);
   }
   if (kitHasCustomFill(object)) {
-    return _parseColor(object.props['fill']?.toString(), tokens.panel);
+    return parseKitColor(object.props['fill']?.toString(), tokens.panel);
   }
-  return _parseColor(object.props['fill']?.toString(), const Color(0xFF7AA3C7));
+  return parseKitColor(
+    object.props['fill']?.toString(),
+    const Color(0xFF7AA3C7),
+  );
 }
 
 double kitCornerRadius(SceneObject object) {
@@ -212,7 +216,7 @@ double kitCornerRadius(SceneObject object) {
   return kitRadius;
 }
 
-Color _parseColor(String? value, Color fallback) {
+Color parseKitColor(String? value, Color fallback) {
   if (value == null || value.isEmpty) {
     return fallback;
   }

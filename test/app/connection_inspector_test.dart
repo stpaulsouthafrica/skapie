@@ -59,6 +59,10 @@ void main() {
     expect(textOf(tester, 'connection-destination'), 'LLM · Input');
     expect(textOf(tester, 'connection-role'), 'Data · Text');
     expect(textOf(tester, 'connection-preview'), 'summarise the repo');
+    expect(
+      textOf(tester, 'connection-explanation'),
+      contains('prompt when you start LLM Run'),
+    );
     expect(textOf(tester, 'connection-last-use'), 'No run yet this session');
     expect(find.text('Carries now'), findsOneWidget);
 

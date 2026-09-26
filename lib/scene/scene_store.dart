@@ -6,6 +6,8 @@ import 'package:skapie/scene/scene_object.dart';
 import 'package:skapie/scene/scene_op.dart';
 import 'package:skapie/scene/scene_persistence.dart';
 
+enum SceneChangeKind { apply, undo, redo, load }
+
 /// Single mutation path for the scene document.
 class SceneStore extends ChangeNotifier {
   SceneStore({SceneDocument? document, this.persistence})
@@ -20,6 +22,7 @@ class SceneStore extends ChangeNotifier {
   Future<void> _writes = Future.value();
 
   Object? _lastPersistenceError;
+  SceneChangeKind? lastChangeKind;
 
   SceneDocument get document => _document;
   bool get canUndo => _undo.isNotEmpty;
@@ -41,6 +44,7 @@ class SceneStore extends ChangeNotifier {
     _undo.add(_document);
     _redo.clear();
     _document = next;
+    lastChangeKind = SceneChangeKind.apply;
     notifyListeners();
     unawaited(save());
     return true;
@@ -52,6 +56,7 @@ class SceneStore extends ChangeNotifier {
     }
     _redo.add(_document);
     _document = _undo.removeLast();
+    lastChangeKind = SceneChangeKind.undo;
     notifyListeners();
     unawaited(save());
     return true;
@@ -63,6 +68,7 @@ class SceneStore extends ChangeNotifier {
     }
     _undo.add(_document);
     _document = _redo.removeLast();
+    lastChangeKind = SceneChangeKind.redo;
     notifyListeners();
     unawaited(save());
     return true;
@@ -74,6 +80,7 @@ class SceneStore extends ChangeNotifier {
     _undo.clear();
     _redo.clear();
     _liveCamera = _document.camera;
+    lastChangeKind = SceneChangeKind.load;
     notifyListeners();
   }
 

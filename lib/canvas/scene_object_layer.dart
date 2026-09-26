@@ -30,6 +30,7 @@ class SceneObjectLayer extends StatelessWidget {
     required this.objects,
     required this.registry,
     this.selectedId,
+    this.selectedIds = const {},
     this.focusedPort,
     this.previewDelta = Offset.zero,
     this.previewIds = const {},
@@ -49,6 +50,7 @@ class SceneObjectLayer extends StatelessWidget {
   final List<SceneObject> objects;
   final ObjectRegistry registry;
   final String? selectedId;
+  final Set<String> selectedIds;
 
   /// Port ringed by the keyboard on [selectedId]'s kit.
   final KitPortKind? focusedPort;
@@ -173,6 +175,7 @@ class SceneObjectLayer extends StatelessWidget {
   }
 
   bool _selectedKitContains(SceneObject frame) {
+    if (selectedIds.contains(frame.id)) return true;
     final id = selectedId;
     if (id == null) {
       return false;
@@ -484,7 +487,7 @@ class SceneObjectLayer extends StatelessWidget {
             ),
           ),
         if (kitIdOf(frame) == codingRepositoryKitId)
-          _outputCaption(tokens, zoom, frame, label: 'In / Out'),
+          Positioned.fill(child: _repositoryCard(tokens, zoom, frame)),
         if (kitIdOf(frame) == codingWriteScopeKitId)
           Positioned.fill(child: _writeScopeCard(tokens, zoom, frame)),
         if (kitIdOf(frame) == codingCheckSpecKitId)
@@ -627,10 +630,27 @@ class SceneObjectLayer extends StatelessWidget {
       color: path.isEmpty ? tokens.muted : tokens.accent,
       headline: path.isEmpty ? 'No write folder' : path.split('/').last,
       subtitle: path.isEmpty
-          ? 'Choose a folder in Inspector'
+          ? 'Double-click to choose folder'
           : 'Write access · separate grant',
       leading: '',
       trailing: 'Apply',
+    );
+  }
+
+  Widget _repositoryCard(PaintTokens tokens, double zoom, SceneObject frame) {
+    final path = frame.props[repositoryPathProp]?.toString() ?? '';
+    return _artifactCard(
+      tokens,
+      zoom,
+      frame,
+      icon: path.isEmpty ? Icons.folder_open_outlined : Icons.folder_outlined,
+      color: path.isEmpty ? tokens.muted : tokens.accent,
+      headline: path.isEmpty ? 'No repository folder' : path.split('/').last,
+      subtitle: path.isEmpty
+          ? 'Double-click to choose folder'
+          : 'Read-only repository',
+      leading: 'In',
+      trailing: 'Out',
     );
   }
 

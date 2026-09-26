@@ -6,6 +6,7 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/canvas/board_validation.dart';
 import 'package:skapie/canvas/cable_layer.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
@@ -20,6 +21,8 @@ import 'package:skapie/paint/cables/cable_painter.dart';
 import 'package:skapie/paint/issue_flash_painter.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/patch/write_permission.dart';
+import 'package:skapie/tools/repository/repository_permission.dart';
 
 void main() {
   testWidgets('viewport fills and shows zoom hud at 100%', (tester) async {
@@ -81,6 +84,276 @@ void main() {
     await tester.tapAt(topLeft + const Offset(8, 8));
     await tester.pump();
     expect(selection.selectedId, isNull);
+  });
+
+  testWidgets('Shift drag selects kits and cable without moving', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final text = kitApi.instantiate(
+      boardTextKitId,
+      origin: const Offset(-220, -20),
+    );
+    final llm = kitApi.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(160, -40),
+    );
+    connectTextToLlm(
+      kitApi: kitApi,
+      textObjectId: text.first,
+      llmBodyId: llm.last,
+    );
+    final before = store.document.toJson();
+    final cable = sceneCables(store.document).single;
+    final selection = SelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(
+            store: store,
+            kitApi: kitApi,
+            selection: selection,
+          ),
+        ),
+      ),
+    );
+
+    final topLeft = tester.getTopLeft(find.byType(CanvasViewport));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    final gesture = await tester.startGesture(
+      topLeft + const Offset(200, 300),
+      kind: PointerDeviceKind.mouse,
+    );
+    await gesture.moveTo(topLeft + const Offset(790, 550));
+    await tester.pump();
+    expect(find.byKey(const Key('marquee-selection')), findsOneWidget);
+    await gesture.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+
+    expect(selection.selectedIds, containsAll([text.first, llm.first]));
+    expect(selection.selectedCableIds, {cable.id});
+    expect(selection.isMultiple, isTrue);
+    expect(find.byKey(const Key('multi-selection-count')), findsOneWidget);
+    expect(store.document.toJson(), before);
+
+    await tester.tapAt(topLeft + const Offset(180, 300));
+    await tester.pump();
+    expect(selection.isMultiple, isFalse);
+
+    // Control and Command no longer start a selection drag by default.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    final controlGesture = await tester.startGesture(
+      topLeft + const Offset(80, 80),
+      kind: PointerDeviceKind.mouse,
+    );
+    await controlGesture.moveTo(topLeft + const Offset(120, 120));
+    await tester.pump();
+    expect(find.byKey(const Key('marquee-selection')), findsNothing);
+    await controlGesture.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    final commandGesture = await tester.startGesture(
+      topLeft + const Offset(80, 80),
+      kind: PointerDeviceKind.mouse,
+    );
+    await commandGesture.moveTo(topLeft + const Offset(120, 120));
+    await tester.pump();
+    expect(find.byKey(const Key('marquee-selection')), findsNothing);
+    await commandGesture.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+    expect(store.document.toJson(), before);
+  });
+
+  testWidgets('Shift click adds and removes individual kits', (tester) async {
+    final store = SceneStore();
+    final api = createAppKitApi(store: store);
+    final first = api.instantiate(
+      boardTextKitId,
+      origin: const Offset(-220, -20),
+    );
+    final second = api.instantiate(
+      boardTextKitId,
+      origin: const Offset(160, -20),
+    );
+    final before = store.document.toJson();
+    final selection = SelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(store: store, kitApi: api, selection: selection),
+        ),
+      ),
+    );
+    final topLeft = tester.getTopLeft(find.byType(CanvasViewport));
+    final firstPoint = topLeft + const Offset(200, 300);
+    final secondPoint = topLeft + const Offset(580, 300);
+    Future<void> mouseClick(Offset point) async {
+      final gesture = await tester.startGesture(
+        point,
+        kind: PointerDeviceKind.mouse,
+      );
+      await gesture.up();
+      await tester.pump();
+    }
+
+    await mouseClick(firstPoint);
+    expect(selection.selectedIds, contains(first.first));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await mouseClick(secondPoint);
+    expect(selection.selectedIds, {first.first, second.first});
+
+    await mouseClick(firstPoint);
+    expect(selection.selectedIds, {second.first});
+    await mouseClick(topLeft + const Offset(80, 80));
+    expect(selection.selectedIds, {second.first});
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    expect(store.document.toJson(), before);
+  });
+
+  testWidgets(
+    'configured Control drag selects, including macOS secondary click',
+    (tester) async {
+      final store = SceneStore();
+      store.apply(
+        AddObject(
+          const SceneObject(
+            id: 'card',
+            type: 'box',
+            x: -40,
+            y: -20,
+            width: 80,
+            height: 40,
+          ),
+        ),
+      );
+      final selection = SelectionController();
+      final settings = CanvasShortcutSettings(
+        selectionDragKey: SelectionDragKey.control,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: CanvasViewport(
+              store: store,
+              selection: selection,
+              canvasShortcuts: settings,
+            ),
+          ),
+        ),
+      );
+      final center = tester.getCenter(find.byType(CanvasViewport));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      final secondary = TestPointer(77, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(
+        secondary.down(
+          center - const Offset(100, 100),
+          buttons: kSecondaryButton,
+        ),
+      );
+      await tester.sendEventToBinding(
+        secondary.move(
+          center + const Offset(100, 100),
+          buttons: kSecondaryButton,
+        ),
+      );
+      await tester.pump();
+      expect(find.byKey(const Key('marquee-selection')), findsOneWidget);
+      await tester.sendEventToBinding(secondary.up());
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(selection.selectedIds, {'card'});
+    },
+  );
+
+  testWidgets('dragging a selected kit moves the group in one undo step', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final api = createAppKitApi(store: store);
+    final first = api.instantiate(
+      boardTextKitId,
+      origin: const Offset(-220, -20),
+    );
+    final second = api.instantiate(
+      harnessLlmKitId,
+      origin: const Offset(160, -40),
+    );
+    connectTextToLlm(
+      kitApi: api,
+      textObjectId: first.first,
+      llmBodyId: second.last,
+    );
+    final beforeCable = sceneCables(store.document).single;
+    final selection = SelectionController()
+      ..selectMany(
+        objectIds: {first.first, second.first},
+        cableIds: {beforeCable.id},
+      );
+    final before = {
+      for (final object in store.document.objects)
+        object.id: Offset(object.x, object.y),
+    };
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(store: store, kitApi: api, selection: selection),
+        ),
+      ),
+    );
+    final topLeft = tester.getTopLeft(find.byType(CanvasViewport));
+    await tester.dragFrom(
+      topLeft + const Offset(200, 300),
+      const Offset(40, 30),
+    );
+    await tester.pump();
+
+    expect(selection.selectedIds, {first.first, second.first});
+    for (final object in store.document.objects) {
+      expect(
+        Offset(object.x, object.y),
+        before[object.id]! + const Offset(40, 30),
+      );
+    }
+    final movedCable = sceneCables(store.document).single;
+    expect(movedCable.from, beforeCable.from + const Offset(40, 30));
+    expect(movedCable.to, beforeCable.to + const Offset(40, 30));
+    store.undo();
+    for (final object in store.document.objects) {
+      expect(Offset(object.x, object.y), before[object.id]);
+    }
+  });
+
+  testWidgets('Delete removes a multiple selection in one undo step', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final api = createAppKitApi(store: store);
+    final first = api.instantiate(boardTextKitId, origin: Offset.zero);
+    final second = api.instantiate(
+      boardTextKitId,
+      origin: const Offset(280, 0),
+    );
+    final before = store.document.toJson();
+    final selection = SelectionController()
+      ..selectMany(objectIds: {first.first, second.first}, cableIds: {});
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(store: store, kitApi: api, selection: selection),
+        ),
+      ),
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+    await tester.pump();
+    expect(store.document.objects, isEmpty);
+    expect(selection.selectedIds, isEmpty);
+    store.undo();
+    expect(store.document.toJson(), before);
   });
 
   testWidgets('drag unlocked object commits one UpdateObjectFrame', (
@@ -525,6 +798,92 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('inline-text-edit')), findsNothing);
     expect(find.byKey(const Key('text-kit-editor')), findsNothing);
+  });
+
+  testWidgets('double-click Repository chooses its read-only folder', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final ids = kitApi.instantiate(
+      codingRepositoryKitId,
+      origin: const Offset(-140, -65),
+    );
+    final permission = _TestRepositoryPermission('/tmp/my-repository');
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      repositoryPermission: permission,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(
+            store: store,
+            kitApi: kitApi,
+            agentController: controller,
+          ),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.tapAt(center);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(center);
+    await tester.pump();
+
+    expect(permission.chooseCalls, 1);
+    expect(
+      store.document.objectById(ids.first)!.props[repositoryPathProp],
+      '/tmp/my-repository',
+    );
+    expect(
+      store.document.objectById(ids.last)!.props['content'],
+      'my-repository\nRead-only repository',
+    );
+    expect(find.byKey(const Key('inline-text-edit')), findsNothing);
+    expect(find.byKey(const Key('text-kit-editor')), findsNothing);
+    expect(find.text('my-repository'), findsOneWidget);
+  });
+
+  testWidgets('double-click Write Scope chooses its separate write folder', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final ids = kitApi.instantiate(
+      codingWriteScopeKitId,
+      origin: const Offset(-140, -60),
+    );
+    final permission = _TestWritePermission('/tmp/write-folder');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CanvasViewport(
+            store: store,
+            kitApi: kitApi,
+            writePermission: permission,
+          ),
+        ),
+      ),
+    );
+
+    final center = tester.getCenter(find.byType(CanvasViewport));
+    await tester.tapAt(center);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(center);
+    await tester.pump();
+
+    expect(permission.chooseCalls, 1);
+    expect(
+      store.document.objectById(ids.first)!.props[writeScopePathProp],
+      '/tmp/write-folder',
+    );
+    expect(find.byKey(const Key('inline-text-edit')), findsNothing);
+    expect(find.byKey(const Key('text-kit-editor')), findsNothing);
+    expect(find.text('write-folder'), findsOneWidget);
   });
 
   testWidgets('double-click proposal opens the dedicated read-only diff', (
@@ -1454,4 +1813,42 @@ void main() {
     expect(validateBoard(store.document).issues, isEmpty);
     expect(find.byKey(const Key('board-issues-button')), findsNothing);
   });
+}
+
+class _TestRepositoryPermission implements RepositoryPermission {
+  _TestRepositoryPermission(this.path);
+
+  final String? path;
+  int chooseCalls = 0;
+
+  @override
+  Future<String?> chooseDirectory() async {
+    chooseCalls++;
+    return path;
+  }
+
+  @override
+  Future<bool> canRead(String path) async => true;
+}
+
+class _TestWritePermission implements PatchWritePermission {
+  _TestWritePermission(this.path);
+
+  final String? path;
+  int chooseCalls = 0;
+
+  @override
+  Future<String?> chooseDirectory() async {
+    chooseCalls++;
+    return path;
+  }
+
+  @override
+  Future<bool> canWrite(String path) async => true;
+
+  @override
+  Future<String?> exportProposal({
+    required String name,
+    required String text,
+  }) async => null;
 }

@@ -10,8 +10,11 @@ import 'package:skapie/app/patch_diff_viewer.dart';
 import 'package:skapie/app/connection_inspector.dart';
 import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/app/llm_request_information.dart';
+import 'package:skapie/app/kit_folder_actions.dart';
 import 'package:skapie/canvas/kit_ports.dart';
+import 'package:skapie/canvas/board_data_flow.dart';
 import 'package:skapie/canvas/selection_controller.dart';
+import 'package:skapie/canvas/selection_actions.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/registry/builtin_types.dart';
@@ -55,6 +58,9 @@ class InspectorPanel extends StatefulWidget {
     this.effectLog,
     this.checkRunner = const SystemCheckProcessRunner(),
     this.checkDirectoryExists,
+    this.onApplyWriteAttempted,
+    this.onCheckRunRequested,
+    this.boardUseForCable,
   }) : kitApi =
            kitApi ?? KitApi(store: store, registry: createBuiltinRegistry());
 
@@ -67,6 +73,9 @@ class InspectorPanel extends StatefulWidget {
   final PatchEffectLog? effectLog;
   final CheckProcessRunner checkRunner;
   final Future<bool> Function(String path)? checkDirectoryExists;
+  final ValueChanged<String>? onApplyWriteAttempted;
+  final ValueChanged<String>? onCheckRunRequested;
+  final BoardCableUse? Function(String cableId)? boardUseForCable;
 
   /// When set, Cut cable plays the board retraction instead of vanishing.
   final ValueChanged<SceneCable>? onCutCable;
@@ -116,9 +125,13 @@ class _InspectorPanelState extends State<InspectorPanel> {
 
   Future<void> _chooseWriteScope(SceneObject frame) async {
     try {
-      final path = await widget.writePermission.chooseDirectory();
-      if (path == null || path.isEmpty) return;
-      widget.kitApi.updateProps(frame.id, {writeScopePathProp: path});
+      final chosen = await chooseWriteScopeFolder(
+        kitApi: widget.kitApi,
+        frameId: frame.id,
+        permission: widget.writePermission,
+        isActive: () => mounted,
+      );
+      if (!chosen) return;
       if (mounted) setState(() => _effectMessage = null);
     } catch (error) {
       if (mounted) {
@@ -181,6 +194,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
       applyFrameId: frame.id,
       permission: widget.writePermission,
       effects: _effects,
+      onWriteAttempted: widget.onApplyWriteAttempted,
     );
     if (mounted) {
       setState(() {
@@ -716,6 +730,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
             : (bodyId, details) =>
                   widget.controller!.beginCheckRun(bodyId, details),
         appendEvidence: widget.controller?.appendCheckEvent,
+        onRunRequested: widget.onCheckRunRequested,
       );
       if (mounted) {
         setState(() => _checkMessage = attempt.message);
@@ -1268,27 +1283,13 @@ class _InspectorPanelState extends State<InspectorPanel> {
 
   Future<void> _chooseRepository(SceneObject frame) async {
     try {
-      final path = await _repositoryPermission.chooseDirectory();
-      if (!mounted || path == null || path.isEmpty) {
-        return;
-      }
-      if (widget.store.document.objectById(frame.id) == null) {
-        return;
-      }
-      widget.kitApi.updateProps(frame.id, {repositoryPathProp: path});
-      final name = path.split('/').where((part) => part.isNotEmpty).last;
-      for (final member
-          in kitMembers(
-                document: widget.store.document,
-                selectedId: frame.id,
-              ) ??
-              const <SceneObject>[]) {
-        if (member.props[skapieRoleProp] == 'body') {
-          widget.kitApi.updateProps(member.id, {
-            'content': '$name\nRead-only repository',
-          });
-        }
-      }
+      final chosen = await chooseRepositoryFolder(
+        kitApi: widget.kitApi,
+        frameId: frame.id,
+        permission: _repositoryPermission,
+        isActive: () => mounted,
+      );
+      if (!mounted || !chosen) return;
       setState(() => _repositoryError = null);
     } catch (error) {
       if (mounted) {
@@ -1299,6 +1300,9 @@ class _InspectorPanelState extends State<InspectorPanel> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.selection.isMultiple) {
+      return _multiSelectionInspector();
+    }
     final cableId = widget.selection.selectedCableId;
     if (cableId != null) {
       return ConnectionInspector(
@@ -1306,6 +1310,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
         selection: widget.selection,
         cableId: cableId,
         controller: widget.controller,
+        boardUse: widget.boardUseForCable?.call(cableId),
         onCut: widget.onCutCable,
       );
     }
@@ -1359,7 +1364,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
                       else
                         _readOnly('Id', object.id),
                     ]),
-                    if (llmBody == null)
+                    if (llmBody == null && !isKitObject(frame))
                       _section('Transform', [
                         PaintHover(
                           child: SwitchListTile(
@@ -1550,6 +1555,102 @@ class _InspectorPanelState extends State<InspectorPanel> {
               child: _section('Actions', [
                 PaintButton(label: 'Delete', onPressed: _delete),
               ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _multiSelectionInspector() {
+    final tokens = PaintScope.of(context);
+    final objects = widget.selection.selectedIds.length;
+    final cables = widget.selection.selectedCableIds.length;
+    return Material(
+      key: const Key('multi-selection-inspector'),
+      type: MaterialType.transparency,
+      child: SizedBox(
+        width: 260,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Selection',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    _section('Selected', [
+                      Text(
+                        '$objects ${objects == 1 ? 'object' : 'objects'} · '
+                        '$cables ${cables == 1 ? 'cable' : 'cables'}',
+                      ),
+                    ]),
+                    _section('Appearance', [
+                      Wrap(
+                        key: const Key('multi-selection-swatches'),
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final swatch in kitSwatches)
+                            GestureDetector(
+                              key: ValueKey(
+                                'multi-swatch-${colorToHex(swatch)}',
+                              ),
+                              onTap: () => colorSelection(
+                                store: widget.store,
+                                objectIds: widget.selection.selectedIds,
+                                cableIds: widget.selection.selectedCableIds,
+                                color: swatch,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(3),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: swatch,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: tokens.ink.withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: const SizedBox(width: 22, height: 22),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ]),
+                    _section('Move', [
+                      Text(
+                        'Drag a selected object to move the group. Cables follow their kits; locked objects stay put.',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: tokens.muted),
+                      ),
+                    ]),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+              child: KeyedSubtree(
+                key: const Key('multi-delete'),
+                child: PaintButton(
+                  label: 'Delete selected',
+                  onPressed: () {
+                    deleteSelection(
+                      store: widget.store,
+                      objectIds: widget.selection.selectedIds,
+                      cableIds: widget.selection.selectedCableIds,
+                    );
+                    widget.selection.select(null);
+                  },
+                ),
+              ),
             ),
           ],
         ),

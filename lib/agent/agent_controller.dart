@@ -271,6 +271,9 @@ class AgentController extends ChangeNotifier {
 
   /// Selection-scoped vanilla completion onto one compound LLM kit body.
   Future<void> sendUser(String text, {String? targetBodyId}) async {
+    if (runningBodyId != null) {
+      return;
+    }
     final prompt = text.trim();
     final bodyId = targetBodyId?.trim() ?? '';
     if (prompt.isEmpty || bodyId.isEmpty) {

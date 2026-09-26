@@ -9,7 +9,7 @@ import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
-import 'package:skapie/canvas/kit_links.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -216,6 +216,51 @@ void main() {
         matching: find.byKey(const Key('kit-swatches')),
       ),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('empty-board palette places the coding workflow starter', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final kitApi = createAppKitApi(store: store);
+    final controller = AgentController(
+      kitApi: kitApi,
+      session: AgentSession(model: FakeAgentModel(), kitApi: kitApi),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+    );
+    await pumpHome(
+      tester,
+      store: store,
+      kitApi: kitApi,
+      controller: controller,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.enterText(
+      find.byKey(const Key('command-palette-search')),
+      'coding workflow starter',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Add coding workflow starter'));
+    await tester.pump();
+
+    expect(find.byKey(const Key('command-palette')), findsNothing);
+    expect(sceneCables(store.document), hasLength(21));
+    expect(controller.ledger.runs, isEmpty);
+    expect(
+      kitApi.store.document.objects.where(
+        (object) => object.props[skapieKitProp] == harnessConversationKitId,
+      ),
+      hasLength(2),
+    );
+    expect(
+      tester
+          .state<CanvasViewportState>(find.byType(CanvasViewport))
+          .camera
+          .zoom,
+      lessThan(1),
     );
   });
 

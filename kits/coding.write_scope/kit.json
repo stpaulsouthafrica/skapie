@@ -24,7 +24,7 @@
       "width": 256,
       "height": 48,
       "props": {
-        "content": "Choose a folder to grant write access",
+        "content": "Double-click to choose a write folder",
         "fontSize": 13,
         "skapieKit": "coding.write_scope",
         "skapieRole": "body"

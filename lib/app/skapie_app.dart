@@ -4,6 +4,7 @@ import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/home_screen.dart';
+import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/tools/world/kits.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -23,6 +24,7 @@ class SkapieApp extends StatefulWidget {
     AgentSession? agentSession,
     AgentController? agentController,
     BoardCatalog? boardCatalog,
+    CanvasShortcutSettings? canvasShortcuts,
   }) : this._(
          key: key,
          store: store,
@@ -35,6 +37,7 @@ class SkapieApp extends StatefulWidget {
          agentSession: agentSession,
          agentController: agentController,
          boardCatalog: boardCatalog,
+         canvasShortcuts: canvasShortcuts ?? CanvasShortcutSettings(),
        );
 
   SkapieApp._({
@@ -44,6 +47,7 @@ class SkapieApp extends StatefulWidget {
     AgentSession? agentSession,
     AgentController? agentController,
     this.boardCatalog,
+    required this.canvasShortcuts,
   }) : agentController =
            agentController ??
            AgentController(
@@ -61,6 +65,7 @@ class SkapieApp extends StatefulWidget {
   final KitApi kitApi;
   final AgentController agentController;
   final BoardCatalog? boardCatalog;
+  final CanvasShortcutSettings canvasShortcuts;
   ObjectRegistry get registry => kitApi.registry;
 
   @override
@@ -145,6 +150,7 @@ class _SkapieAppState extends State<SkapieApp> {
           registry: _kitApi.registry,
           kitApi: _kitApi,
           agentController: _controller,
+          canvasShortcuts: widget.canvasShortcuts,
           onNewBoard: widget.boardCatalog == null ? null : _newBoard,
           listBoards: widget.boardCatalog?.list,
           onOpenBoard: widget.boardCatalog == null ? null : _openBoard,

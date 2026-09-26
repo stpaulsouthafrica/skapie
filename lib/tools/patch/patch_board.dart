@@ -209,7 +209,7 @@ const Map<String, Object?> writeScopeKitJson = {
       'width': 256,
       'height': 48,
       'props': {
-        'content': 'Choose a folder to grant write access',
+        'content': 'Double-click to choose a write folder',
         'fontSize': 13,
         skapieKitProp: codingWriteScopeKitId,
         skapieRoleProp: 'body',
@@ -715,6 +715,7 @@ Future<PatchApplyAttempt> invokeApplyPatch({
   required String applyFrameId,
   PatchWritePermission permission = const SystemPatchWritePermission(),
   PatchEffectLog? effects,
+  void Function(String applyFrameId)? onWriteAttempted,
 }) async {
   try {
     return await _invokeApplyPatch(
@@ -722,6 +723,7 @@ Future<PatchApplyAttempt> invokeApplyPatch({
       applyFrameId: applyFrameId,
       permission: permission,
       effects: effects,
+      onWriteAttempted: onWriteAttempted,
     );
   } catch (error) {
     return PatchApplyAttempt(
@@ -738,6 +740,7 @@ Future<PatchApplyAttempt> _invokeApplyPatch({
   required String applyFrameId,
   required PatchWritePermission permission,
   required PatchEffectLog? effects,
+  required void Function(String applyFrameId)? onWriteAttempted,
 }) async {
   final gate = applyPatchGate(kitApi.store.document, applyFrameId);
   if (gate.inert) {
@@ -855,16 +858,32 @@ Future<PatchApplyAttempt> _invokeApplyPatch({
     await log.append(record); // Preserve the preimage before touching disk.
     preimageRecorded = true;
     file = await _scopedExistingFile(scopePath, path);
-    if (_byteFingerprint(await file.readAsBytes()) != base ||
-        !await permission.canWrite(scopePath)) {
+    final currentBytes = await file.readAsBytes();
+    final permissionStillLive = await permission.canWrite(scopePath);
+    final live = kitApi.store.document;
+    final liveProposal = connectedProposalFrame(live, review.id);
+    final liveBody = liveProposal == null
+        ? null
+        : patchProposalBody(live, liveProposal.id);
+    if (applyPatchGate(live, applyFrameId).inert ||
+        connectedReviewFrame(live, applyFrameId)?.id != review.id ||
+        liveProposal?.id != proposal.id ||
+        liveBody?.props[proposalIdProp] != props[proposalIdProp] ||
+        liveBody?.props[proposalFingerprintProp] !=
+            props[proposalFingerprintProp] ||
+        connectedWriteScopeFrame(live, applyFrameId)?.id != scope?.id ||
+        live.objectById(scope!.id)?.props[writeScopePathProp] != scopePath ||
+        _byteFingerprint(currentBytes) != base ||
+        !permissionStillLive) {
       await log.update(id, {'state': 'conflict'});
       return const PatchApplyAttempt(
         inert: true,
         wrote: false,
         conflict: true,
-        reason: 'Conflict: the target changed immediately before writing.',
+        reason: 'Conflict: the file or board inputs changed before writing.',
       );
     }
+    onWriteAttempted?.call(applyFrameId);
     await file.writeAsBytes(nextBytes, flush: true);
     final observed = await file.readAsBytes();
     final observedFingerprint = _byteFingerprint(observed);

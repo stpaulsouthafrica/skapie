@@ -365,9 +365,10 @@ SceneCable? _cableFor({
         targetFrameId: input.frameId,
         from: output.center,
         to: input.center,
-        color: inputFrame == null
-            ? kitSwatches.first
-            : kitAccentColor(inputFrame),
+        color: parseKitColor(
+          link.color,
+          inputFrame == null ? kitSwatches.first : kitAccentColor(inputFrame),
+        ),
         targetBodyId: link.to,
         affectsRun: input.spec.affectsRun,
         fromKind: output.kind,

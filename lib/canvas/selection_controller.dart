@@ -5,31 +5,44 @@ import 'package:skapie/scene/scene_document.dart';
 
 /// UI-only selection and move preview. Not persisted on the scene.
 class SelectionController extends ChangeNotifier {
-  String? _selectedId;
+  final Set<String> _selectedIds = {};
+  final Set<String> _selectedCableIds = {};
   Offset _previewDelta = Offset.zero;
   bool _moving = false;
   double? _originX;
   double? _originY;
 
-  String? _selectedCableId;
   KitPortKind? _selectedPort;
 
-  String? get selectedId => _selectedId;
+  Set<String> get selectedIds => Set.unmodifiable(_selectedIds);
+  Set<String> get selectedCableIds => Set.unmodifiable(_selectedCableIds);
+  bool get isMultiple => _selectedIds.length + _selectedCableIds.length > 1;
+  String? get selectedId =>
+      _selectedIds.length == 1 && _selectedCableIds.isEmpty
+      ? _selectedIds.single
+      : null;
 
   /// Port ringed on the selected kit. Cleared with the kit.
-  KitPortKind? get selectedPort => _selectedId == null ? null : _selectedPort;
+  KitPortKind? get selectedPort => selectedId == null ? null : _selectedPort;
 
-  /// A [SceneCable.id]. Only one of object or cable is selected at a time.
-  String? get selectedCableId => _selectedCableId;
+  /// A [SceneCable.id] when exactly one cable is selected.
+  String? get selectedCableId =>
+      _selectedCableIds.length == 1 && _selectedIds.isEmpty
+      ? _selectedCableIds.single
+      : null;
   Offset get previewDelta => _previewDelta;
   bool get isMoving => _moving;
 
   void selectCable(String? id) {
-    if (_selectedCableId == id && _selectedId == null) {
+    if (selectedCableId == id &&
+        _selectedIds.isEmpty &&
+        _selectedCableIds.length == (id == null ? 0 : 1)) {
       return;
     }
-    _selectedCableId = id;
-    _selectedId = null;
+    _selectedCableIds
+      ..clear()
+      ..addAll(id == null ? const <String>{} : {id});
+    _selectedIds.clear();
     _selectedPort = null;
     _moving = false;
     _previewDelta = Offset.zero;
@@ -39,14 +52,43 @@ class SelectionController extends ChangeNotifier {
   }
 
   void select(String? id) {
-    if (_selectedId == id &&
-        _selectedCableId == null &&
+    if (selectedId == id &&
+        _selectedCableIds.isEmpty &&
+        _selectedIds.length == (id == null ? 0 : 1) &&
         !_moving &&
         _previewDelta == Offset.zero) {
       return;
     }
-    _selectedCableId = null;
-    _selectedId = id;
+    _selectedIds
+      ..clear()
+      ..addAll(id == null ? const <String>{} : {id});
+    _selectedCableIds.clear();
+    _selectedPort = null;
+    _moving = false;
+    _previewDelta = Offset.zero;
+    _originX = null;
+    _originY = null;
+    notifyListeners();
+  }
+
+  /// Replace the transient selection with everything crossed by a marquee.
+  void selectMany({
+    required Set<String> objectIds,
+    required Set<String> cableIds,
+  }) {
+    if (setEquals(_selectedIds, objectIds) &&
+        setEquals(_selectedCableIds, cableIds) &&
+        _selectedPort == null &&
+        !_moving &&
+        _previewDelta == Offset.zero) {
+      return;
+    }
+    _selectedIds
+      ..clear()
+      ..addAll(objectIds);
+    _selectedCableIds
+      ..clear()
+      ..addAll(cableIds);
     _selectedPort = null;
     _moving = false;
     _previewDelta = Offset.zero;
@@ -57,17 +99,22 @@ class SelectionController extends ChangeNotifier {
 
   /// Ring [kind] on the selected kit. No kit selected means no ring.
   void selectPort(KitPortKind? kind) {
-    if (_selectedId == null || _selectedPort == kind) {
+    if (selectedId == null || _selectedPort == kind) {
       return;
     }
     _selectedPort = kind;
     notifyListeners();
   }
 
-  void syncToDocument(SceneDocument document) {
-    final id = _selectedId;
-    if (id != null && document.objectById(id) == null) {
-      select(null);
+  void syncToDocument(SceneDocument document, {Set<String>? cableIds}) {
+    final before = _selectedIds.length + _selectedCableIds.length;
+    _selectedIds.removeWhere((id) => document.objectById(id) == null);
+    if (cableIds != null) {
+      _selectedCableIds.removeWhere((id) => !cableIds.contains(id));
+    }
+    if (_selectedIds.length + _selectedCableIds.length != before) {
+      _selectedPort = null;
+      notifyListeners();
     }
   }
 

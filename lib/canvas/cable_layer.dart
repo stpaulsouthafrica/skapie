@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:skapie/canvas/board_validation.dart';
+import 'package:skapie/canvas/board_data_flow.dart';
 import 'package:skapie/canvas/cable_activity.dart';
 import 'package:skapie/canvas/canvas_camera.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -77,13 +78,14 @@ class CableLayer extends StatefulWidget {
     this.previewOnly = false,
     this.paintDrag = true,
     this.activity = CableActivity.idle,
+    this.boardEvents = const [],
     this.glow,
     this.motion,
     this.retractions = const [],
     this.onRetractionDone,
     this.validation = BoardValidation.empty,
     this.invalidColor = const Color(0xFFB85C5C),
-    this.selectedCableId,
+    this.selectedCableIds = const {},
     this.traceCables = const {},
     this.traceKits = const {},
     this.traceAmount = 1,
@@ -102,6 +104,7 @@ class CableLayer extends StatefulWidget {
   final bool previewOnly;
   final bool paintDrag;
   final CableActivity activity;
+  final List<BoardDataEvent> boardEvents;
   final ActivityGlow? glow;
   final CableMotion? motion;
   final List<RetractingCable> retractions;
@@ -110,7 +113,7 @@ class CableLayer extends StatefulWidget {
   /// Marked cables are drawn dashed in [invalidColor], never as live.
   final BoardValidation validation;
   final Color invalidColor;
-  final String? selectedCableId;
+  final Set<String> selectedCableIds;
 
   /// Recorded route for the selected timeline event. Unused cables stay dark.
   final Set<String> traceCables;
@@ -136,6 +139,7 @@ class _CableLayerState extends State<CableLayer>
   final _fading = <_Act>[];
   var _seenToolPulse = 0;
   var _seenToolResultPulse = 0;
+  var _seenBoardEventSequence = 0;
 
   @override
   void initState() {
@@ -310,14 +314,15 @@ class _CableLayerState extends State<CableLayer>
         invalid: true,
         danglingStart: mark.dangling == CableDangling.start,
         danglingEnd: mark.dangling == CableDangling.end,
-        selected: cable.id == widget.selectedCableId,
+        selected: widget.selectedCableIds.contains(cable.id),
       );
     }
     final arrival = _arrivals[cable.id];
-    final pose = arrival == null
+    final live = _liveOf(cable);
+    // An actual transfer takes priority over a connection's decorative flash.
+    final pose = arrival == null || live?.head != null
         ? null
         : _pose(arrival, _clock - arrival.start);
-    final live = pose == null ? _liveOf(cable) : null;
     return PaintedCable(
       from: _screen(_shown(cable.from, cable.sourceId)),
       to: _screen(_shown(cable.to, cable.targetFrameId)),
@@ -332,7 +337,7 @@ class _CableLayerState extends State<CableLayer>
       ),
       flashTowardSource: pose?.towardSource ?? (live?.towardSource ?? false),
       arrivalAtStart: pose?.towardSource ?? (live?.towardSource ?? false),
-      selected: cable.id == widget.selectedCableId,
+      selected: widget.selectedCableIds.contains(cable.id),
     );
   }
 
@@ -367,7 +372,9 @@ class _CableLayerState extends State<CableLayer>
     final envelope = cableGlowEnvelope(elapsed: elapsed, sinceFade: sinceFade);
     final towardSource = act.towardSource.contains(cable.id);
     final sequencing =
-        act.kind == _ActKind.tool || act.kind == _ActKind.toolResult;
+        act.kind == _ActKind.tool ||
+        act.kind == _ActKind.toolResult ||
+        act.kind == _ActKind.board;
     if (sequencing && elapsed >= 0 && (sinceFade == null || sinceFade < 0)) {
       final index = act.cableIds.indexOf(cable.id);
       final active = toolFlashIndex(
@@ -403,6 +410,7 @@ class _CableLayerState extends State<CableLayer>
   }
 
   void _syncActs(List<SceneCable> cables) {
+    _syncBoardEvents(cables);
     final activity = widget.activity;
     final body = activity.runningBodyId;
     final desired = <String>{};
@@ -507,6 +515,35 @@ class _CableLayerState extends State<CableLayer>
     _syncTicker();
   }
 
+  void _syncBoardEvents(List<SceneCable> cables) {
+    final live = {for (final cable in cables) cable.id};
+    for (final event in widget.boardEvents) {
+      if (event.sequence <= _seenBoardEventSequence) continue;
+      _seenBoardEventSequence = event.sequence;
+      final route = event.route;
+      if (route.cableIds.any(
+        (id) => !live.contains(id) || widget.validation.markOf(id) != null,
+      )) {
+        continue;
+      }
+      final frames = {
+        for (final id in route.frameIds)
+          if (widget.document.objectById(id) != null) id,
+      };
+      if (frames.isEmpty) continue;
+      final act = _Act(
+        kind: _ActKind.board,
+        cableIds: route.cableIds,
+        frames: frames,
+        frameOrder: route.frameIds,
+        towardSource: const {},
+        born: _clock,
+      );
+      _release(act);
+      _fading.add(act);
+    }
+  }
+
   void _keep(String token, _ActKind kind, List<SceneCable> members) {
     final ids = [for (final cable in members) cable.id];
     final frames = switch (kind) {
@@ -568,10 +605,16 @@ class _CableLayerState extends State<CableLayer>
     act.fadeAt = activityFadeAt(
       born: act.born,
       now: now,
-      cycle: act.kind == _ActKind.tool || act.kind == _ActKind.toolResult
+      cycle:
+          act.kind == _ActKind.tool ||
+              act.kind == _ActKind.toolResult ||
+              act.kind == _ActKind.board
           ? count * _travelSeconds
           : _travelSeconds,
-      finishCycle: act.kind == _ActKind.tool || act.kind == _ActKind.toolResult,
+      finishCycle:
+          act.kind == _ActKind.tool ||
+          act.kind == _ActKind.toolResult ||
+          act.kind == _ActKind.board,
     );
   }
 
@@ -610,6 +653,19 @@ class _CableLayerState extends State<CableLayer>
     void add(_Act act) {
       final sinceFade = act.released ? _clock - act.fadeAt : null;
       if (sinceFade != null && sinceFade >= _fadeSeconds) {
+        return;
+      }
+      if (act.kind == _ActKind.board) {
+        for (var i = 0; i < act.frameOrder.length; i++) {
+          final elapsed = _clock - act.born - i * _travelSeconds;
+          if (elapsed < 0) continue;
+          final amount = cableGlowEnvelope(
+            elapsed: elapsed,
+            sinceFade: sinceFade,
+          );
+          final id = act.frameOrder[i];
+          if (amount > (levels[id] ?? 0)) levels[id] = amount;
+        }
         return;
       }
       final amount = cableGlowEnvelope(
@@ -703,7 +759,9 @@ class _CableLayerState extends State<CableLayer>
     if (act.released) {
       return _clock < act.fadeAt + _fadeSeconds;
     }
-    if (act.kind == _ActKind.tool || act.kind == _ActKind.toolResult) {
+    if (act.kind == _ActKind.tool ||
+        act.kind == _ActKind.toolResult ||
+        act.kind == _ActKind.board) {
       return true;
     }
     if (act.kind == _ActKind.run) {
@@ -829,7 +887,7 @@ class _CablePainter extends CustomPainter {
   }
 }
 
-enum _ActKind { seed, tool, toolResult, output, run }
+enum _ActKind { seed, tool, toolResult, output, run, board }
 
 class _Act {
   _Act({
@@ -838,12 +896,14 @@ class _Act {
     required this.frames,
     required this.towardSource,
     required this.born,
+    this.frameOrder = const [],
   });
 
   final _ActKind kind;
   List<String> cableIds;
   Set<String> frames;
   Set<String> towardSource;
+  final List<String> frameOrder;
   final double born;
   var released = false;
   var fadeAt = 0.0;

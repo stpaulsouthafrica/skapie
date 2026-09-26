@@ -280,7 +280,7 @@ const KitRecipe codingRepositoryRecipe = KitRecipe(
       width: 256,
       height: 56,
       props: {
-        'content': 'Choose a repository in the inspector',
+        'content': 'Double-click to choose a repository folder',
         'fontSize': 13,
         skapieKitProp: codingRepositoryKitId,
         skapieRoleProp: 'body',

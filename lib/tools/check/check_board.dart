@@ -306,6 +306,7 @@ Future<CheckAttempt> invokeRunCheck({
   beginEvidence,
   void Function(String runId, RunEventKind kind, Map<String, Object?> payload)?
   appendEvidence,
+  void Function(String runFrameId)? onRunRequested,
 }) async {
   final document = kitApi.store.document;
   final gate = checkGate(document, runFrameId);
@@ -332,6 +333,18 @@ Future<CheckAttempt> invokeRunCheck({
       message: 'Write Scope check failed: $error',
     );
   }
+  final live = kitApi.store.document;
+  if (!checkGate(live, runFrameId).ready ||
+      connectedCheckWriteScope(live, runFrameId)?.id != scope.id ||
+      live.objectById(scope.id)?.props[writeScopePathProp] != root ||
+      connectedCheckResult(live, runFrameId)?.id != result.id) {
+    return const CheckAttempt(
+      started: false,
+      outcome: '',
+      message: 'Check setup changed. Review the cables and folder again.',
+    );
+  }
+  onRunRequested?.call(runFrameId);
   kitApi.updateProps(body.id, {
     'content': 'Running Git diff --check…',
     'checkOutcome': 'running',

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/canvas/board_validation.dart';
+import 'package:skapie/canvas/board_data_flow.dart';
 import 'package:skapie/canvas/connection_info.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/selection_controller.dart';
@@ -15,6 +16,7 @@ class ConnectionInspector extends StatelessWidget {
     required this.selection,
     required this.cableId,
     this.controller,
+    this.boardUse,
     this.onCut,
   });
 
@@ -22,6 +24,7 @@ class ConnectionInspector extends StatelessWidget {
   final SelectionController selection;
   final String cableId;
   final AgentController? controller;
+  final BoardCableUse? boardUse;
 
   /// Plays the board retraction. Absent callers disconnect immediately.
   final ValueChanged<SceneCable>? onCut;
@@ -53,6 +56,7 @@ class ConnectionInspector extends StatelessWidget {
       document,
       cable,
       controller?.lastRunUse ?? const {},
+      boardUse: boardUse,
     );
     final carries = switch (info.role) {
       PortRole.data => 'Carries now',
@@ -124,6 +128,14 @@ class ConnectionInspector extends StatelessWidget {
                       line(info.roleLabel, key: const Key('connection-role')),
                       line(info.role.meaning, color: tokens.muted),
                     ]),
+                    if (info.explanation.isNotEmpty)
+                      section('Why connected', [
+                        line(
+                          info.explanation,
+                          key: const Key('connection-explanation'),
+                          maxLines: 4,
+                        ),
+                      ]),
                     section(carries, [
                       line(
                         info.preview.isEmpty ? '—' : info.preview,

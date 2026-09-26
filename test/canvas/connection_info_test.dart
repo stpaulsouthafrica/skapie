@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:skapie/agent/llm_run_use.dart';
 import 'package:skapie/canvas/board_validation.dart';
+import 'package:skapie/canvas/board_data_flow.dart';
 import 'package:skapie/canvas/connection_info.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -123,6 +124,49 @@ void main() {
     expect(info.source, 'Text · Out');
     expect(info.destination, 'Deleted kit');
     expect(info.issue, 'Out points at a kit that was deleted');
+  });
+
+  test('a patch cable reports the recorded board transfer', () {
+    final propose = kitApi.instantiate(
+      proposePatchKitId,
+      origin: const Offset(0, 800),
+    );
+    final proposal = kitApi.instantiate(
+      codingPatchProposalKitId,
+      origin: const Offset(300, 800),
+    );
+    final ports = kitPorts(kitApi.store.document);
+    connectKitPorts(
+      kitApi: kitApi,
+      from: ports.singleWhere(
+        (port) =>
+            port.frameId == propose.first &&
+            port.kind == KitPortKind.proposalResult,
+      ),
+      to: ports.singleWhere(
+        (port) =>
+            port.frameId == proposal.first &&
+            port.kind == KitPortKind.proposalIn,
+      ),
+    );
+    final link = sceneCables(kitApi.store.document)
+        .singleWhere((item) => item.toKind == KitPortKind.proposalIn);
+    expect(
+      lastUseSummary(kitApi.store.document, link, const {}),
+      'No transfer observed this session',
+    );
+    expect(
+      lastUseSummary(
+        kitApi.store.document,
+        link,
+        const {},
+        boardUse: BoardCableUse(
+          DateTime(2026, 9, 26, 17, 30),
+          'Patch proposal delivered',
+        ),
+      ),
+      contains('Patch proposal delivered'),
+    );
   });
 
   test('last use appears only on cables that ran in the latest run', () {

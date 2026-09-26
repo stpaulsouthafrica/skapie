@@ -1,11 +1,150 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/agent_controller.dart';
+import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/canvas/selection_controller.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/tools/patch/write_permission.dart';
+import 'package:skapie/tools/repository/repository_permission.dart';
 
 void main() {
+  testWidgets('Inspector folder buttons use the same read and write grants', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final api = createAppKitApi(store: store);
+    final repository = api.instantiate(
+      codingRepositoryKitId,
+      origin: Offset.zero,
+    );
+    final scope = api.instantiate(
+      codingWriteScopeKitId,
+      origin: const Offset(400, 0),
+    );
+    final selection = SelectionController()..select(repository.first);
+    final readPermission = _InspectorRepositoryPermission();
+    final writePermission = _InspectorWritePermission();
+    final controller = AgentController(
+      kitApi: api,
+      session: AgentSession(model: FakeAgentModel(), kitApi: api),
+      runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      repositoryPermission: readPermission,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InspectorPanel(
+            store: store,
+            selection: selection,
+            kitApi: api,
+            controller: controller,
+            writePermission: writePermission,
+          ),
+        ),
+      ),
+    );
+
+    final readButton = find.byKey(const Key('choose-repository'));
+    await tester.ensureVisible(readButton);
+    await tester.tap(readButton);
+    await tester.pump();
+    expect(readPermission.chooseCalls, 1);
+    expect(
+      store.document.objectById(repository.first)!.props[repositoryPathProp],
+      '/tmp/read-repo',
+    );
+
+    selection.select(scope.first);
+    await tester.pump();
+    final writeButton = find.byKey(const Key('choose-write-scope'));
+    await tester.ensureVisible(writeButton);
+    await tester.tap(writeButton);
+    await tester.pump();
+    expect(writePermission.chooseCalls, 1);
+    expect(
+      store.document.objectById(scope.first)!.props[writeScopePathProp],
+      '/tmp/write-repo',
+    );
+  });
+
+  testWidgets('multi Inspector colors and deletes kits and cables', (
+    tester,
+  ) async {
+    final store = SceneStore();
+    final api = createAppKitApi(store: store);
+    final first = api.instantiate(boardTextKitId, origin: Offset.zero);
+    final second = api.instantiate(
+      boardTextKitId,
+      origin: const Offset(0, 200),
+    );
+    final llm = api.instantiate(harnessLlmKitId, origin: const Offset(400, 0));
+    connectTextToLlm(
+      kitApi: api,
+      textObjectId: first.first,
+      llmBodyId: llm.last,
+    );
+    connectTextToLlm(
+      kitApi: api,
+      textObjectId: second.first,
+      llmBodyId: llm.last,
+      port: llmContextPort,
+    );
+    final cable = sceneCables(store.document)
+        .singleWhere((item) => item.sourceId == first.first);
+    final selection = SelectionController()
+      ..selectMany(
+        objectIds: {first.first, second.first},
+        cableIds: {cable.id},
+      );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InspectorPanel(store: store, selection: selection, kitApi: api),
+        ),
+      ),
+    );
+    expect(find.byKey(const Key('multi-selection-inspector')), findsOneWidget);
+    expect(find.byKey(const Key('multi-selection-swatches')), findsOneWidget);
+
+    final swatch = kitSwatches[2];
+    await tester.tap(
+      find.byKey(ValueKey('multi-swatch-${colorToHex(swatch)}')),
+    );
+    await tester.pump();
+    expect(
+      store.document.objectById(first.first)!.props[kitAccentProp],
+      colorToHex(swatch),
+    );
+    expect(
+      store.document.objectById(second.first)!.props[kitAccentProp],
+      colorToHex(swatch),
+    );
+    expect(
+      colorToHex(
+        sceneCables(store.document)
+            .singleWhere((item) => item.id == cable.id)
+            .color,
+      ),
+      colorToHex(swatch),
+    );
+
+    await tester.tap(find.text('Delete selected'));
+    await tester.pump();
+    expect(store.document.objectById(first.first), isNull);
+    expect(store.document.objectById(second.first), isNull);
+    expect(store.document.objectById(llm.first), isNotNull);
+    expect(selection.selectedIds, isEmpty);
+    expect(selection.selectedCableIds, isEmpty);
+    store.undo();
+    expect(store.document.objectById(first.first), isNotNull);
+    expect(store.document.objectById(second.first), isNotNull);
+  });
+
   testWidgets('text content submit applies UpdateObjectProps; undo restores', (
     tester,
   ) async {
@@ -166,6 +305,77 @@ void main() {
     expect(store.document.objects.single.locked, isFalse);
   });
 
+  testWidgets('kits omit Transform, including a future kit id', (tester) async {
+    for (final kitId in [
+      codingRepositoryKitId,
+      codingWriteScopeKitId,
+      boardTextKitId,
+      harnessLlmKitId,
+      'tools.list_kits',
+    ]) {
+      final store = SceneStore();
+      final kitApi = createAppKitApi(store: store);
+      final ids = kitApi.instantiate(kitId, origin: Offset.zero);
+      final selection = SelectionController()
+        ..select(kitId == codingRepositoryKitId ? ids.last : ids.first);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InspectorPanel(
+              key: ValueKey(kitId),
+              store: store,
+              selection: selection,
+              kitApi: kitApi,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Transform'), findsNothing, reason: kitId);
+      expect(find.text('Locked'), findsNothing, reason: kitId);
+    }
+
+    final store = SceneStore();
+    store.apply(
+      AddObject(
+        const SceneObject(
+          id: 'future-kit',
+          type: 'box',
+          x: 0,
+          y: 0,
+          width: 100,
+          height: 80,
+          props: {skapieKitProp: 'example.future', skapieRoleProp: 'frame'},
+        ),
+      ),
+    );
+    final selection = SelectionController()..select('future-kit');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InspectorPanel(store: store, selection: selection),
+        ),
+      ),
+    );
+    expect(find.text('Transform'), findsNothing);
+
+    store.apply(
+      AddObject(
+        const SceneObject(
+          id: 'standalone',
+          type: 'box',
+          x: 200,
+          y: 0,
+          width: 80,
+          height: 60,
+        ),
+      ),
+    );
+    selection.select('standalone');
+    await tester.pump();
+    expect(find.text('Transform'), findsOneWidget);
+    expect(find.text('Locked'), findsOneWidget);
+  });
+
   testWidgets('allowed connection uses the LLM name and accent color', (
     tester,
   ) async {
@@ -246,4 +456,36 @@ void main() {
       '#7EB6E8',
     );
   });
+}
+
+class _InspectorRepositoryPermission implements RepositoryPermission {
+  int chooseCalls = 0;
+
+  @override
+  Future<String?> chooseDirectory() async {
+    chooseCalls++;
+    return '/tmp/read-repo';
+  }
+
+  @override
+  Future<bool> canRead(String path) async => true;
+}
+
+class _InspectorWritePermission implements PatchWritePermission {
+  int chooseCalls = 0;
+
+  @override
+  Future<String?> chooseDirectory() async {
+    chooseCalls++;
+    return '/tmp/write-repo';
+  }
+
+  @override
+  Future<bool> canWrite(String path) async => true;
+
+  @override
+  Future<String?> exportProposal({
+    required String name,
+    required String text,
+  }) async => null;
 }

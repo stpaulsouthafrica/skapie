@@ -9,7 +9,6 @@ import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
-import 'package:skapie/tools/world/kits.dart';
 
 import 'agent_controller_test.dart';
 
@@ -136,6 +135,39 @@ void main() {
               as List;
       expect(offered, contains('list_kits'));
       _expectIncreasing(run);
+    },
+  );
+
+  test(
+    'a second manual turn cannot start while the first is running',
+    () async {
+      final model = _HoldModel();
+      final controller = AgentController(
+        kitApi: kitApi,
+        session: AgentSession(model: model, kitApi: kitApi),
+        runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      );
+      final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
+      final tool = kitApi.instantiate(
+        'tools.list_kits',
+        origin: const Offset(400, 0),
+      );
+      attachToolKit(
+        kitApi: kitApi,
+        toolObjectId: tool.first,
+        llmBodyId: llm.last,
+      );
+      sinkLlm(kitApi, llm.last);
+
+      final first = controller.sendUser('first', targetBodyId: llm.last);
+      await model.started.future;
+      await controller.sendUser('second', targetBodyId: llm.last);
+      expect(controller.ledger.runs, hasLength(1));
+      expect(controller.runningBodyId, llm.last);
+      model.release.complete();
+      await first;
+      expect(controller.runningBodyId, isNull);
+      expect(controller.ledger.runs, hasLength(1));
     },
   );
 

@@ -17,6 +17,24 @@ void main() {
     expect(selection.selectedId, isNull);
   });
 
+  test('marquee can hold objects and cables without a misleading primary', () {
+    final selection = SelectionController()
+      ..selectMany(objectIds: {'a', 'b'}, cableIds: {'c'});
+    expect(selection.selectedIds, {'a', 'b'});
+    expect(selection.selectedCableIds, {'c'});
+    expect(selection.isMultiple, isTrue);
+    expect(selection.selectedId, isNull);
+    expect(selection.selectedCableId, isNull);
+
+    selection.select('a');
+    expect(selection.selectedIds, {'a'});
+    expect(selection.selectedCableIds, isEmpty);
+    selection.selectMany(objectIds: {}, cableIds: {'c'});
+    expect(selection.selectedCableId, 'c');
+    selection.syncToDocument(SceneDocument.empty(), cableIds: {});
+    expect(selection.selectedCableIds, isEmpty);
+  });
+
   test('endMove commits one preview offset from origin', () {
     final selection = SelectionController()..select('a');
     selection.beginMove(originX: 10, originY: 20);

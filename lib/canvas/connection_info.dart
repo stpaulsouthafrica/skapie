@@ -6,6 +6,7 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
+import 'package:skapie/canvas/board_data_flow.dart';
 import 'package:skapie/tools/check/check_board.dart';
 
 const int connectionPreviewLimit = 280;
@@ -18,6 +19,7 @@ class ConnectionInfo {
     required this.role,
     required this.value,
     required this.preview,
+    required this.explanation,
     this.issue,
   });
 
@@ -27,6 +29,9 @@ class ConnectionInfo {
   final PortRole role;
   final PortValue value;
   final String preview;
+
+  /// A short, stable reason for this typed connection.
+  final String explanation;
 
   /// Board problem on this cable, if any.
   final String? issue;
@@ -67,8 +72,38 @@ ConnectionInfo describeConnection(
     role: value.role,
     value: value,
     preview: _clip(_preview(document, cable, value)),
+    explanation: connectionExplanation(fromKind, toKind),
     issue: problem.isEmpty ? null : problem,
   );
+}
+
+String connectionExplanation(KitPortKind? from, KitPortKind? to) {
+  return switch ((from, to)) {
+    (KitPortKind.textOut, KitPortKind.llmInput) =>
+      'This text becomes the prompt when you start LLM Run.',
+    (KitPortKind.llmConversation, KitPortKind.conversationIn) =>
+      'Stores this exchange for the next turn you start.',
+    (KitPortKind.repositoryOut, KitPortKind.toolRepository) =>
+      'Grants this tool access to the chosen repository folder.',
+    (KitPortKind.toolOut, KitPortKind.llmTools) =>
+      'Offers this tool to the LLM. The model chooses whether to call it.',
+    (KitPortKind.proposalResult, KitPortKind.proposalIn) =>
+      'Displays the proposed patch for review. No file is changed.',
+    (KitPortKind.proposalOut, KitPortKind.reviewIn) =>
+      'Shows the proposal for your Accept or Reject decision.',
+    (KitPortKind.reviewOut, KitPortKind.applyIn) =>
+      'An accepted decision can unlock Apply, which you still start yourself.',
+    (KitPortKind.writeScopeOut, KitPortKind.applyWriteScope) =>
+      'Limits manual Apply to the folder you choose.',
+    (KitPortKind.writeScopeOut, KitPortKind.runCheckWrite) =>
+      'Limits manual Check to the folder you choose.',
+    (KitPortKind.checkSpecOut, KitPortKind.runCheckSpec) =>
+      'Selects the trusted check you configure. You start it manually.',
+    (KitPortKind.runCheckResult, KitPortKind.checkResultIn) =>
+      'Records the outcome after you start Run Check.',
+    (KitPortKind.checkResultOut, KitPortKind.llmContext) => 'Adds a short check summary to the next turn. Conversation keeps the thread.',
+    _ => '',
+  };
 }
 
 String _end(SceneDocument document, String frameId, KitPortKind? kind) {
@@ -252,8 +287,23 @@ LastUse? cableLastUse(
 String lastUseSummary(
   SceneDocument document,
   SceneCable cable,
-  Map<String, LlmRunUse> uses,
-) {
+  Map<String, LlmRunUse> uses, {
+  BoardCableUse? boardUse,
+}) {
+  if (boardUse != null) {
+    return '${_clock(boardUse.at)} · ${boardUse.how}';
+  }
+  if (const {
+    KitPortKind.proposalIn,
+    KitPortKind.reviewIn,
+    KitPortKind.applyIn,
+    KitPortKind.applyWriteScope,
+    KitPortKind.runCheckSpec,
+    KitPortKind.runCheckWrite,
+    KitPortKind.checkResultIn,
+  }.contains(cable.toKind)) {
+    return 'No transfer observed this session';
+  }
   final last = cableLastUse(document, cable, uses);
   if (last != null) {
     return '${_clock(last.at)} · ${last.how}';

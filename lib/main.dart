@@ -7,6 +7,7 @@ import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/skapie_app.dart';
+import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/kit_api/kit_path.dart';
@@ -36,12 +37,17 @@ Future<void> main() async {
   }
   final kitApi = await bootstrapKitApi(store: store);
   final agentController = await bootstrapAgentController(kitApi: kitApi);
+  final appSupport = await getApplicationSupportDirectory();
+  final canvasShortcuts = await CanvasShortcutSettings.load(
+    CanvasShortcutSettings.fileIn(appSupport),
+  );
   runApp(
     SkapieApp(
       store: store,
       kitApi: kitApi,
       agentController: agentController,
       boardCatalog: boardCatalog,
+      canvasShortcuts: canvasShortcuts,
     ),
   );
 }

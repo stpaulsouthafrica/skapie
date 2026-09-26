@@ -130,7 +130,9 @@ class _LlmKitInputState extends State<LlmKitInput> {
 
   Future<void> _submit() async {
     final prompt = _cableInput;
-    if (_blockers.isNotEmpty || _busy) {
+    if (_blockers.isNotEmpty ||
+        _busy ||
+        widget.controller.runningBodyId != null) {
       return;
     }
     setState(() => _busy = true);
@@ -150,7 +152,10 @@ class _LlmKitInputState extends State<LlmKitInput> {
     final tokens = PaintScope.of(context);
     final blockers = _blockers;
     final runningHere = widget.controller.runningBodyId == widget.body.id;
-    final blocked = blockers.isNotEmpty || (_busy && !runningHere);
+    final blocked =
+        blockers.isNotEmpty ||
+        (_busy && !runningHere) ||
+        (widget.controller.runningBodyId != null && !runningHere);
     final choices = _choices;
     final selected = _selectedModel;
     return Column(

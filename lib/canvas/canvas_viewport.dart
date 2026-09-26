@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/canvas/board_validation.dart';
+import 'package:skapie/canvas/board_data_flow.dart';
 import 'package:skapie/canvas/cable_activity.dart';
 import 'package:skapie/canvas/cable_drag.dart';
 import 'package:skapie/canvas/cable_layer.dart';
@@ -17,12 +19,18 @@ import 'package:skapie/canvas/canvas_grid_painter.dart';
 import 'package:skapie/canvas/hit_test.dart';
 import 'package:skapie/canvas/keyboard_connect.dart';
 import 'package:skapie/canvas/kit_ports.dart';
+import 'package:skapie/canvas/marquee_selection.dart';
+import 'package:skapie/canvas/selection_actions.dart';
 import 'package:skapie/app/conversation_kit_viewer.dart';
 import 'package:skapie/app/text_kit_editor.dart';
+import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/app/patch_diff_viewer.dart';
+import 'package:skapie/app/kit_folder_actions.dart';
 import 'package:skapie/canvas/scene_object_layer.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
+import 'package:skapie/tools/patch/write_permission.dart';
+import 'package:skapie/tools/repository/repository_permission.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
@@ -44,6 +52,8 @@ class CanvasViewport extends StatefulWidget {
     KitApi? kitApi,
     this.agentController,
     this.onConnect,
+    this.canvasShortcuts,
+    this.writePermission = const SystemPatchWritePermission(),
   }) : selection = selection ?? SelectionController(),
        kitApi =
            kitApi ??
@@ -53,6 +63,8 @@ class CanvasViewport extends StatefulWidget {
   final SelectionController selection;
   final KitApi kitApi;
   final AgentController? agentController;
+  final CanvasShortcutSettings? canvasShortcuts;
+  final PatchWritePermission writePermission;
 
   /// Enter while a port is ringed. The host opens the connect palette.
   final VoidCallback? onConnect;
@@ -69,13 +81,25 @@ class CanvasViewportState extends State<CanvasViewport>
   Offset? _lastDrag;
   CanvasCamera? _panZoomStart;
   _DragKind _dragKind = _DragKind.none;
+  Offset? _marqueeStart;
+  Offset? _marqueeEnd;
+  Set<String> _marqueeInitialObjects = const {};
+  Set<String> _marqueeInitialCables = const {};
   Offset? _moveWorldStart;
+  String? _multiMoveHitId;
   final _focus = FocusNode();
   final _inlineController = TextEditingController();
   final _inlineFocus = FocusNode();
   String? _inlineEditId;
   final _cableMotion = CableMotion();
   final _activityGlow = ActivityGlow();
+  late SceneDocument _lastFlowDocument;
+  final _boardEvents = <BoardDataEvent>[];
+  final _lastBoardUses = <String, BoardCableUse>{};
+  int _boardEventSequence = 0;
+  Timer? _boardEventsExpiry;
+  final _pendingRevealProps = <String, Map<String, Object?>>{};
+  final _revealTimers = <String, Timer>{};
   final _retractions = <RetractingCable>[];
   CableHover? _cableHover;
   KitPort? _portHover;
@@ -115,15 +139,9 @@ class CanvasViewportState extends State<CanvasViewport>
 
   String get _zoomLabel => '${(_camera.zoom * 100).round()}%';
 
-  void requestBoardFocus() => _focus.requestFocus();
+  BoardCableUse? boardUseFor(String cableId) => _lastBoardUses[cableId];
 
-  SceneObject? get _selectedObject {
-    final id = widget.selection.selectedId;
-    if (id == null) {
-      return null;
-    }
-    return widget.store.document.objectById(id);
-  }
+  void requestBoardFocus() => _focus.requestFocus();
 
   static CanvasCamera _cameraFrom(SceneCameraSnapshot? snapshot) {
     if (snapshot == null) {
@@ -146,6 +164,7 @@ class CanvasViewportState extends State<CanvasViewport>
   @override
   void initState() {
     super.initState();
+    _lastFlowDocument = widget.store.document;
     _seenOutputPulse = widget.agentController?.outputPulse ?? 0;
     _outputTicker = createTicker((elapsed) {
       if (elapsed < outputActivityHold) {
@@ -199,6 +218,11 @@ class CanvasViewportState extends State<CanvasViewport>
     if (oldWidget.store != widget.store) {
       oldWidget.store.removeListener(_onStore);
       widget.store.addListener(_onStore);
+      _lastFlowDocument = widget.store.document;
+      _boardEvents.clear();
+      _lastBoardUses.clear();
+      _boardEventsExpiry?.cancel();
+      _clearReveals();
     }
     if (oldWidget.selection != widget.selection) {
       oldWidget.selection.removeListener(_onSelection);
@@ -220,6 +244,8 @@ class CanvasViewportState extends State<CanvasViewport>
     _focus.dispose();
     _cableMotion.dispose();
     _activityGlow.dispose();
+    _boardEventsExpiry?.cancel();
+    _clearReveals();
     _outputTicker
       ..stop()
       ..dispose();
@@ -261,11 +287,109 @@ class CanvasViewportState extends State<CanvasViewport>
   }
 
   void _onStore() {
-    widget.selection.syncToDocument(widget.store.document);
+    final document = widget.store.document;
+    if (widget.store.lastChangeKind == SceneChangeKind.apply) {
+      final routes = boardDataRoutesForChange(_lastFlowDocument, document);
+      _recordBoardRoutes(routes);
+      _holdNewPayloads(_lastFlowDocument, document, routes);
+    } else {
+      _clearReveals();
+      if (widget.store.lastChangeKind == SceneChangeKind.load) {
+        _boardEvents.clear();
+        _lastBoardUses.clear();
+        _boardEventsExpiry?.cancel();
+      }
+    }
+    _lastFlowDocument = document;
+    widget.selection.syncToDocument(
+      document,
+      cableIds: {for (final cable in _allCables()) cable.id},
+    );
     final next = _clamped(_camera);
     setState(() => _camera = next);
     widget.store.noteCamera(_snapshot(next));
     _syncOverview();
+  }
+
+  void _clearReveals() {
+    for (final timer in _revealTimers.values) {
+      timer.cancel();
+    }
+    _revealTimers.clear();
+    _pendingRevealProps.clear();
+  }
+
+  void _holdNewPayloads(
+    SceneDocument before,
+    SceneDocument after,
+    List<BoardDataRoute> routes,
+  ) {
+    for (final route in routes) {
+      for (var i = 1; i < route.frameIds.length; i++) {
+        final members = kitMembers(
+          document: after,
+          selectedId: route.frameIds[i],
+        );
+        if (members == null) continue;
+        for (final member in members) {
+          if (member.props[skapieRoleProp] != 'body') continue;
+          final previous = before.objectById(member.id);
+          if (previous == null ||
+              (previous.props['content'] == member.props['content'] &&
+                  previous.props['checkOutcome'] ==
+                      member.props['checkOutcome'])) {
+            continue;
+          }
+          _pendingRevealProps[member.id] = previous.props;
+          _revealTimers.remove(member.id)?.cancel();
+          final bodyId = member.id;
+          _revealTimers[bodyId] = Timer(
+            Duration(
+              milliseconds: (i * cableFlashTravelSeconds * 1000).round(),
+            ),
+            () {
+              _revealTimers.remove(bodyId);
+              _pendingRevealProps.remove(bodyId);
+              if (mounted) setState(() {});
+            },
+          );
+        }
+      }
+    }
+  }
+
+  void _recordBoardRoutes(List<BoardDataRoute> routes) {
+    if (routes.isEmpty) return;
+    for (final route in routes) {
+      _boardEvents.add(BoardDataEvent(++_boardEventSequence, route));
+      final at = DateTime.now();
+      for (final cableId in route.cableIds) {
+        _lastBoardUses[cableId] = BoardCableUse(at, route.how);
+      }
+    }
+    if (_boardEvents.length > 48) {
+      _boardEvents.removeRange(0, _boardEvents.length - 48);
+    }
+    _boardEventsExpiry?.cancel();
+    _boardEventsExpiry = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(_boardEvents.clear);
+    });
+  }
+
+  /// Called only after Apply's final verification, immediately before writing.
+  void signalApplyWriteAttempted(String applyFrameId) {
+    _recordBoardRoutes(
+      boardDataRoutesForApply(widget.store.document, applyFrameId),
+    );
+    setState(() {});
+  }
+
+  /// Called only after a Check's live permission check, before native work.
+  void signalCheckRunRequested(String runFrameId) {
+    _recordBoardRoutes(
+      boardDataRoutesForCheck(widget.store.document, runFrameId),
+    );
+    setState(() {});
   }
 
   CanvasCamera _clamped(CanvasCamera camera) {
@@ -297,6 +421,19 @@ class CanvasViewportState extends State<CanvasViewport>
 
   void resetCamera() => _setCamera(_camera.reset());
 
+  /// Show a newly placed board arrangement without changing its objects.
+  void showWorldRect(Rect bounds) {
+    if (_viewportSize.isEmpty || bounds.isEmpty) return;
+    const margin = 72.0;
+    final usableWidth = math.max(1.0, _viewportSize.width - margin * 2);
+    final usableHeight = math.max(1.0, _viewportSize.height - margin * 2);
+    final zoom = math.min(
+      usableWidth / bounds.width,
+      usableHeight / bounds.height,
+    );
+    _setCamera(CanvasCamera(offset: bounds.center, zoom: zoom));
+  }
+
   void addDebugRect() => addTypedObject(debugRectType);
 
   void addTypedObject(String typeId) {
@@ -320,9 +457,23 @@ class CanvasViewportState extends State<CanvasViewport>
     final middle =
         event.kind == PointerDeviceKind.mouse &&
         (event.buttons & kMiddleMouseButton) != 0;
+    final dragKey =
+        widget.canvasShortcuts?.selectionDragKey ?? SelectionDragKey.shift;
+    final modifierMarquee =
+        event.kind == PointerDeviceKind.mouse &&
+        switch (dragKey) {
+          SelectionDragKey.shift => HardwareKeyboard.instance.isShiftPressed,
+          SelectionDragKey.control =>
+            HardwareKeyboard.instance.isControlPressed,
+          SelectionDragKey.command => HardwareKeyboard.instance.isMetaPressed,
+          SelectionDragKey.option => HardwareKeyboard.instance.isAltPressed,
+        };
     if (event.kind == PointerDeviceKind.mouse &&
         !middle &&
-        (event.buttons & kPrimaryButton) == 0) {
+        (event.buttons & kPrimaryButton) == 0 &&
+        !(dragKey == SelectionDragKey.control &&
+            modifierMarquee &&
+            (event.buttons & kSecondaryButton) != 0)) {
       return;
     }
     if (_runNotice != null) {
@@ -338,6 +489,19 @@ class CanvasViewportState extends State<CanvasViewport>
     if (_viewportSize.isEmpty) {
       _dragKind = _DragKind.pan;
       _focus.requestFocus();
+      return;
+    }
+    if (modifierMarquee) {
+      if (_inlineEditId != null) _commitInlineEdit();
+      _focus.requestFocus();
+      _dragKind = _DragKind.marquee;
+      _marqueeStart = event.localPosition;
+      _marqueeEnd = event.localPosition;
+      _marqueeInitialObjects = widget.selection.selectedIds;
+      _marqueeInitialCables = widget.selection.selectedCableIds;
+      _cableHover = null;
+      _portHover = null;
+      setState(() {});
       return;
     }
     final world = screenToWorld(event.localPosition, _viewportSize, _camera);
@@ -410,13 +574,36 @@ class CanvasViewportState extends State<CanvasViewport>
       _dragKind = _DragKind.pan;
       return;
     }
-    widget.selection.select(hit.id);
+    final hitFrame = kitFrameForSelection(
+      document: widget.store.document,
+      selectedId: hit.id,
+    );
+    final tapId = hitFrame?.id ?? hit.id;
     final isDouble =
-        hit.id == _lastTapId &&
+        tapId == _lastTapId &&
         _lastTapStamp != null &&
         event.timeStamp - _lastTapStamp! <= kDoubleTapTimeout;
-    _lastTapId = hit.id;
+    _lastTapId = tapId;
     _lastTapStamp = event.timeStamp;
+    if (isDouble &&
+        hitFrame != null &&
+        (kitIdOf(hitFrame) == codingRepositoryKitId ||
+            kitIdOf(hitFrame) == codingWriteScopeKitId)) {
+      widget.selection.select(hitFrame.id);
+      _dragKind = _DragKind.none;
+      unawaited(_chooseFolderForKit(hitFrame));
+      return;
+    }
+    if (widget.selection.isMultiple &&
+        widget.selection.selectedIds.contains(hitFrame?.id ?? hit.id) &&
+        _moveMembers(hit).every(objectAllowsMove)) {
+      _dragKind = _DragKind.move;
+      _moveWorldStart = world;
+      _multiMoveHitId = hit.id;
+      widget.selection.beginMove(originX: hit.x, originY: hit.y);
+      return;
+    }
+    widget.selection.select(hit.id);
     if (isDouble) {
       final frame = kitFrameForSelection(
         document: widget.store.document,
@@ -459,6 +646,32 @@ class CanvasViewportState extends State<CanvasViewport>
       widget.selection.beginMove(originX: hit.x, originY: hit.y);
     } else {
       _dragKind = _DragKind.none;
+    }
+  }
+
+  Future<void> _chooseFolderForKit(SceneObject frame) async {
+    try {
+      if (kitIdOf(frame) == codingRepositoryKitId) {
+        await chooseRepositoryFolder(
+          kitApi: widget.kitApi,
+          frameId: frame.id,
+          permission:
+              widget.agentController?.repositoryPermission ??
+              const SystemRepositoryPermission(),
+          isActive: () => mounted,
+        );
+      } else if (kitIdOf(frame) == codingWriteScopeKitId) {
+        await chooseWriteScopeFolder(
+          kitApi: widget.kitApi,
+          frameId: frame.id,
+          permission: widget.writePermission,
+          isActive: () => mounted,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _runNotice = 'Folder selection failed: $error');
+      }
     }
   }
 
@@ -848,6 +1061,24 @@ class CanvasViewportState extends State<CanvasViewport>
       _setCamera(_camera.panScreen(delta));
       return;
     }
+    if (_dragKind == _DragKind.marquee) {
+      setState(() => _marqueeEnd = event.localPosition);
+      final rect = _marqueeRect;
+      if (rect != null) {
+        final hits = hitMarquee(
+          rect: rect,
+          objects: widget.store.document.objects,
+          cables: _allCables(),
+          toScreen: (world) => worldToScreen(world, _viewportSize, _camera),
+          zoom: _camera.zoom,
+        );
+        widget.selection.selectMany(
+          objectIds: hits.objectIds,
+          cableIds: hits.cableIds,
+        );
+      }
+      return;
+    }
     if (_dragKind == _DragKind.move && _moveWorldStart != null) {
       final world = screenToWorld(event.localPosition, _viewportSize, _camera);
       widget.selection.updatePreview(world - _moveWorldStart!);
@@ -895,10 +1126,19 @@ class CanvasViewportState extends State<CanvasViewport>
     final cableCursor = _cableCursor;
     final resizeId = _resizeFrameId;
     final resizeHeight = _resizeHeight;
+    final multiMoveHitId = _multiMoveHitId;
+    final marqueeStart = _marqueeStart;
+    final marqueePreviousObjects = _marqueeInitialObjects;
+    final marqueePreviousCables = _marqueeInitialCables;
     _dragPointer = null;
     _lastDrag = null;
     _moveWorldStart = null;
+    _multiMoveHitId = null;
     _dragKind = _DragKind.none;
+    _marqueeStart = null;
+    _marqueeEnd = null;
+    _marqueeInitialObjects = const {};
+    _marqueeInitialCables = const {};
     _cableFrameId = null;
     _cableKind = null;
     _cableCursor = null;
@@ -906,6 +1146,32 @@ class CanvasViewportState extends State<CanvasViewport>
     _resizeStartHeight = null;
     _resizeStartWorldY = null;
     _resizeHeight = null;
+    if (kind == _DragKind.marquee) {
+      if (!commitMove) {
+        widget.selection.selectMany(
+          objectIds: marqueePreviousObjects,
+          cableIds: marqueePreviousCables,
+        );
+      } else if (marqueeStart != null &&
+          upLocal != null &&
+          (upLocal - marqueeStart).distance >= 4) {
+        final hits = hitMarquee(
+          rect: Rect.fromPoints(marqueeStart, upLocal),
+          objects: widget.store.document.objects,
+          cables: _allCables(),
+          toScreen: (world) => worldToScreen(world, _viewportSize, _camera),
+          zoom: _camera.zoom,
+        );
+        widget.selection.selectMany(
+          objectIds: hits.objectIds,
+          cableIds: hits.cableIds,
+        );
+      } else if (marqueeStart != null && upLocal != null) {
+        _toggleSelectionAt(upLocal);
+      }
+      setState(() {});
+      return;
+    }
     if (kind == _DragKind.resize) {
       if (commitMove && resizeId != null && resizeHeight != null) {
         _commitResize(resizeId, resizeHeight);
@@ -947,6 +1213,18 @@ class CanvasViewportState extends State<CanvasViewport>
     }
     final delta = widget.selection.previewDelta;
     final commit = widget.selection.endMove();
+    if (multiMoveHitId != null) {
+      if (commit == null) {
+        widget.selection.select(multiMoveHitId);
+      } else {
+        moveSelection(
+          store: widget.store,
+          objectIds: widget.selection.selectedIds,
+          delta: delta,
+        );
+      }
+      return;
+    }
     final id = widget.selection.selectedId;
     if (commit == null || id == null) {
       return;
@@ -1054,11 +1332,49 @@ class CanvasViewportState extends State<CanvasViewport>
         [hit];
   }
 
+  void _toggleSelectionAt(Offset local) {
+    final world = screenToWorld(local, _viewportSize, _camera);
+    final hit = hitTestObjects(widget.store.document.objects, world);
+    final objectIds = {
+      for (final id in widget.selection.selectedIds)
+        kitFrameForSelection(
+              document: widget.store.document,
+              selectedId: id,
+            )?.id ??
+            id,
+    };
+    final cableIds = widget.selection.selectedCableIds.toSet();
+    if (hit != null) {
+      final id =
+          kitFrameForSelection(
+            document: widget.store.document,
+            selectedId: hit.id,
+          )?.id ??
+          hit.id;
+      if (!objectIds.add(id)) objectIds.remove(id);
+    } else {
+      final cable = _cableAt(local)?.cable;
+      if (cable == null) return;
+      if (!cableIds.add(cable.id)) cableIds.remove(cable.id);
+    }
+    widget.selection.selectMany(objectIds: objectIds, cableIds: cableIds);
+  }
+
   Set<String> get _previewIds {
-    final id = widget.selection.selectedId;
-    if (id == null || !widget.selection.isMoving) {
+    if (!widget.selection.isMoving) {
       return const {};
     }
+    if (widget.selection.isMultiple) {
+      return {
+        for (final member in movableSelectionMembers(
+          widget.store.document,
+          widget.selection.selectedIds,
+        ))
+          member.id,
+      };
+    }
+    final id = widget.selection.selectedId;
+    if (id == null) return const {};
     final selected = widget.store.document.objectById(id);
     if (selected == null) {
       return {id};
@@ -1066,9 +1382,22 @@ class CanvasViewportState extends State<CanvasViewport>
     return {for (final member in _moveMembers(selected)) member.id};
   }
 
+  Rect? get _marqueeRect {
+    final start = _marqueeStart;
+    final end = _marqueeEnd;
+    if (start == null || end == null || (end - start).distance < 4) {
+      return null;
+    }
+    return Rect.fromPoints(start, end);
+  }
+
   void _clearSelectionOrCancelMove() {
     if (_inlineEditId != null) {
       _commitInlineEdit();
+      return;
+    }
+    if (_dragKind == _DragKind.marquee) {
+      _finishPointer(commitMove: false);
       return;
     }
     if (widget.selection.isMoving) {
@@ -1076,6 +1405,7 @@ class CanvasViewportState extends State<CanvasViewport>
       _dragPointer = null;
       _lastDrag = null;
       _moveWorldStart = null;
+      _multiMoveHitId = null;
       _dragKind = _DragKind.none;
       return;
     }
@@ -1085,6 +1415,15 @@ class CanvasViewportState extends State<CanvasViewport>
 
   void _deleteSelected() {
     if (widget.selection.isMoving) {
+      return;
+    }
+    if (widget.selection.isMultiple) {
+      deleteSelection(
+        store: widget.store,
+        objectIds: widget.selection.selectedIds,
+        cableIds: widget.selection.selectedCableIds,
+      );
+      widget.selection.select(null);
       return;
     }
     if (widget.selection.selectedCableId != null) {
@@ -1102,6 +1441,7 @@ class CanvasViewportState extends State<CanvasViewport>
   SceneObject? _previewKitBody(SceneObject hit) {
     final kitId = kitIdOf(hit);
     if (kitId == codingPatchProposalKitId ||
+        kitId == codingRepositoryKitId ||
         kitId == codingReviewDecisionKitId ||
         kitId == codingApplyPatchKitId ||
         kitId == codingWriteScopeKitId ||
@@ -1157,6 +1497,7 @@ class CanvasViewportState extends State<CanvasViewport>
     }
     final kitId = kitIdOf(object);
     if (kitId == codingPatchProposalKitId ||
+        kitId == codingRepositoryKitId ||
         kitId == codingReviewDecisionKitId ||
         kitId == codingApplyPatchKitId ||
         kitId == codingWriteScopeKitId ||
@@ -1312,6 +1653,13 @@ class CanvasViewportState extends State<CanvasViewport>
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final objects = widget.store.document.objects;
+    final displayObjects = [
+      for (final object in objects)
+        if (_pendingRevealProps[object.id] case final props?)
+          object.copyWith(props: props)
+        else
+          object,
+    ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1466,13 +1814,14 @@ class CanvasViewportState extends State<CanvasViewport>
                       resizeHeight: _resizeHeight,
                       paintDrag: false,
                       activity: activity,
+                      boardEvents: _boardEvents,
                       glow: _activityGlow,
                       motion: _cableMotion,
                       retractions: _retractions,
                       onRetractionDone: _endRetraction,
                       validation: validation,
                       invalidColor: tokens.danger,
-                      selectedCableId: widget.selection.selectedCableId,
+                      selectedCableIds: widget.selection.selectedCableIds,
                       traceCables: _identifyCables ?? const {},
                       traceKits: _identifyKits ?? const {},
                       traceAmount: Curves.easeInOut.transform(_identify.value),
@@ -1482,9 +1831,10 @@ class CanvasViewportState extends State<CanvasViewport>
                       builder: (context, _) => SceneObjectLayer(
                         camera: _camera,
                         viewportSize: size,
-                        objects: objects,
+                        objects: displayObjects,
                         registry: widget.registry,
                         selectedId: widget.selection.selectedId,
+                        selectedIds: widget.selection.selectedIds,
                         focusedPort: widget.selection.selectedPort,
                         previewDelta: widget.selection.previewDelta,
                         previewIds: _previewIds,
@@ -1518,13 +1868,45 @@ class CanvasViewportState extends State<CanvasViewport>
                       ),
                     ?_cableRefusalLabel(size, tokens),
                     ?_issueFlashLayer(size, tokens),
-                    if (_selectedObject != null &&
-                        !isKitObject(_selectedObject!))
-                      SceneSelectionOverlay(
-                        camera: _camera,
-                        viewportSize: size,
-                        object: _selectedObject!,
-                        previewDelta: widget.selection.previewDelta,
+                    for (final object in objects)
+                      if (widget.selection.selectedIds.contains(object.id) &&
+                          !isKitObject(object))
+                        SceneSelectionOverlay(
+                          camera: _camera,
+                          viewportSize: size,
+                          object: object,
+                          previewDelta: _previewIds.contains(object.id)
+                              ? widget.selection.previewDelta
+                              : Offset.zero,
+                        ),
+                    if (_marqueeRect case final rect?)
+                      Positioned.fromRect(
+                        rect: rect,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            key: const Key('marquee-selection'),
+                            decoration: BoxDecoration(
+                              color: tokens.accent.withValues(alpha: 0.12),
+                              border: Border.all(
+                                color: tokens.accent,
+                                width: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (widget.selection.isMultiple)
+                      Positioned(
+                        left: 12,
+                        bottom: 12,
+                        child: IgnorePointer(
+                          child: Text(
+                            '${widget.selection.selectedIds.length} objects · '
+                            '${widget.selection.selectedCableIds.length} cables selected',
+                            key: const Key('multi-selection-count'),
+                            style: TextStyle(color: tokens.ink, fontSize: 12),
+                          ),
+                        ),
                       ),
                     ?_inlineEditor(size),
                     if (scissors != null)
@@ -1851,4 +2233,4 @@ class CanvasViewportState extends State<CanvasViewport>
   }
 }
 
-enum _DragKind { none, pan, move, cable, resize }
+enum _DragKind { none, pan, move, cable, resize, marquee }

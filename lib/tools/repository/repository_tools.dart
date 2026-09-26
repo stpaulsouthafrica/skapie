@@ -12,6 +12,20 @@ const repositoryToolNames = <String>{
   'repo_git_diff',
 };
 
+/// macOS /usr/bin/git is a launcher that invokes xcrun, which is unavailable
+/// inside the app sandbox. Use the installed Git binary directly, as the
+/// native Check runner does.
+String? repositoryGitExecutable() {
+  if (!Platform.isMacOS) return 'git';
+  for (final path in [
+    '/Library/Developer/CommandLineTools/usr/bin/git',
+    '/Applications/Xcode.app/Contents/Developer/usr/bin/git',
+  ]) {
+    if (File(path).existsSync()) return path;
+  }
+  return null;
+}
+
 const _skippedDirectories = <String>{
   '.git',
   '.dart_tool',
@@ -265,11 +279,30 @@ class RepositoryReader {
   }
 
   Future<Map<String, Object?>> _git(Directory root, List<String> args) async {
+    final git = repositoryGitExecutable();
+    if (git == null) {
+      return toolError(
+        'Installed Git was not found. Install Xcode Command Line Tools.',
+      );
+    }
     final result = await Process.run(
-      'git',
+      git,
       args,
       workingDirectory: root.path,
-      environment: {'GIT_OPTIONAL_LOCKS': '0', 'GIT_PAGER': 'cat'},
+      environment: Platform.isMacOS
+          ? {
+              'PATH': '/usr/bin:/bin',
+              'LANG': 'C',
+              'LC_ALL': 'C',
+              'HOME': '/var/empty',
+              'GIT_CONFIG_NOSYSTEM': '1',
+              'GIT_CONFIG_GLOBAL': '/dev/null',
+              'GIT_OPTIONAL_LOCKS': '0',
+              'GIT_TERMINAL_PROMPT': '0',
+              'GIT_PAGER': 'cat',
+            }
+          : {'GIT_OPTIONAL_LOCKS': '0', 'GIT_PAGER': 'cat'},
+      includeParentEnvironment: !Platform.isMacOS,
     ).timeout(const Duration(seconds: 15));
     final output = result.stdout.toString();
     final error = result.stderr.toString();

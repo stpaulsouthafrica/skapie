@@ -3,7 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/app/agent_settings_panel.dart';
+import 'package:skapie/app/canvas_settings_panel.dart';
+import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/app/command_palette.dart';
+import 'package:skapie/app/coding_workflow_starter.dart';
 import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/keyboard_connect.dart';
@@ -25,6 +28,7 @@ class HomeScreen extends StatefulWidget {
     required this.registry,
     required this.kitApi,
     required this.agentController,
+    this.canvasShortcuts,
     this.onNewBoard,
     this.listBoards,
     this.onOpenBoard,
@@ -34,6 +38,7 @@ class HomeScreen extends StatefulWidget {
   final ObjectRegistry registry;
   final KitApi kitApi;
   final AgentController agentController;
+  final CanvasShortcutSettings? canvasShortcuts;
   final Future<void> Function()? onNewBoard;
   final Future<List<BoardInfo>> Function()? listBoards;
   final Future<void> Function(BoardInfo board)? onOpenBoard;
@@ -45,6 +50,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _viewportKey = GlobalKey<CanvasViewportState>();
   final _selection = SelectionController();
+  late final CanvasShortcutSettings _canvasShortcuts =
+      widget.canvasShortcuts ?? CanvasShortcutSettings();
   var _settingsOpen = false;
   var _paletteOpen = false;
   String? _lastLlmBodyId;
@@ -228,6 +235,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     return [
       ...defaultCommandActions,
+      if (widget.store.document.objects.isEmpty)
+        const CommandAction(
+          id: 'add-coding-workflow-starter',
+          label: 'Add coding workflow starter',
+          icon: KitIconKind.box,
+        ),
       if (widget.onNewBoard != null)
         const CommandAction(
           id: 'new-board',
@@ -279,6 +292,8 @@ class _HomeScreenState extends State<HomeScreen> {
         _newBoard();
       case 'switch-board':
         _chooseBoard();
+      case 'add-coding-workflow-starter':
+        _addCodingWorkflowStarter();
       case 'add-llm':
         _add(harnessLlmKitId);
       case 'add-conversation':
@@ -313,6 +328,20 @@ class _HomeScreenState extends State<HomeScreen> {
         if (action.id.startsWith('add-tools.')) {
           _add(action.id.substring(4));
         }
+    }
+  }
+
+  void _addCodingWorkflowStarter() {
+    try {
+      final bounds = addCodingWorkflowStarter(
+        widget.kitApi,
+        origin: _placeOrigin,
+      );
+      _viewportKey.currentState?.showWorldRect(bounds);
+    } catch (error) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not add starter: $error')));
     }
   }
 
@@ -577,10 +606,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 selection: _selection,
                 kitApi: widget.kitApi,
                 agentController: widget.agentController,
+                canvasShortcuts: _canvasShortcuts,
                 onConnect: _openPaletteIfIdle,
               ),
-              if (_selection.selectedId != null ||
-                  _selection.selectedCableId != null)
+              if (_selection.selectedIds.isNotEmpty ||
+                  _selection.selectedCableIds.isNotEmpty)
                 Positioned(
                   top: 16,
                   right: 16,
@@ -593,6 +623,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       kitApi: widget.kitApi,
                       lastLlmBodyId: _lastLlmBodyId,
                       controller: widget.agentController,
+                      boardUseForCable: (id) =>
+                          _viewportKey.currentState?.boardUseFor(id),
+                      onApplyWriteAttempted: (frameId) => _viewportKey
+                          .currentState
+                          ?.signalApplyWriteAttempted(frameId),
+                      onCheckRunRequested: (frameId) => _viewportKey
+                          .currentState
+                          ?.signalCheckRunRequested(frameId),
                       onCutCable: (cable) {
                         _viewportKey.currentState?.retractCable(cable);
                       },
@@ -670,6 +708,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               shrinkWrap: true,
                               children: [
                                 _settingsChrome(label),
+                                CanvasSettingsPanel(settings: _canvasShortcuts),
                                 AgentSettingsPanel(
                                   controller: widget.agentController,
                                   onClose: _closeSettings,

@@ -3,10 +3,11 @@ import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
 
 class KitLink {
-  const KitLink({required this.to, required this.port});
+  const KitLink({required this.to, required this.port, this.color});
 
   final String to;
   final String port;
+  final String? color;
 
   String get id => '$to|$port';
 }
@@ -172,7 +173,7 @@ List<KitLink> _parseLinks(Object? raw) {
     if (links.any((link) => link.to == to && link.port == port)) {
       continue;
     }
-    links.add(KitLink(to: to, port: port));
+    links.add(KitLink(to: to, port: port, color: item['color']?.toString()));
   }
   return links;
 }
@@ -205,7 +206,12 @@ void _writeLinks(
 ) {
   final props = <String, Object?>{
     linksProp: [
-      for (final link in links) {'to': link.to, 'port': link.port},
+      for (final link in links)
+        {
+          'to': link.to,
+          'port': link.port,
+          if (link.color != null) 'color': link.color,
+        },
     ],
     connectedToProp: '',
     connectedPortProp: '',
