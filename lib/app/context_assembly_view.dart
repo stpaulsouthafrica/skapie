@@ -195,19 +195,19 @@ class _ContextAssemblyViewState extends State<ContextAssemblyView> {
           ),
         ),
       ),
-      for (final exclusion in assembly.exclusions)
+      for (var i = 0; i < assembly.exclusions.length; i++)
         Padding(
-          key: Key('context-exclusion-${exclusion.sourceKitId}'),
+          key: Key('context-exclusion-$i'),
           padding: const EdgeInsets.only(bottom: 6),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                exclusion.sourceKitId,
+                assembly.exclusions[i].sourceKitId,
                 style: TextStyle(color: tokens.ink, fontSize: 12),
               ),
               Text(
-                exclusion.reason,
+                assembly.exclusions[i].reason,
                 style: TextStyle(color: tokens.muted, fontSize: 11),
               ),
             ],

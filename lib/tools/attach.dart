@@ -121,6 +121,7 @@ LlmToolOffer llmToolOffer({
   required String llmBodyId,
   RepositoryPermission repositoryPermission =
       const SystemRepositoryPermission(),
+  bool recordErrors = true,
 }) {
   final document = kitApi.store.document;
   final byName = {for (final tool in createWorldTools(kitApi)) tool.name: tool};
@@ -175,10 +176,12 @@ LlmToolOffer llmToolOffer({
             : null);
     if (tool == null) {
       filtered.add(FilteredTool(name: name, reason: 'Unknown tool'));
-      kitApi.updateProps(object.id, {
-        'error': 'Unknown tool: $name',
-        'content': 'Unknown tool: $name',
-      });
+      if (recordErrors) {
+        kitApi.updateProps(object.id, {
+          'error': 'Unknown tool: $name',
+          'content': 'Unknown tool: $name',
+        });
+      }
       continue;
     }
     tools.add(tool);

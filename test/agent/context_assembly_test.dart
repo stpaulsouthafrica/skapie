@@ -53,7 +53,7 @@ void main() {
     expect(assembly.instructionText, 'Be careful');
 
     final toolItem = assembly.itemsFor(ContextLayer.tools).single;
-    expect(toolItem.sourceRange, 'list_kits');
+    expect(toolItem.sourceRange, 'tools.list_kits');
     expect(toolItem.provenance, ContextProvenance.toolOutput);
     expect(assembly.tools.map((tool) => tool.name), contains('list_kits'));
   });
@@ -121,7 +121,8 @@ void main() {
     expect(
       assembly.exclusions.any(
         (item) =>
-            item.reason == 'Repository text is only included through a read tool',
+            item.reason ==
+            'Repository root only; no file text is sent unless a read tool runs',
       ),
       isTrue,
     );

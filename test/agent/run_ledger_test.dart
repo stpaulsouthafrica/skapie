@@ -225,6 +225,7 @@ void main() {
         RunEventKind.modelRequestFinished,
         RunEventKind.toolCallStarted,
         RunEventKind.toolCallFinished,
+        RunEventKind.contextAssembled,
         RunEventKind.modelRequestStarted,
         RunEventKind.modelRequestFinished,
         RunEventKind.runCompleted,

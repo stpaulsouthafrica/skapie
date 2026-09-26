@@ -544,13 +544,15 @@ class AgentController extends ChangeNotifier {
       'model': model ?? '',
       'provider': provider,
     };
-    _note(
-      runId,
-      RunEventKind.contextAssembled,
-      contextProvenancePayload(assembly),
-      _modelRoute(bodyId),
-    );
-    await flushLedger();
+    if (attached.isEmpty) {
+      _note(
+        runId,
+        RunEventKind.contextAssembled,
+        contextProvenancePayload(assembly),
+        _modelRoute(bodyId),
+      );
+      await flushLedger();
+    }
     agentHttpRequestObserver = (request) {
       if (!gate.cancelled && !gate.paused) {
         _transition(runId, RunPhase.modelWait);
@@ -577,11 +579,19 @@ class AgentController extends ChangeNotifier {
                   String? response,
                   int? elapsedMs,
                   String? error,
+                  required List<AgentMessage> messages,
+                  required List<AgentTool> tools,
                 }) async {
                   if (!finished) {
                     if (!gate.cancelled && !gate.paused) {
                       _transition(runId, RunPhase.modelWait);
                     }
+                    _note(
+                      runId,
+                      RunEventKind.contextAssembled,
+                      contextProvenanceForMessages(messages, tools: tools),
+                      _modelRoute(bodyId),
+                    );
                     // HTTP models emit their start through the request observer,
                     // which also captures the actual request body.
                     if (turnModel is OpenAiCompatibleAgentModel ||
@@ -1043,6 +1053,8 @@ class _RunLedgerModel implements AgentModel {
     String? response,
     int? elapsedMs,
     String? error,
+    required List<AgentMessage> messages,
+    required List<AgentTool> tools,
   })
   onRequest;
 
@@ -1051,7 +1063,7 @@ class _RunLedgerModel implements AgentModel {
     required List<AgentMessage> messages,
     List<AgentTool> tools = const [],
   }) async {
-    await onRequest(false, ok: true);
+    await onRequest(false, ok: true, messages: messages, tools: tools);
     final watch = Stopwatch()..start();
     try {
       final reply = await inner.complete(messages: messages, tools: tools);
@@ -1061,6 +1073,8 @@ class _RunLedgerModel implements AgentModel {
         ok: true,
         response: _modelResponseBody(inner),
         elapsedMs: watch.elapsedMilliseconds,
+        messages: messages,
+        tools: tools,
       );
       return reply;
     } catch (error) {
@@ -1071,6 +1085,8 @@ class _RunLedgerModel implements AgentModel {
         response: _modelResponseBody(inner),
         elapsedMs: watch.elapsedMilliseconds,
         error: '$error',
+        messages: messages,
+        tools: tools,
       );
       rethrow;
     }

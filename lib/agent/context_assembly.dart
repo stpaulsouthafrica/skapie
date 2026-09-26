@@ -139,6 +139,7 @@ class ContextAssembly {
     required this.tools,
     required this.items,
     required this.exclusions,
+    this.omittedHistoryTurns = 0,
   });
 
   final String taskInput;
@@ -147,13 +148,15 @@ class ContextAssembly {
   final List<AgentTool> tools;
   final List<ContextItem> items;
   final List<ContextExclusion> exclusions;
+  final int omittedHistoryTurns;
 
   List<ContextItem> itemsFor(ContextLayer layer) => [
     for (final item in items)
       if (item.layer == layer) item,
   ];
 
-  bool get isTruncated => items.any((item) => item.truncated);
+  bool get isTruncated =>
+      omittedHistoryTurns > 0 || items.any((item) => item.truncated);
 
   int get totalChars {
     var total = taskInput.length + instructionText.length;
@@ -236,7 +239,7 @@ ContextAssembly assembleContext({
         sourceId: '',
         text: turn.content,
         order: ++order,
-        reason: '${turn.role} turn, newest kept first',
+        reason: 'Earlier turn, in order',
       ),
     );
   }
@@ -275,16 +278,19 @@ ContextAssembly assembleContext({
     kitApi: kitApi,
     llmBodyId: llmBodyId,
     repositoryPermission: repositoryPermission,
+    recordErrors: false,
   );
   final tools = <AgentTool>[];
   for (final tool in offer.tools) {
+    final frameId = toolFrameIdForName(document, llmBodyId, tool.name);
+    final frame = frameId == null ? null : document.objectById(frameId);
     tools.add(tool);
     items.add(
       ContextItem(
         layer: ContextLayer.tools,
         provenance: ContextProvenance.toolOutput,
-        sourceKitId: tool.name,
-        sourceId: '',
+        sourceKitId: frame == null ? tool.name : (kitIdOf(frame) ?? tool.name),
+        sourceId: frameId ?? '',
         text: tool.description,
         order: ++order,
         reason: 'Cabled to Tools',
@@ -311,6 +317,7 @@ ContextAssembly assembleContext({
     tools: tools,
     items: items,
     exclusions: exclusions,
+    omittedHistoryTurns: trimmed.omitted,
   );
 }
 
@@ -411,7 +418,7 @@ List<ContextExclusion> _unusedSources(
         layer: ContextLayer.excerpts,
         sourceKitId: codingRepositoryKitId,
         sourceId: frame.id,
-        reason: 'Repository text is only included through a read tool',
+        reason: 'Repository root only; no file text is sent unless a read tool runs',
       ),
     );
   }
@@ -423,7 +430,8 @@ Map<String, Object?> contextProvenancePayload(ContextAssembly assembly) => {
   'included': assembly.items.length,
   'excluded': assembly.exclusions.length,
   'truncated': assembly.isTruncated,
-  'budgetChars': assembly.totalChars,
+  'contextChars': assembly.totalChars,
+  'omittedHistoryTurns': assembly.omittedHistoryTurns,
   'sources': [
     for (final item in assembly.items)
       '${item.layer.name}:${item.sourceRange}',
@@ -433,6 +441,33 @@ Map<String, Object?> contextProvenancePayload(ContextAssembly assembly) => {
       '${exclusion.sourceKitId}:${exclusion.reason}',
   ],
 };
+
+/// Provenance for one model request, read from the live message list.
+/// The tool loop rebuilds later requests this way, so each turn is recorded.
+Map<String, Object?> contextProvenanceForMessages(
+  List<AgentMessage> messages, {
+  List<AgentTool> tools = const [],
+}) {
+  final sources = <String>[];
+  for (final message in messages) {
+    final provenance = switch (message.role) {
+      AgentRole.system => ContextProvenance.boardInstruction,
+      AgentRole.user => ContextProvenance.userTask,
+      AgentRole.assistant => ContextProvenance.modelOutput,
+      AgentRole.tool => ContextProvenance.toolOutput,
+    };
+    sources.add(
+      '${provenance.name}:${message.role.name}:${message.content.length}',
+    );
+  }
+  return {
+    'included': messages.length + tools.length,
+    'excluded': 0,
+    'truncated': false,
+    'sources': sources,
+    'tools': [for (final tool in tools) tool.name],
+  };
+}
 
 String _sourceRange(String kitLabel, String? path, int? start, int? end) {
   if (path == null || path.isEmpty) {
