@@ -6,6 +6,7 @@ import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/run_ledger.dart';
+import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
@@ -34,13 +35,19 @@ void main() {
 
       final run = controller.latestRunFor(ids.last)!;
       expect(run.schemaVersion, runRecordSchemaVersion);
-      expect(run.events.map((event) => event.kind).toList(), [
-        RunEventKind.runRequested,
-        RunEventKind.graphValidated,
-        RunEventKind.modelRequestStarted,
-        RunEventKind.modelRequestFinished,
-        RunEventKind.runCompleted,
-      ]);
+      expect(
+        run.events
+            .map((event) => event.kind)
+            .where((kind) => kind != RunEventKind.stateChanged)
+            .toList(),
+        [
+          RunEventKind.runRequested,
+          RunEventKind.graphValidated,
+          RunEventKind.modelRequestStarted,
+          RunEventKind.modelRequestFinished,
+          RunEventKind.runCompleted,
+        ],
+      );
       expect(run.events.first.payload['offeredTools'], isNull);
       expect(
         run.events
@@ -95,7 +102,7 @@ void main() {
       final pending = controller.sendUser('kits', targetBodyId: llm.last);
       await model.started.future;
       controller.interruptRun();
-      expect(controller.runningBodyId, isNull);
+      expect(controller.runPhase, RunPhase.cancelling);
       model.release.complete();
       await pending;
 
@@ -165,9 +172,10 @@ void main() {
       expect(controller.ledger.runs, hasLength(1));
       expect(controller.runningBodyId, llm.last);
       model.release.complete();
-      await first;
+      await expectLater(first, throwsA(isA<RunLimitReached>()));
       expect(controller.runningBodyId, isNull);
       expect(controller.ledger.runs, hasLength(1));
+      expect(controller.latestRunFor(llm.last)!.status, RunStatus.failed);
     },
   );
 
@@ -203,7 +211,11 @@ void main() {
     await controller.sendUser('kits', targetBodyId: llm.last);
 
     expect(
-      controller.latestRunFor(llm.last)!.events.map((event) => event.kind),
+      controller
+          .latestRunFor(llm.last)!
+          .events
+          .map((event) => event.kind)
+          .where((kind) => kind != RunEventKind.stateChanged),
       [
         RunEventKind.runRequested,
         RunEventKind.graphValidated,

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 /// Schema for [RunRecord] and [RunEvent]. Bump when the fields change.
-const int runRecordSchemaVersion = 2;
+const int runRecordSchemaVersion = 3;
 
 /// Longest string stored inside one event. Longer text is cut and marked.
 const int runPayloadTextLimit = 280;
@@ -29,6 +29,7 @@ bool runEvidenceMayDrop(String kind) =>
 enum RunEventKind {
   runRequested,
   graphValidated,
+  stateChanged,
   modelRequestStarted,
   modelRequestFinished,
   toolCallStarted,
@@ -36,12 +37,13 @@ enum RunEventKind {
   runCompleted,
   runFailed,
   runInterrupted,
+  runPaused,
   checkStarted,
   checkOutput,
   checkFinished,
 }
 
-enum RunStatus { running, completed, failed, interrupted }
+enum RunStatus { running, completed, failed, interrupted, paused }
 
 class RunEvent {
   const RunEvent({
@@ -109,6 +111,8 @@ class RunRecord {
           return RunStatus.failed;
         case RunEventKind.runInterrupted:
           return RunStatus.interrupted;
+        case RunEventKind.runPaused:
+          return RunStatus.paused;
         case RunEventKind.checkFinished:
           return event.payload['outcome'] == 'cancelled'
               ? RunStatus.interrupted
@@ -151,10 +155,10 @@ class RunRecord {
 /// Saved log of executions. Not part of the scene document.
 class RunLedger {
   RunLedger({
-    DateTime Function()? clock,
+    this._clock,
     this.onAppend,
     this.historyWarnBytes = runHistoryWarnBytes,
-  }) : _clock = clock;
+  });
 
   final DateTime Function()? _clock;
   final void Function()? onAppend;
@@ -540,6 +544,7 @@ String _detailValue(Object? value) {
 String runEventLabel(RunEventKind kind) => switch (kind) {
   RunEventKind.runRequested => 'Run requested',
   RunEventKind.graphValidated => 'Graph validated',
+  RunEventKind.stateChanged => 'Run state changed',
   RunEventKind.modelRequestStarted => 'Model request started',
   RunEventKind.modelRequestFinished => 'Model request finished',
   RunEventKind.toolCallStarted => 'Tool call started',
@@ -547,6 +552,7 @@ String runEventLabel(RunEventKind kind) => switch (kind) {
   RunEventKind.runCompleted => 'Run completed',
   RunEventKind.runFailed => 'Run failed',
   RunEventKind.runInterrupted => 'Run interrupted',
+  RunEventKind.runPaused => 'Run paused',
   RunEventKind.checkStarted => 'Check started',
   RunEventKind.checkOutput => 'Check output',
   RunEventKind.checkFinished => 'Check finished',

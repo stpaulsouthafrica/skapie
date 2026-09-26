@@ -436,6 +436,7 @@ class SceneObjectLayer extends StatelessWidget {
     final zoom = camera.zoom;
     final accent = kitAccentColor(frame);
     final hairline = kitAccentHairline(accent);
+    final id = kitIdOf(frame);
     return Stack(
       children: [
         child,
@@ -446,26 +447,17 @@ class SceneObjectLayer extends StatelessWidget {
           tokens: tokens,
           zoom: zoom,
         ),
-        if (kitIdOf(frame) == boardTextKitId)
+        if (id == boardTextKitId ||
+            id == harnessConversationKitId ||
+            id == harnessRunControlKitId)
           Positioned.fill(
             child: _previewFooter(
               tokens,
               zoom,
               frame,
-              content: _bodyContent(frame, boardTextKitId),
-              leading: 'In',
-              trailing: 'Out',
-            ),
-          ),
-        if (kitIdOf(frame) == harnessConversationKitId)
-          Positioned.fill(
-            child: _previewFooter(
-              tokens,
-              zoom,
-              frame,
-              content: _bodyContent(frame, harnessConversationKitId),
-              leading: 'In',
-              trailing: 'Out',
+              content: _bodyContent(frame, id!),
+              leading: id == harnessRunControlKitId ? 'Check' : 'In',
+              trailing: id == harnessRunControlKitId ? 'LLM' : 'Out',
             ),
           ),
         if (kitIdOf(frame) == codingPatchProposalKitId)

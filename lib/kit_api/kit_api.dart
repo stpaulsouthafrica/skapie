@@ -15,6 +15,7 @@ const double textFrameHeight = 120;
 const String boardBoxKitId = 'board.box';
 const String boardButtonKitId = 'board.button';
 const String harnessLlmKitId = 'harness.llm';
+const String harnessRunControlKitId = 'harness.run_control';
 const String harnessConversationKitId = 'harness.conversation';
 const String codingRepositoryKitId = 'coding.repository';
 const String proposePatchToolName = 'propose_patch';
@@ -53,6 +54,8 @@ const String llmInputPort = 'input';
 const String llmContextPort = 'context';
 const String llmConversationPort = 'conversation';
 const String llmToolsPort = 'tools';
+const String runControlPort = 'runControl';
+const String runCheckFeedbackPort = 'checkFeedback';
 
 /// LLM output cabled into a text kit. The text kit receives the reply.
 const String llmTextOutPort = 'text';
@@ -203,7 +206,7 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
       x: 0,
       y: 0,
       width: 320,
-      height: 200,
+      height: 231,
       props: {skapieKitProp: harnessLlmKitId, skapieRoleProp: 'frame'},
     ),
     KitObjectSpec(
@@ -211,7 +214,7 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
       x: 12,
       y: 12,
       width: 296,
-      height: 176,
+      height: 207,
       props: {
         'content': 'Input\n\nOutput\n\nTools: none',
         'fontSize': 14,
@@ -223,6 +226,42 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
         'surface': '',
         skapieKitProp: harnessLlmKitId,
         skapieRoleProp: 'body',
+      },
+    ),
+  ],
+);
+
+const KitRecipe harnessRunControlRecipe = KitRecipe(
+  id: harnessRunControlKitId,
+  displayName: 'Run Control',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 280,
+      height: textFrameHeight,
+      props: {
+        skapieKitProp: harnessRunControlKitId,
+        skapieRoleProp: 'frame',
+        'modelTurns': 8,
+        'toolCalls': 16,
+        'elapsedSeconds': 120,
+        'outputChars': 32000,
+        'failedCheckRule': 'off',
+      },
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 40,
+      width: 256,
+      height: 48,
+      props: {
+        skapieKitProp: harnessRunControlKitId,
+        skapieRoleProp: 'body',
+        'content': '8 turns · 16 tools · 120s',
+        'fontSize': 13,
       },
     ),
   ],
@@ -687,6 +726,7 @@ KitApi createAppKitApi({
   api.registerKit(boardBoxRecipe);
   api.registerKit(boardButtonRecipe);
   api.registerKit(harnessLlmRecipe);
+  api.registerKit(harnessRunControlRecipe);
   api.registerKit(harnessConversationRecipe);
   api.registerKit(codingRepositoryRecipe);
   api.registerKit(harnessSystemPromptRecipe);

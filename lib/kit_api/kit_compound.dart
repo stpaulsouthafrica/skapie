@@ -31,6 +31,7 @@ bool isKitObject(SceneObject object) => kitIdOf(object) != null;
 /// These kits hide the body widget and draw a two-line preview on the frame.
 bool kitUsesTextPreview(String? kitId) {
   return kitId == boardTextKitId ||
+      kitId == harnessRunControlKitId ||
       kitId == harnessConversationKitId ||
       kitId == codingRepositoryKitId ||
       kitId == codingPatchProposalKitId ||

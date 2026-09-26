@@ -56,7 +56,7 @@ void main() {
     );
     expect(
       ports.firstWhere((port) => port.kind == KitPortKind.llmOutput).center.dy,
-      llmFrame.y + llmRegionLabelCenter(llmFrame.height, 4),
+      llmFrame.y + llmRegionLabelCenter(llmFrame.height, 5),
     );
     expect(llmFrame.height, llmFrameHeight);
     final toolPorts = ports.where((port) => port.frameId == toolFrame.id);

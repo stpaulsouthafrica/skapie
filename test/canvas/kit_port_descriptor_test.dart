@@ -51,6 +51,10 @@ void main() {
     kitApi.instantiate(codingCheckSpecKitId, origin: const Offset(0, 800));
     kitApi.instantiate(codingRunCheckKitId, origin: const Offset(400, 800));
     kitApi.instantiate(codingCheckResultKitId, origin: const Offset(800, 1000));
+    final control = kitApi.instantiate(
+      harnessRunControlKitId,
+      origin: const Offset(-800, 1000),
+    );
     connectTextToLlm(
       kitApi: kitApi,
       textObjectId: text.first,
@@ -78,6 +82,19 @@ void main() {
       repositoryFrameId: repository.first,
       toolFrameId: tool.first,
     );
+    final controlPorts = kitPorts(kitApi.store.document);
+    connectKitPorts(
+      kitApi: kitApi,
+      from: controlPorts.singleWhere(
+        (port) =>
+            port.frameId == control.first &&
+            port.kind == KitPortKind.runControlOut,
+      ),
+      to: controlPorts.singleWhere(
+        (port) =>
+            port.frameId == llm.first && port.kind == KitPortKind.runControlIn,
+      ),
+    );
 
     final document = kitApi.store.document;
     final kinds = kitPorts(document).map((port) => port.kind).toSet();
@@ -87,7 +104,7 @@ void main() {
     SceneCable cableOn(String port) =>
         cables.singleWhere((cable) => cable.port == port);
     final llmFrame = document.objectById(llm.first)!;
-    expect(cables, hasLength(5));
+    expect(cables, hasLength(6));
     expect(cableOn(llmInputPort).ownerId, text.first);
     expect(cableOn(llmInputPort).to, llmInputCenter(llmFrame));
     expect(cableOn(llmTextOutPort).ownerId, llm.last);

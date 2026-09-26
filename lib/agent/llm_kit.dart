@@ -128,6 +128,7 @@ enum LlmRunStatus {
   completed,
   failed,
   cancelled,
+  paused,
 }
 
 String llmRunStatusLabel(LlmRunStatus status) {
@@ -138,6 +139,7 @@ String llmRunStatusLabel(LlmRunStatus status) {
     LlmRunStatus.completed => 'Completed',
     LlmRunStatus.failed => 'Failed',
     LlmRunStatus.cancelled => 'Cancelled',
+    LlmRunStatus.paused => 'Paused',
   };
 }
 
@@ -150,6 +152,7 @@ LlmRunStatus llmRunStatusOf(SceneObject? body, {required bool running}) {
     'completed' => LlmRunStatus.completed,
     'failed' => LlmRunStatus.failed,
     'cancelled' => LlmRunStatus.cancelled,
+    'paused' => LlmRunStatus.paused,
     'ready' => LlmRunStatus.ready,
     _ => null,
   };
@@ -165,6 +168,40 @@ LlmRunStatus llmRunStatusOf(SceneObject? body, {required bool running}) {
     return LlmRunStatus.completed;
   }
   return LlmRunStatus.ready;
+}
+
+void updateLlmRunState({
+  required KitApi kitApi,
+  required String bodyId,
+  required LlmRunStatus status,
+  String? prompt,
+  String? error,
+}) {
+  final body = kitApi.store.document.objectById(bodyId);
+  if (body == null || !isLlmKitObject(body)) return;
+  final input = prompt ?? body.props['prompt']?.toString() ?? '';
+  final reply = status == LlmRunStatus.running
+      ? ''
+      : body.props['reply']?.toString() ?? '';
+  final problem =
+      error ??
+      (status == LlmRunStatus.running
+          ? ''
+          : body.props['error']?.toString() ?? '');
+  kitApi.updateProps(bodyId, {
+    'prompt': input,
+    'reply': reply,
+    'error': problem,
+    llmRunStatusProp: status.name,
+    'content': formatLlmKitContent(
+      prompt: input,
+      reply: reply,
+      error: problem,
+      model: body.props['model']?.toString(),
+      surface: body.props['surface']?.toString(),
+      attachedTools: llmAttachedToolNames(kitApi.store.document, bodyId),
+    ),
+  });
 }
 
 void setLlmKitPrompt({

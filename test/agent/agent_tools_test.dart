@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
@@ -218,7 +219,7 @@ void main() {
     expect(session.messages.last.content, 'plain');
   });
 
-  test('max tool iterations appends limit message and finishes', () async {
+  test('max tool iterations fails with a named limit', () async {
     final replies = [
       for (var i = 0; i < 12; i++)
         AgentModelReply(
@@ -234,9 +235,10 @@ void main() {
       maxToolIterations: 8,
     );
 
-    await session.sendUser('loop');
-
-    expect(session.messages.last.role, AgentRole.assistant);
-    expect(session.messages.last.content, 'Tool loop limit reached');
+    await expectLater(
+      session.sendUser('loop'),
+      throwsA(isA<RunLimitReached>()),
+    );
+    expect(session.messages.last.role, AgentRole.tool);
   });
 }

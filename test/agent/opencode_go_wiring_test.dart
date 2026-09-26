@@ -15,7 +15,6 @@ import 'package:skapie/providers/vanilla_messages.dart';
 import 'package:skapie/providers/vanilla_responses.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
-import 'package:skapie/tools/world/kits.dart';
 
 import 'agent_controller_test.dart';
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:skapie/agent/agent_tool.dart';
 import 'package:skapie/agent/agent_tool_dispatcher.dart';
+import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/tools/world/register.dart';
 
@@ -110,16 +111,18 @@ class AgentMessageAppended extends AgentEvent {
 }
 
 class AgentToolStarted extends AgentEvent {
-  const AgentToolStarted(this.call);
+  const AgentToolStarted(this.call, {this.denial});
 
   final AgentToolCall call;
+  final String? denial;
 }
 
 class AgentToolFinished extends AgentEvent {
-  const AgentToolFinished(this.call, this.result);
+  const AgentToolFinished(this.call, this.result, {this.denied = false});
 
   final AgentToolCall call;
   final AgentToolResult result;
+  final bool denied;
 }
 
 class AgentTurnFinished extends AgentEvent {
@@ -145,6 +148,7 @@ class AgentSession {
     String? systemPrompt,
     String? id,
     this.maxToolIterations = defaultMaxToolIterations,
+    this.limits = const RunLimits(),
     this.includeTools = true,
     List<AgentTool>? tools,
     List<AgentMessage> history = const [],
@@ -165,6 +169,7 @@ class AgentSession {
   final AgentModel model;
   final KitApi kitApi;
   final int maxToolIterations;
+  final RunLimits limits;
   final bool includeTools;
   final List<AgentTool> _tools;
   late final AgentToolDispatcher _dispatcher;
@@ -180,7 +185,17 @@ class AgentSession {
   ///
   /// On model failure: user message is kept, [AgentTurnFailed] is emitted,
   /// then the error is rethrown. Tool dispatch errors become tool messages.
-  Future<void> sendUser(String text, {bool Function()? isCancelled}) async {
+  Future<void> sendUser(
+    String text, {
+    bool Function()? isCancelled,
+    Future<void> Function()? beforeModel,
+    Future<String?> Function(String name)? toolDenial,
+    Future<void> Function()? afterToolResult,
+    Future<void> Function()? beforeToolDispatch,
+    Future<void> Function(RunPhase phase, int modelTurns, int toolCalls)?
+    onPhase,
+    void Function(int outputChars)? onOutput,
+  }) async {
     final user = AgentMessage(role: AgentRole.user, content: text);
     _messages.add(user);
     _events.add(const AgentTurnStarted());
@@ -191,14 +206,51 @@ class AgentSession {
       }
     }
 
+    final watch = Stopwatch()..start();
+    var toolCalls = 0;
+    var outputChars = 0;
+    final modelLimit = limits.effectiveModelTurns < maxToolIterations
+        ? limits.effectiveModelTurns
+        : maxToolIterations;
+    void checkTime() {
+      if (watch.elapsed >= limits.elapsed) {
+        throw const RunLimitReached('elapsed time');
+      }
+    }
+
+    void countOutput(String value) {
+      outputChars += value.length;
+      onOutput?.call(outputChars);
+      if (outputChars > limits.outputChars) {
+        throw const RunLimitReached('output volume');
+      }
+    }
+
     try {
-      for (var i = 0; i < maxToolIterations; i++) {
+      for (var i = 0; i < modelLimit; i++) {
         stopIfCancelled();
-        final reply = await model.complete(
-          messages: List.unmodifiable(_messages),
-          tools: includeTools ? List.unmodifiable(_tools) : const <AgentTool>[],
-        );
+        checkTime();
+        await beforeModel?.call();
         stopIfCancelled();
+        await onPhase?.call(RunPhase.modelWait, i + 1, toolCalls);
+        stopIfCancelled();
+        checkTime();
+        final reply = await model
+            .complete(
+              messages: List.unmodifiable(_messages),
+              tools: includeTools
+                  ? List.unmodifiable(_tools)
+                  : const <AgentTool>[],
+            )
+            .timeout(
+              limits.elapsed - watch.elapsed,
+              onTimeout: () {
+                throw const RunLimitReached('elapsed time');
+              },
+            );
+        stopIfCancelled();
+        checkTime();
+        countOutput(reply.content);
         final calls = reply.toolCalls;
         if (calls == null || calls.isEmpty) {
           final assistant = AgentMessage(
@@ -219,13 +271,27 @@ class AgentSession {
         _events.add(AgentMessageAppended(assistant));
         for (final call in calls) {
           stopIfCancelled();
-          _events.add(AgentToolStarted(call));
-          final result = await _dispatcher.dispatch(
-            call.name,
-            call.argumentsJson,
-          );
+          checkTime();
+          if (toolCalls >= limits.toolCalls) {
+            throw const RunLimitReached('tool calls');
+          }
+          toolCalls++;
+          await onPhase?.call(RunPhase.toolWait, i + 1, toolCalls);
           stopIfCancelled();
-          _events.add(AgentToolFinished(call, result));
+          final denial = await toolDenial?.call(call.name);
+          stopIfCancelled();
+          _events.add(AgentToolStarted(call, denial: denial));
+          await beforeToolDispatch?.call();
+          stopIfCancelled();
+          checkTime();
+          final result = denial == null
+              ? await _dispatcher.dispatch(call.name, call.argumentsJson)
+              : AgentToolResult(toolError(denial));
+          _events.add(AgentToolFinished(call, result, denied: denial != null));
+          await afterToolResult?.call();
+          stopIfCancelled();
+          checkTime();
+          countOutput(result.content);
           final toolMessage = AgentMessage(
             role: AgentRole.tool,
             content: result.content,
@@ -235,13 +301,7 @@ class AgentSession {
           _events.add(AgentMessageAppended(toolMessage));
         }
       }
-      const limit = AgentMessage(
-        role: AgentRole.assistant,
-        content: 'Tool loop limit reached',
-      );
-      _messages.add(limit);
-      _events.add(const AgentMessageAppended(limit));
-      _events.add(const AgentTurnFinished());
+      throw const RunLimitReached('model turns');
     } on AgentRunInterrupted {
       rethrow;
     } catch (error) {

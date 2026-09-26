@@ -83,10 +83,19 @@ RunRoute routeIntoModel({
     for (final cable in sceneCables(document))
       if (cable.targetBodyId == bodyId &&
           (ports.contains(cable.port) ||
+              cable.port == runControlPort ||
               (conversation && cable.port == llmConversationPort)))
         cable.id,
   ];
-  return RunRoute(kits: [if (frame != null) frame], cables: cables);
+  final controls = [
+    for (final cable in sceneCables(document))
+      if (cable.targetBodyId == bodyId && cable.port == runControlPort)
+        cable.sourceId,
+  ];
+  return RunRoute(
+    kits: [?frame, ...controls],
+    cables: cables,
+  );
 }
 
 /// The tool kit, the LLM, and the cables that call actually traveled.
@@ -102,7 +111,7 @@ RunRoute routeForTool({
     llmBodyId: bodyId,
   );
   return RunRoute(
-    kits: [if (llm != null) llm, toolFrameId],
+    kits: [?llm, toolFrameId],
     cables: [for (final cable in members) cable.id],
   );
 }
@@ -114,7 +123,7 @@ RunRoute routeForReply({
 }) {
   final frame = _frameId(document, bodyId);
   return RunRoute(
-    kits: [if (frame != null) frame],
+    kits: [?frame],
     cables: [
       for (final cable in sceneCables(document))
         if (cableWritesReply(cable, bodyId)) cable.id,
@@ -125,5 +134,5 @@ RunRoute routeForReply({
 /// The LLM kit alone. An interrupt has no cable still in motion.
 RunRoute routeForKit(SceneDocument document, String bodyId) {
   final frame = _frameId(document, bodyId);
-  return RunRoute(kits: [if (frame != null) frame]);
+  return RunRoute(kits: [?frame]);
 }

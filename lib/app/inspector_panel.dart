@@ -10,6 +10,8 @@ import 'package:skapie/app/patch_diff_viewer.dart';
 import 'package:skapie/app/connection_inspector.dart';
 import 'package:skapie/app/llm_kit_input.dart';
 import 'package:skapie/app/llm_request_information.dart';
+import 'package:skapie/app/run_control_panel.dart';
+import 'package:skapie/app/run_rail.dart';
 import 'package:skapie/app/kit_folder_actions.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/board_data_flow.dart';
@@ -1431,6 +1433,10 @@ class _InspectorPanelState extends State<InspectorPanel> {
                         controller: controller,
                       ),
                     if (llmBody != null && controller != null)
+                      _section('Run', [
+                        RunRail(bodyId: llmBody.id, controller: controller),
+                      ]),
+                    if (llmBody != null && controller != null)
                       _toolActivity(llmBody.id, controller),
                     if (llmBody != null && controller != null)
                       _runEvidence(llmBody.id, controller),
@@ -1487,6 +1493,15 @@ class _InspectorPanelState extends State<InspectorPanel> {
                       _runCheckPanel(frame),
                     if (kitIdOf(frame) == codingCheckResultKitId)
                       _checkResultPanel(frame),
+                    if (kitIdOf(frame) == harnessRunControlKitId &&
+                        controller != null)
+                      _section('Run Control', [
+                        RunControlPanel(
+                          frame: frame,
+                          kitApi: widget.kitApi,
+                          controller: controller,
+                        ),
+                      ]),
                     if (llmBody == null &&
                         object.type != boxTypeId &&
                         !isWorldToolKit(object) &&
@@ -1497,7 +1512,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
                         kitIdOf(object) != codingWriteScopeKitId &&
                         kitIdOf(object) != codingCheckSpecKitId &&
                         kitIdOf(object) != codingRunCheckKitId &&
-                        kitIdOf(object) != codingCheckResultKitId)
+                        kitIdOf(object) != codingCheckResultKitId &&
+                        kitIdOf(object) != harnessRunControlKitId)
                       _section('Content', _typeFields(object)),
                     if (llmBody != null)
                       _section('Tools', [

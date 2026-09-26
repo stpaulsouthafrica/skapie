@@ -51,8 +51,9 @@ bool kitPortAccepts(KitPortKind source, KitPortKind target) {
   return from.isOutput && !to.isOutput && to.takes(from.value);
 }
 
-/// Input, Context, and Tools on the left; Conversation and Output on the right.
-const int llmRegionCount = 5;
+/// Input, Context, Tools, and Control on the left; Conversation and Output on
+/// the right.
+const int llmRegionCount = 6;
 
 const double llmPortRowHeight = 22;
 const double llmPortTop = 4;
@@ -61,7 +62,7 @@ const double llmResizeHandle = 10;
 /// One row under the title. Repository and LLM labels share it.
 const double toolFrameHeight = 64;
 
-/// Header, five port rows, separators, and a resize handle.
+/// Header, six port rows, separators, and a resize handle.
 /// Status shares the Output row.
 const double llmFrameHeight =
     kitBarWorld +

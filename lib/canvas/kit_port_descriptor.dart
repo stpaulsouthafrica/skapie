@@ -31,6 +31,9 @@ enum KitPortKind {
   runCheckResult,
   checkResultIn,
   checkResultOut,
+  runControlOut,
+  runControlIn,
+  runCheckFeedback,
 }
 
 enum PortDirection { input, output }
@@ -62,7 +65,8 @@ enum PortValue {
   reviewDecision('Review', PortRole.data),
   checkSpec('Check Spec', PortRole.data),
   checkResult('Check Result', PortRole.data),
-  checkSummary('Check Summary', PortRole.data);
+  checkSummary('Check Summary', PortRole.data),
+  runControl('Run Control', PortRole.data);
 
   const PortValue(this.label, this.role);
 
@@ -395,6 +399,26 @@ const List<KitPortSpec> checkResultKitPorts = [
   ),
 ];
 
+const List<KitPortSpec> runControlKitPorts = [
+  KitPortSpec(
+    id: runCheckFeedbackPort,
+    kind: KitPortKind.runCheckFeedback,
+    label: 'Check',
+    direction: PortDirection.input,
+    value: PortValue.checkSummary,
+    placement: PortPlacement.footer(PortSide.left),
+    multiplicity: PortMultiplicity.one,
+  ),
+  KitPortSpec(
+    id: 'out',
+    kind: KitPortKind.runControlOut,
+    label: 'LLM',
+    direction: PortDirection.output,
+    value: PortValue.runControl,
+    placement: PortPlacement.footer(PortSide.right),
+  ),
+];
+
 const String _llmSink = 'sink';
 const String _llmSinkMessage = 'Needs Output or Conversation';
 
@@ -442,12 +466,22 @@ const List<KitPortSpec> llmKitPorts = [
     requiredMessage: _llmSinkMessage,
   ),
   KitPortSpec(
+    id: runControlPort,
+    kind: KitPortKind.runControlIn,
+    label: 'Control',
+    direction: PortDirection.input,
+    value: PortValue.runControl,
+    placement: PortPlacement.row(4, PortSide.left),
+    peer: PortPeer.body,
+    multiplicity: PortMultiplicity.one,
+  ),
+  KitPortSpec(
     id: 'output',
     kind: KitPortKind.llmOutput,
     label: 'Output',
     direction: PortDirection.output,
     value: PortValue.reply,
-    placement: PortPlacement.row(4, PortSide.right),
+    placement: PortPlacement.row(5, PortSide.right),
     peer: PortPeer.body,
     requiredGroup: _llmSink,
     requiredMessage: _llmSinkMessage,
@@ -460,6 +494,7 @@ const Map<String, List<KitPortSpec>> builtinKitPorts = {
   harnessConversationKitId: conversationKitPorts,
   codingRepositoryKitId: repositoryKitPorts,
   harnessLlmKitId: llmKitPorts,
+  harnessRunControlKitId: runControlKitPorts,
   proposePatchKitId: proposePatchKitPorts,
   codingPatchProposalKitId: patchProposalKitPorts,
   codingReviewDecisionKitId: reviewDecisionKitPorts,

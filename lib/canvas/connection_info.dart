@@ -79,6 +79,10 @@ ConnectionInfo describeConnection(
 
 String connectionExplanation(KitPortKind? from, KitPortKind? to) {
   return switch ((from, to)) {
+    (KitPortKind.runControlOut, KitPortKind.runControlIn) =>
+      'Sets limits and controls for this LLM run.',
+    (KitPortKind.checkResultOut, KitPortKind.runCheckFeedback) =>
+      'A failed check can allow one more turn when the rule is enabled.',
     (KitPortKind.textOut, KitPortKind.llmInput) =>
       'This text becomes the prompt when you start LLM Run.',
     (KitPortKind.llmConversation, KitPortKind.conversationIn) =>
@@ -204,6 +208,12 @@ String _preview(SceneDocument document, SceneCable cable, PortValue value) {
       return 'An explicit Run Check writes the outcome here';
     case PortValue.checkSummary:
       return source == null ? '' : textKitContent(document, source);
+    case PortValue.runControl:
+      return source == null
+          ? ''
+          : '${source.props['modelTurns'] ?? 8} turns · '
+                '${source.props['toolCalls'] ?? 16} tools · '
+                '${source.props['elapsedSeconds'] ?? 120}s';
   }
 }
 
