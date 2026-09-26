@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:skapie/agent/compaction.dart';
 import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -58,11 +59,16 @@ class _ConversationKitViewer extends StatelessWidget {
               final turns = body == null
                   ? const <ConversationTurn>[]
                   : conversationTurnsOf(body);
+              final compaction = body == null
+                  ? null
+                  : conversationCompactionOf(body);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _header(context, hasTurns: turns.isNotEmpty),
+                  _header(context, turns),
                   const SizedBox(height: 12),
+                  if (compaction != null)
+                    _compactionCard(tokens, compaction, bodyId),
                   Expanded(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
@@ -89,7 +95,7 @@ class _ConversationKitViewer extends StatelessWidget {
     );
   }
 
-  Widget _header(BuildContext context, {required bool hasTurns}) {
+  Widget _header(BuildContext context, List<ConversationTurn> turns) {
     return Row(
       children: [
         Expanded(
@@ -99,7 +105,14 @@ class _ConversationKitViewer extends StatelessWidget {
                 ?.copyWith(color: tokens.ink),
           ),
         ),
-        if (hasTurns)
+        if (turns.length > 2)
+          TextButton(
+            key: const Key('conversation-kit-compact'),
+            onPressed: () =>
+                compactOldestTurns(kitApi: kitApi, bodyId: bodyId),
+            child: Text('Compact', style: TextStyle(color: tokens.accent)),
+          ),
+        if (turns.isNotEmpty)
           TextButton(
             key: const Key('conversation-kit-clear'),
             onPressed: () => clearConversation(kitApi: kitApi, bodyId: bodyId),
@@ -112,6 +125,66 @@ class _ConversationKitViewer extends StatelessWidget {
           icon: Icon(Icons.close, color: tokens.muted),
         ),
       ],
+    );
+  }
+
+  Widget _compactionCard(
+    PaintTokens tokens,
+    ConversationCompaction compaction,
+    String bodyId,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DecoratedBox(
+        key: const Key('conversation-compaction'),
+        decoration: BoxDecoration(
+          color: Color.alphaBlend(
+            tokens.accent.withValues(alpha: 0.10),
+            tokens.panel,
+          ),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: tokens.hairline),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Compacted summary · turns '
+                      '${compaction.fromTurn + 1}-${compaction.toTurn}',
+                      style: TextStyle(
+                        color: tokens.muted,
+                        fontSize: 11,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    key: const Key('conversation-kit-restore'),
+                    onPressed: () => clearConversationCompaction(
+                      kitApi: kitApi,
+                      bodyId: bodyId,
+                    ),
+                    child: Text('Restore', style: TextStyle(color: tokens.accent)),
+                  ),
+                ],
+              ),
+              SelectableText(
+                compaction.summary,
+                style: TextStyle(
+                  color: tokens.ink,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

@@ -1,4 +1,6 @@
 import 'package:skapie/agent/agent.dart';
+import 'package:skapie/agent/compaction.dart';
+import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -255,6 +257,7 @@ ContextAssembly assembleContext({
       ),
     );
   }
+  exclusions.addAll(_compactionNotes(document, llmBodyId));
 
   for (final excerpt in _trimExcerpts(excerpts)) {
     items.add(
@@ -366,6 +369,37 @@ List<ContextExcerpt> _trimExcerpts(List<ContextExcerpt> excerpts) {
   return kept.reversed.toList();
 }
 
+List<ContextExclusion> _compactionNotes(
+  SceneDocument document,
+  String llmBodyId,
+) {
+  final notes = <ContextExclusion>[];
+  for (final frame in conversationFrames(document)) {
+    if (!kitHasLink(frame, to: llmBodyId, port: llmConversationPort)) {
+      continue;
+    }
+    final body = conversationBody(document, frame);
+    if (body == null) {
+      continue;
+    }
+    final compaction = conversationCompactionOf(body);
+    if (compaction == null || compaction.isEmpty) {
+      continue;
+    }
+    notes.add(
+      ContextExclusion(
+        layer: ContextLayer.history,
+        sourceKitId: harnessConversationKitId,
+        sourceId: frame.id,
+        reason:
+            'Turns ${compaction.fromTurn + 1}-${compaction.toTurn} condensed; '
+            'originals remain in the Conversation kit',
+      ),
+    );
+  }
+  return notes;
+}
+
 List<ContextExclusion> _unusedSources(
   SceneDocument document,
   String llmBodyId,
@@ -427,6 +461,33 @@ List<ContextExclusion> _unusedSources(
     );
   }
   return exclusions;
+}
+
+/// Build a preview excerpt from one `repo_read_file` result, or null.
+ContextExcerpt? contextExcerptFromRead({
+  required String callId,
+  required String toolName,
+  required Map<String, Object?> result,
+  String? sourceKitId,
+}) {
+  if (toolName != 'repo_read_file' || result['ok'] == false) {
+    return null;
+  }
+  final path = result['path']?.toString() ?? '';
+  final content = result['content']?.toString() ?? '';
+  if (path.isEmpty || content.isEmpty) {
+    return null;
+  }
+  return ContextExcerpt(
+    toolName: toolName,
+    sourceKitId: sourceKitId ?? toolName,
+    sourceId: callId,
+    text: content,
+    path: path,
+    lineStart: (result['startLine'] as num?)?.toInt(),
+    lineEnd: (result['endLine'] as num?)?.toInt(),
+    truncated: result['truncated'] == true,
+  );
 }
 
 /// Compact facts for the run ledger: what went in and what was left out.

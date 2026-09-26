@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/context_assembly.dart';
 import 'package:skapie/app/full_screen_text_editor.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -12,10 +13,12 @@ class ContextAssemblyView extends StatefulWidget {
     super.key,
     required this.body,
     required this.kitApi,
+    this.controller,
   });
 
   final SceneObject body;
   final KitApi kitApi;
+  final AgentController? controller;
 
   @override
   State<ContextAssemblyView> createState() => _ContextAssemblyViewState();
@@ -29,6 +32,7 @@ class _ContextAssemblyViewState extends State<ContextAssemblyView> {
       kitApi: widget.kitApi,
       llmBodyId: widget.body.id,
       taskInput: llmCableInput(widget.kitApi.store.document, widget.body.id),
+      excerpts: widget.controller?.excerptsFor(widget.body.id) ?? const [],
     );
   }
 

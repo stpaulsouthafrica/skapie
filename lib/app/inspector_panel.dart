@@ -1437,6 +1437,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
                       ContextAssemblyView(
                         body: llmBody,
                         kitApi: widget.kitApi,
+                        controller: controller,
                       ),
                     if (llmBody != null && controller != null)
                       _section('Run', [

@@ -19,6 +19,7 @@ import 'package:skapie/agent/messages_agent_model.dart';
 import 'package:skapie/agent/openai_compatible.dart';
 import 'package:skapie/agent/responses_agent_model.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/providers/model_surface.dart';
 import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
 import 'package:skapie/providers/vanilla_client.dart';
@@ -113,6 +114,7 @@ class AgentController extends ChangeNotifier {
   RunTrace? trace;
   int _traceToken = 0;
   final Map<String, List<AgentToolActivity>> _toolActivities = {};
+  final Map<String, List<ContextExcerpt>> _excerpts = {};
   final Map<String, LlmRunUse> _runUse = {};
 
   /// Each LLM's latest run this session. Not persisted.
@@ -120,6 +122,10 @@ class AgentController extends ChangeNotifier {
 
   List<AgentToolActivity> toolActivitiesFor(String bodyId) =>
       List.unmodifiable(_toolActivities[bodyId] ?? const <AgentToolActivity>[]);
+
+  /// File excerpts read during the latest run, for the context preview.
+  List<ContextExcerpt> excerptsFor(String bodyId) =>
+      List.unmodifiable(_excerpts[bodyId] ?? const <ContextExcerpt>[]);
 
   RunRecord? latestRunFor(String bodyId) {
     final runs = ledger.runsFor(bodyId);
@@ -340,6 +346,7 @@ class AgentController extends ChangeNotifier {
     activeToolFrameId = null;
     seedPorts = _seedPortsFor(bodyId);
     _toolActivities[bodyId] = [];
+    _excerpts[bodyId] = [];
     _runUse[bodyId] = LlmRunUse(
       bodyId: bodyId,
       startedAt: _runStartedAt!,
@@ -955,6 +962,10 @@ class AgentController extends ChangeNotifier {
           result: event.result.content,
         );
       }
+      final excerpt = _excerptFromRead(bodyId, event);
+      if (excerpt != null) {
+        _excerpts.putIfAbsent(bodyId, () => []).add(excerpt);
+      }
       _markToolUsed(activeToolFrameId);
       final frameId = activeToolFrameId ?? toolPulseFrameId;
       if (frameId != null && !event.denied) {
@@ -987,6 +998,23 @@ class AgentController extends ChangeNotifier {
       activeToolFrameId = null;
       notifyListeners();
     }
+  }
+
+  ContextExcerpt? _excerptFromRead(String bodyId, AgentToolFinished event) {
+    final frameId = toolFrameIdForName(
+      kitApi.store.document,
+      bodyId,
+      event.call.name,
+    );
+    final frame = frameId == null
+        ? null
+        : kitApi.store.document.objectById(frameId);
+    return contextExcerptFromRead(
+      callId: event.call.id,
+      toolName: event.call.name,
+      result: event.result.json,
+      sourceKitId: frame == null ? null : kitIdOf(frame),
+    );
   }
 
   void _markToolUsed(String? frameId) {

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:skapie/agent/compaction.dart';
 import 'package:skapie/agent/conversation_kit.dart';
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/agent/llm_kit.dart';
@@ -578,6 +579,7 @@ String llmContextText(SceneDocument document, String llmBodyId) {
 }
 
 /// Turns from every Conversation kit cabled into this LLM, in board order.
+/// A kit's compacted summary stands in for its source span.
 List<ConversationTurn> llmConversationHistory(
   SceneDocument document,
   String llmBodyId,
@@ -594,7 +596,9 @@ List<ConversationTurn> llmConversationHistory(
     if (body == null) {
       continue;
     }
-    turns.addAll(conversationTurnsOf(body));
+    turns.addAll(
+      compactedHistory(conversationTurnsOf(body), conversationCompactionOf(body)),
+    );
   }
   return turns;
 }
