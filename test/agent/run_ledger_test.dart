@@ -238,7 +238,10 @@ void main() {
         .where((event) => event.kind == RunEventKind.contextAssembled)
         .toList();
     expect(contexts, hasLength(2));
-    expect(contexts.first.payload['sources'], contains('tools:tools.list_kits'));
+    expect(
+      contexts.first.payload['sources'],
+      contains('toolOutput:tools:tools.list_kits'),
+    );
     expect(
       (contexts.last.payload['sources'] as List)
           .any((source) => '$source'.startsWith('toolOutput:tool:')),
