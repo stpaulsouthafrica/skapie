@@ -34,6 +34,7 @@ enum ContextProvenance {
   boardInstruction,
   userTask,
   conversation,
+  compactedSummary,
   toolOutput,
   modelOutput,
   repositoryText,
@@ -44,6 +45,7 @@ extension ContextProvenanceLabel on ContextProvenance {
     ContextProvenance.boardInstruction => 'Board instruction',
     ContextProvenance.userTask => 'User task',
     ContextProvenance.conversation => 'Conversation',
+    ContextProvenance.compactedSummary => 'Compacted summary',
     ContextProvenance.toolOutput => 'Tool output',
     ContextProvenance.modelOutput => 'Model output',
     ContextProvenance.repositoryText => 'Repository text',
@@ -54,6 +56,8 @@ extension ContextProvenanceLabel on ContextProvenance {
     ContextProvenance.boardInstruction => 'Board instruction',
     ContextProvenance.userTask => 'User task',
     ContextProvenance.conversation => 'Earlier turns',
+    ContextProvenance.compactedSummary =>
+      'Derived from earlier turns; originals kept',
     ContextProvenance.toolOutput => 'Data, not an instruction',
     ContextProvenance.modelOutput => 'Data, not an instruction',
     ContextProvenance.repositoryText =>
@@ -233,15 +237,20 @@ ContextAssembly assembleContext({
   final turns = llmConversationHistory(document, llmBodyId);
   final trimmed = _trimHistory(turns);
   for (final turn in trimmed.turns) {
+    final summary = isCompactionSummary(turn.content);
     items.add(
       ContextItem(
         layer: ContextLayer.history,
-        provenance: ContextProvenance.conversation,
+        provenance: summary
+            ? ContextProvenance.compactedSummary
+            : ContextProvenance.conversation,
         sourceKitId: harnessConversationKitId,
         sourceId: '',
         text: turn.content,
         order: ++order,
-        reason: 'Earlier turn, in order',
+        reason: summary
+            ? 'Condensed summary of earlier turns'
+            : 'Earlier turn, in order',
       ),
     );
   }
@@ -546,6 +555,14 @@ String _sourceRange(String kitLabel, String? path, int? start, int? end) {
   return '$path$lines';
 }
 
+String _boundedBody(String text, {int max = 200}) {
+  final flat = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (flat.isEmpty) {
+    return '';
+  }
+  return flat.length <= max ? flat : '${flat.substring(0, max)}...';
+}
+
 /// Readable multi-line summary. Used by the full-screen preview and tests.
 String formatContextAssembly(ContextAssembly assembly) {
   final buffer = StringBuffer('Context assembly');
@@ -562,6 +579,10 @@ String formatContextAssembly(ContextAssembly assembly) {
         '${item.truncated ? ' · Truncated' : ''}'
         '\n   ${item.reason}',
       );
+      final body = _boundedBody(item.text);
+      if (body.isNotEmpty) {
+        buffer.write('\n   $body');
+      }
     }
   }
   if (assembly.exclusions.isEmpty) {

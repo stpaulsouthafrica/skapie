@@ -7,7 +7,9 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
 
-/// Collapsible view of exactly what the model will see, and why.
+/// Collapsible view of the sources for the next model request, and why.
+/// Reads from the latest run are shown for reference; the tool loop sends
+/// them to the model as tool results.
 class ContextAssemblyView extends StatefulWidget {
   const ContextAssemblyView({
     super.key,

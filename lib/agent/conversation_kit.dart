@@ -1,3 +1,4 @@
+import 'package:skapie/agent/compaction.dart';
 import 'package:skapie/agent/conversation_turn.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
@@ -20,7 +21,14 @@ String formatConversationTranscript(List<ConversationTurn> turns) {
 }
 
 void clearConversation({required KitApi kitApi, required String bodyId}) {
-  kitApi.updateProps(bodyId, {turnsProp: <Object?>[], 'content': ''});
+  kitApi.updateProps(bodyId, {
+    turnsProp: <Object?>[],
+    'content': '',
+    compactedSummaryProp: '',
+    compactedFromProp: 0,
+    compactedToProp: 0,
+    compactedAtProp: '',
+  });
 }
 
 SceneObject? conversationBody(SceneDocument document, SceneObject frame) {

@@ -41,12 +41,23 @@ ConversationCompaction? conversationCompactionOf(SceneObject body) {
   );
 }
 
+/// First line every condensed summary starts with. A reader can tell a
+/// derived summary from a real turn.
+const String compactionSummaryMarker = '[Earlier turns, condensed]';
+
+bool isCompactionSummary(String content) =>
+    content.trimLeft().startsWith(compactionSummaryMarker);
+
 /// The turns a request should send: the summary replaces its source span.
 List<ConversationTurn> compactedHistory(
   List<ConversationTurn> turns,
   ConversationCompaction? compaction,
 ) {
   if (compaction == null || compaction.isEmpty) {
+    return turns;
+  }
+  // A span past the current turns is stale: never hide real turns with it.
+  if (compaction.toTurn > turns.length) {
     return turns;
   }
   final from = compaction.fromTurn.clamp(0, turns.length);
@@ -121,7 +132,7 @@ String condenseTurns(
   required int to,
   int perTurn = 140,
 }) {
-  final buffer = StringBuffer('[Earlier turns, condensed]');
+  final buffer = StringBuffer(compactionSummaryMarker);
   for (var i = from; i < to && i < turns.length; i++) {
     final turn = turns[i];
     final text = turn.content.trim().replaceAll(RegExp(r'\s+'), ' ');

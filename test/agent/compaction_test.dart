@@ -57,6 +57,8 @@ void main() {
       llmBodyId: llm.last,
       taskInput: 'go',
     );
+    final summaryItem = assembly.itemsFor(ContextLayer.history).first;
+    expect(summaryItem.provenance, ContextProvenance.compactedSummary);
     expect(
       assembly.exclusions.any(
         (item) => item.reason.contains('condensed; originals remain'),
@@ -66,6 +68,43 @@ void main() {
 
     clearConversationCompaction(kitApi: api, bodyId: conversation.last);
     expect(llmConversationHistory(api.store.document, llm.last), hasLength(4));
+  });
+
+  test('clearing turns also clears a compaction, so nothing is hidden', () {
+    final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final conversation = api.instantiate(
+      harnessConversationKitId,
+      origin: const Offset(400, 0),
+    );
+    connectTextToLlm(
+      kitApi: api,
+      textObjectId: conversation.first,
+      llmBodyId: llm.last,
+      port: llmConversationPort,
+    );
+    api.updateProps(conversation.last, {
+      'turns': [
+        {'role': 'user', 'content': 'old ask'},
+        {'role': 'assistant', 'content': 'old answer'},
+        {'role': 'user', 'content': 'another ask'},
+        {'role': 'assistant', 'content': 'another answer'},
+      ],
+    });
+    expect(
+      compactOldestTurns(kitApi: api, bodyId: conversation.last, keep: 2),
+      true,
+    );
+
+    clearConversation(kitApi: api, bodyId: conversation.last);
+    api.updateProps(conversation.last, {
+      'turns': [
+        {'role': 'user', 'content': 'new ask'},
+        {'role': 'assistant', 'content': 'new answer'},
+      ],
+    });
+
+    final history = llmConversationHistory(api.store.document, llm.last);
+    expect(history.map((turn) => turn.content), ['new ask', 'new answer']);
   });
 
   test('a read result becomes a bounded excerpt with a line range', () {
