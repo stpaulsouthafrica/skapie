@@ -31,11 +31,14 @@ enum RunEventKind {
   graphValidated,
   contextAssembled,
   stateChanged,
+  checkpoint,
+  effectInFlight,
   modelRequestStarted,
   modelRequestFinished,
   toolCallStarted,
   toolCallFinished,
   toolCallUncertain,
+  runResumed,
   runCompleted,
   runFailed,
   runInterrupted,
@@ -43,6 +46,41 @@ enum RunEventKind {
   checkStarted,
   checkOutput,
   checkFinished,
+}
+
+/// An effect began but its result has not been seen. A crash leaves it here.
+const Set<RunEventKind> runEffectInFlightKinds = {
+  RunEventKind.effectInFlight,
+  RunEventKind.toolCallStarted,
+  RunEventKind.checkStarted,
+};
+
+/// The effect settled, one way or another.
+const Set<RunEventKind> runEffectResolvedKinds = {
+  RunEventKind.toolCallFinished,
+  RunEventKind.toolCallUncertain,
+  RunEventKind.checkFinished,
+  RunEventKind.runCompleted,
+  RunEventKind.runFailed,
+  RunEventKind.runInterrupted,
+  RunEventKind.runPaused,
+};
+
+/// True when a run started an effect and never saw it finish. Such a run needs
+/// inspection before any retry.
+bool runRecordEffectUncertain(RunRecord run) {
+  if (run.events.any(
+    (event) =>
+        event.kind == RunEventKind.runInterrupted &&
+        event.payload['uncertain'] == true,
+  )) {
+    return true;
+  }
+  for (final event in run.events.reversed) {
+    if (runEffectInFlightKinds.contains(event.kind)) return true;
+    if (runEffectResolvedKinds.contains(event.kind)) return false;
+  }
+  return false;
 }
 
 enum RunStatus { running, completed, failed, interrupted, paused }
@@ -95,6 +133,7 @@ class RunRecord {
     required this.bodyId,
     this.schemaVersion = runRecordSchemaVersion,
     this.kind = 'agent',
+    this.resumedFrom,
     List<RunEvent> events = const [],
   }) : events = List.of(events);
 
@@ -102,6 +141,9 @@ class RunRecord {
   final String id;
   final String bodyId;
   final String kind;
+
+  /// The run this one continues, after a resume. Null for a fresh run.
+  final String? resumedFrom;
   final List<RunEvent> events;
 
   RunStatus get status {
@@ -135,6 +177,7 @@ class RunRecord {
     'id': id,
     'bodyId': bodyId,
     'kind': kind,
+    if (resumedFrom != null) 'resumedFrom': resumedFrom,
     'events': [for (final event in events) event.toJson()],
   };
 
@@ -145,6 +188,7 @@ class RunRecord {
       id: json['id']?.toString() ?? '',
       bodyId: json['bodyId']?.toString() ?? '',
       kind: json['kind']?.toString() ?? 'agent',
+      resumedFrom: json['resumedFrom']?.toString(),
       events: [
         if (rawEvents is List)
           for (final item in rawEvents)
@@ -186,9 +230,18 @@ class RunLedger {
       if (run.bodyId == bodyId) run,
   ];
 
-  RunRecord begin({required String bodyId, String kind = 'agent'}) {
+  RunRecord begin({
+    required String bodyId,
+    String kind = 'agent',
+    String? resumedFrom,
+  }) {
     _nextId++;
-    final run = RunRecord(id: 'run_$_nextId', bodyId: bodyId, kind: kind);
+    final run = RunRecord(
+      id: 'run_$_nextId',
+      bodyId: bodyId,
+      kind: kind,
+      resumedFrom: resumedFrom,
+    );
     _runs.add(run);
     return run;
   }
@@ -263,13 +316,18 @@ class RunLedger {
       utf8.encode(jsonEncode(toJson())).length >= historyWarnBytes;
 
   /// Runs left open by a quit become interrupted. Completed runs stay completed.
+  /// A run with an unobserved effect is flagged uncertain so it is inspected.
   int closeIncompleteRuns() {
     var closed = 0;
     for (final run in List<RunRecord>.of(_runs)) {
       if (run.isTerminal) {
         continue;
       }
-      append(run.id, RunEventKind.runInterrupted, {'reason': 'reopened'});
+      final uncertainAtClose = runRecordEffectUncertain(run);
+      append(run.id, RunEventKind.runInterrupted, {
+        'reason': 'reopened',
+        if (uncertainAtClose) 'uncertain': true,
+      });
       closed++;
     }
     if (closed > 0) {
@@ -548,11 +606,14 @@ String runEventLabel(RunEventKind kind) => switch (kind) {
   RunEventKind.graphValidated => 'Graph validated',
   RunEventKind.contextAssembled => 'Context assembled',
   RunEventKind.stateChanged => 'Run state changed',
+  RunEventKind.checkpoint => 'Checkpoint saved',
+  RunEventKind.effectInFlight => 'Effect in flight',
   RunEventKind.modelRequestStarted => 'Model request started',
   RunEventKind.modelRequestFinished => 'Model request finished',
   RunEventKind.toolCallStarted => 'Tool call started',
   RunEventKind.toolCallFinished => 'Tool call finished',
   RunEventKind.toolCallUncertain => 'Tool outcome uncertain',
+  RunEventKind.runResumed => 'Run resumed',
   RunEventKind.runCompleted => 'Run completed',
   RunEventKind.runFailed => 'Run failed',
   RunEventKind.runInterrupted => 'Run interrupted',

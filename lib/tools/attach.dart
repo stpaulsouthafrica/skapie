@@ -6,6 +6,7 @@ import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
+import 'package:skapie/shared/text_digest.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 import 'package:skapie/tools/repository/repository_tools.dart';
@@ -192,16 +193,12 @@ LlmToolOffer llmToolOffer({
 }
 
 String toolSchemaDigest(List<AgentTool> tools) {
-  final canonical = jsonEncode([
-    for (final tool in tools)
-      {'name': tool.name, 'parameters': tool.parameters ?? const {}},
-  ]);
-  var hash = 0x811c9dc5;
-  for (final byte in utf8.encode(canonical)) {
-    hash ^= byte;
-    hash = (hash * 0x01000193) & 0xFFFFFFFF;
-  }
-  return hash.toRadixString(16).padLeft(8, '0');
+  return fnv1aHex(
+    jsonEncode([
+      for (final tool in tools)
+        {'name': tool.name, 'parameters': tool.parameters ?? const {}},
+    ]),
+  );
 }
 
 /// Why a repository-backed tool cannot run now, or null when it can.

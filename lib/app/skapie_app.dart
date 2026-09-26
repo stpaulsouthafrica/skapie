@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/run_ledger.dart';
+import 'package:skapie/agent/run_checkpoint.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/home_screen.dart';
 import 'package:skapie/app/canvas_shortcut_settings.dart';
@@ -99,6 +100,9 @@ class _SkapieAppState extends State<SkapieApp> {
     final runtime = _controller.runtime;
     final session = buildAgentSession(kitApi: nextKitApi, runtime: runtime);
     final ledgerFile = RunLedgerFile.besideScene(nextStore.sceneFilePath);
+    final checkpointStore = RunCheckpointStore.besideScene(
+      nextStore.sceneFilePath,
+    );
     final nextController = AgentController(
       kitApi: nextKitApi,
       session: session,
@@ -110,6 +114,7 @@ class _SkapieAppState extends State<SkapieApp> {
       prefs: _controller.prefs,
       repositoryPermission: _controller.repositoryPermission,
       ledgerFile: ledgerFile,
+      checkpointStore: checkpointStore,
     );
     await nextController.loadLedger();
     nextController.rememberCatalog(_controller.catalogModels);

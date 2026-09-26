@@ -43,9 +43,11 @@ void main() {
         [
           RunEventKind.runRequested,
           RunEventKind.graphValidated,
+          RunEventKind.checkpoint,
           RunEventKind.contextAssembled,
           RunEventKind.modelRequestStarted,
           RunEventKind.modelRequestFinished,
+          RunEventKind.checkpoint,
           RunEventKind.runCompleted,
         ],
       );
@@ -220,14 +222,18 @@ void main() {
       [
         RunEventKind.runRequested,
         RunEventKind.graphValidated,
+        RunEventKind.checkpoint,
         RunEventKind.contextAssembled,
         RunEventKind.modelRequestStarted,
         RunEventKind.modelRequestFinished,
+        RunEventKind.checkpoint,
         RunEventKind.toolCallStarted,
         RunEventKind.toolCallFinished,
+        RunEventKind.checkpoint,
         RunEventKind.contextAssembled,
         RunEventKind.modelRequestStarted,
         RunEventKind.modelRequestFinished,
+        RunEventKind.checkpoint,
         RunEventKind.runCompleted,
       ],
     );

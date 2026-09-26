@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/run_ledger.dart';
+import 'package:skapie/agent/run_checkpoint.dart';
 import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/skapie_app.dart';
@@ -158,6 +159,9 @@ Future<AgentController> bootstrapAgentController({
   );
   final session = buildAgentSession(kitApi: kitApi, runtime: runtime);
   final ledgerFile = RunLedgerFile.besideScene(kitApi.store.sceneFilePath);
+  final checkpointStore = RunCheckpointStore.besideScene(
+    kitApi.store.sceneFilePath,
+  );
   final controller = AgentController(
     kitApi: kitApi,
     session: session,
@@ -168,6 +172,7 @@ Future<AgentController> bootstrapAgentController({
     memoryApiKey: prefs?.apiKey ?? runtime.apiKey,
     prefs: prefs,
     ledgerFile: ledgerFile,
+    checkpointStore: checkpointStore,
   );
   await controller.loadLedger();
   return controller;

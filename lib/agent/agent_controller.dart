@@ -12,6 +12,7 @@ import 'package:skapie/agent/agent_prefs.dart';
 import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/agent/run_ledger.dart';
+import 'package:skapie/agent/run_checkpoint.dart';
 import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/agent/run_error.dart';
 import 'package:skapie/agent/run_route.dart';
@@ -58,6 +59,7 @@ class AgentController extends ChangeNotifier {
     this.repositoryPermission = const SystemRepositoryPermission(),
     RunLedger? ledger,
     this.ledgerFile,
+    this.checkpointStore,
   }) : ledger = ledger ?? RunLedger();
 
   final KitApi kitApi;
@@ -66,9 +68,14 @@ class AgentController extends ChangeNotifier {
   final RepositoryPermission repositoryPermission;
   final RunLedger ledger;
   final RunLedgerFile? ledgerFile;
+  final RunCheckpointStore? checkpointStore;
   Future<void> _ledgerWrites = Future.value();
   String? _activeRunId;
   _RunCancel? _gate;
+  String? _graphRevision;
+  String? _pendingOperationId;
+  RunBoundary _lastBoundary = RunBoundary.started;
+  final Set<String> _dismissedRecovery = {};
 
   AgentSession session;
   ResolvedAgentRuntime runtime;
@@ -172,8 +179,10 @@ class AgentController extends ChangeNotifier {
   ) => _note(runId, kind, payload);
 
   Future<void> loadLedger() async {
+    await checkpointStore?.load();
     final file = ledgerFile;
     if (file == null) {
+      notifyListeners();
       return;
     }
     await file.loadInto(ledger);
@@ -182,6 +191,70 @@ class AgentController extends ChangeNotifier {
       await _ledgerWrites;
     }
     notifyListeners();
+  }
+
+  /// Runs left unfinished by a quit that the user has not dismissed. Each is a
+  /// place where Continue, Inspect, or End is offered.
+  List<RecoveryNotice> get pendingRecovery {
+    final notices = <RecoveryNotice>[];
+    final bodies = <String>{for (final run in ledger.runs) run.bodyId};
+    for (final bodyId in bodies) {
+      final runs = ledger.runsFor(bodyId);
+      if (runs.isEmpty) continue;
+      final latest = runs.last;
+      if (latest.status != RunStatus.interrupted ||
+          _dismissedRecovery.contains(latest.id)) {
+        continue;
+      }
+      notices.add(
+        RecoveryNotice(
+          runId: latest.id,
+          bodyId: bodyId,
+          uncertain: runRecordEffectUncertain(latest),
+          resumable: checkpointStore?.forRun(latest.id) != null,
+        ),
+      );
+    }
+    return notices;
+  }
+
+  /// Continue a paused or interrupted run. A new segment links to the old one.
+  Future<void> resumeRun(String bodyId) async {
+    if (runningBodyId != null) return;
+    final runs = ledger.runsFor(bodyId);
+    final previous = runs.isEmpty ? null : runs.last;
+    _dismissedRecovery.add(previous?.id ?? '');
+    final checkpoint = previous == null ? null : checkpointStore?.forRun(previous.id);
+    final prompt = llmCableInput(kitApi.store.document, bodyId).trim();
+    await _run(
+      prompt: prompt,
+      bodyId: bodyId,
+      resumedFrom: previous?.id,
+      checkpoint: checkpoint,
+    );
+  }
+
+  /// Rerun against the current board and repository. A fresh run, no link.
+  Future<void> rerunRun(String bodyId) async {
+    final prompt = llmCableInput(kitApi.store.document, bodyId).trim();
+    await sendUser(prompt, targetBodyId: bodyId);
+  }
+
+  /// Drop the recovery offer for a run without running it again.
+  Future<void> endRun(String runId) async {
+    _dismissedRecovery.add(runId);
+    final store = checkpointStore;
+    if (store != null) {
+      _ledgerWrites = _ledgerWrites.then((_) => store.remove(runId));
+      await _ledgerWrites;
+    }
+    notifyListeners();
+  }
+
+  void _removeCheckpoint(String runId) {
+    final store = checkpointStore;
+    if (store == null) return;
+    _ledgerWrites = _ledgerWrites.then((_) => store.remove(runId));
   }
 
   void clearTrace() {
@@ -224,8 +297,39 @@ class AgentController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _transition(String runId, RunPhase phase, {String? reason}) {
-    if (!runPhaseCanMove(runPhase, phase)) {
+  /// Record a small save point after a stable boundary. The ledger gets a
+  /// matching event; the checkpoint file gets the compact record.
+  void _saveCheckpoint({
+    required String runId,
+    required String bodyId,
+    required RunBoundary boundary,
+    String? pendingOperationId,
+  }) {
+    _lastBoundary = boundary;
+    _note(runId, RunEventKind.checkpoint, {
+      'boundary': boundary.name,
+      'phase': runPhase.name,
+      'pendingOperationId': ?pendingOperationId,
+    });
+    final store = checkpointStore;
+    if (store == null) return;
+    final checkpoint = RunCheckpoint(
+      runId: runId,
+      bodyId: bodyId,
+      phase: runPhase.name,
+      boundary: boundary,
+      modelTurns: modelTurnsUsed,
+      toolCalls: toolCallsUsed,
+      outputChars: outputCharsUsed,
+      graphRevision: _graphRevision ?? '',
+      pendingOperationId: pendingOperationId,
+      resumedFrom: ledger.runById(runId)?.resumedFrom,
+      at: DateTime.now(),
+    );
+    _ledgerWrites = _ledgerWrites.then((_) => store.save(checkpoint));
+  }
+
+  void _transition(String runId, RunPhase phase, {String? reason}) {    if (!runPhaseCanMove(runPhase, phase)) {
       throw StateError(
         'Invalid run transition: ${runPhase.name} → ${phase.name}',
       );
@@ -319,12 +423,20 @@ class AgentController extends ChangeNotifier {
   );
 
   /// Selection-scoped vanilla completion onto one compound LLM kit body.
-  Future<void> sendUser(String text, {String? targetBodyId}) async {
+  Future<void> sendUser(String text, {String? targetBodyId}) {
+    return _run(prompt: text.trim(), bodyId: targetBodyId?.trim() ?? '');
+  }
+
+  /// Shared run start. Resume passes [resumedFrom] and a saved [checkpoint].
+  Future<void> _run({
+    required String prompt,
+    required String bodyId,
+    String? resumedFrom,
+    RunCheckpoint? checkpoint,
+  }) async {
     if (runningBodyId != null) {
       return;
     }
-    final prompt = text.trim();
-    final bodyId = targetBodyId?.trim() ?? '';
     if (prompt.isEmpty || bodyId.isEmpty) {
       return;
     }
@@ -335,13 +447,15 @@ class AgentController extends ChangeNotifier {
     runningBodyId = bodyId;
     final gate = _RunCancel();
     _gate = gate;
-    final run = ledger.begin(bodyId: bodyId);
+    final run = ledger.begin(bodyId: bodyId, resumedFrom: resumedFrom);
     _activeRunId = run.id;
     runPhase = RunPhase.ready;
     _runStartedAt = DateTime.now();
-    modelTurnsUsed = 0;
-    toolCallsUsed = 0;
-    outputCharsUsed = 0;
+    modelTurnsUsed = checkpoint?.modelTurns ?? 0;
+    toolCallsUsed = checkpoint?.toolCalls ?? 0;
+    outputCharsUsed = checkpoint?.outputChars ?? 0;
+    _graphRevision = graphRevision(kitApi.store.document);
+    _pendingOperationId = null;
     activeLimits = runLimitsFor(kitApi.store.document, bodyId);
     activeToolFrameId = null;
     seedPorts = _seedPortsFor(bodyId);
@@ -361,6 +475,13 @@ class AgentController extends ChangeNotifier {
       'bodyId': bodyId,
       'limits': activeLimits.toJson(),
     }, into);
+    if (resumedFrom != null) {
+      _note(run.id, RunEventKind.runResumed, {
+        'from': resumedFrom,
+        'modelTurns': modelTurnsUsed,
+        'toolCalls': toolCallsUsed,
+      }, into);
+    }
     _transition(run.id, RunPhase.validating);
     notifyListeners();
     Object? failure;
@@ -392,6 +513,11 @@ class AgentController extends ChangeNotifier {
         return;
       }
       _note(run.id, RunEventKind.graphValidated, {'ok': true}, into);
+      _saveCheckpoint(
+        runId: run.id,
+        bodyId: bodyId,
+        boundary: RunBoundary.graphValidated,
+      );
       _transition(run.id, RunPhase.assembling);
       updateLlmRunState(
         kitApi: kitApi,
@@ -436,6 +562,7 @@ class AgentController extends ChangeNotifier {
           status: LlmRunStatus.cancelled,
         );
         _note(run.id, RunEventKind.runInterrupted);
+        _removeCheckpoint(run.id);
       } else if (gate.paused) {
         _transition(run.id, RunPhase.paused);
         updateLlmRunState(
@@ -444,6 +571,12 @@ class AgentController extends ChangeNotifier {
           status: LlmRunStatus.paused,
         );
         _note(run.id, RunEventKind.runPaused);
+        _saveCheckpoint(
+          runId: run.id,
+          bodyId: bodyId,
+          boundary: _lastBoundary,
+          pendingOperationId: _pendingOperationId,
+        );
       } else if (failure == null) {
         _transition(run.id, RunPhase.completed);
         _note(
@@ -452,6 +585,7 @@ class AgentController extends ChangeNotifier {
           const {},
           routeForReply(document: kitApi.store.document, bodyId: bodyId),
         );
+        _removeCheckpoint(run.id);
       }
       _runUse[bodyId]?.finishedAt = DateTime.now();
       if (identical(_gate, gate)) {
@@ -636,6 +770,11 @@ class AgentController extends ChangeNotifier {
                       error: error,
                     ),
                     _modelRoute(bodyId),
+                  );
+                  _saveCheckpoint(
+                    runId: runId,
+                    bodyId: bodyId,
+                    boundary: RunBoundary.modelResult,
                   );
                   await flushLedger();
                 },
@@ -842,6 +981,11 @@ class AgentController extends ChangeNotifier {
         ),
         _modelRoute(bodyId),
       );
+      _saveCheckpoint(
+        runId: runId,
+        bodyId: bodyId,
+        boundary: RunBoundary.modelResult,
+      );
     }
     publishLlmKit(
       kitApi: kitApi,
@@ -879,6 +1023,7 @@ class AgentController extends ChangeNotifier {
     final activities = _toolActivities.putIfAbsent(bodyId, () => []);
     final runId = _activeRunId;
     if (event is AgentToolStarted) {
+      _pendingOperationId = event.call.id;
       if (runId != null) {
         final frameId = toolFrameIdForName(
           kitApi.store.document,
@@ -974,8 +1119,17 @@ class AgentController extends ChangeNotifier {
         toolResultPulse++;
       }
       activeToolFrameId = null;
+      _pendingOperationId = null;
+      if (runId != null) {
+        _saveCheckpoint(
+          runId: runId,
+          bodyId: bodyId,
+          boundary: RunBoundary.toolResult,
+        );
+      }
       notifyListeners();
     } else if (event is AgentToolUncertain) {
+      _pendingOperationId = null;
       if (runId != null) {
         _note(runId, RunEventKind.toolCallUncertain, {
           'name': event.call.name,
