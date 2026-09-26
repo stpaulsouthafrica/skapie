@@ -43,6 +43,7 @@ void main() {
         [
           RunEventKind.runRequested,
           RunEventKind.graphValidated,
+          RunEventKind.contextAssembled,
           RunEventKind.modelRequestStarted,
           RunEventKind.modelRequestFinished,
           RunEventKind.runCompleted,
@@ -219,6 +220,7 @@ void main() {
       [
         RunEventKind.runRequested,
         RunEventKind.graphValidated,
+        RunEventKind.contextAssembled,
         RunEventKind.modelRequestStarted,
         RunEventKind.modelRequestFinished,
         RunEventKind.toolCallStarted,

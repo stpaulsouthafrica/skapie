@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:skapie/agent/agent.dart';
 import 'package:skapie/agent/conversation_kit.dart';
+import 'package:skapie/agent/context_assembly.dart';
 import 'package:skapie/agent/llm_run_use.dart';
 import 'package:skapie/canvas/board_validation.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -23,7 +24,6 @@ import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 import 'package:skapie/tools/attach.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
-import 'package:skapie/tools/repository/repository_tools.dart';
 
 enum AgentToolActivityState { running, completed, failed, uncertain }
 
@@ -490,20 +490,13 @@ class AgentController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> _repositoryGrantReason(String bodyId, String name) async {
-    if (!repositoryToolNames.contains(name) && name != proposePatchToolName) {
-      return null;
-    }
-    final document = kitApi.store.document;
-    final frameId = toolFrameIdForName(document, bodyId, name);
-    final path = frameId == null
-        ? ''
-        : repositoryPathForTool(document, frameId);
-    if (path.isEmpty) return 'Repository grant missing for $name';
-    if (!await repositoryPermission.canRead(path)) {
-      return 'Repository access expired for $name';
-    }
-    return null;
+  Future<String?> _repositoryGrantReason(String bodyId, String name) {
+    return repositoryGrantReasonForTool(
+      document: kitApi.store.document,
+      bodyId: bodyId,
+      name: name,
+      permission: repositoryPermission,
+    );
   }
 
   Future<void> _completeSend({
@@ -522,17 +515,21 @@ class AgentController extends ChangeNotifier {
     final kitSurface = target.props['surface']?.toString().trim() ?? '';
     final model = kitModel.isNotEmpty ? kitModel : runtime.model;
     final provider = kitProvider.isNotEmpty ? kitProvider : runtime.presetId;
-    final document = kitApi.store.document;
-    final systemText = llmContextText(document, bodyId);
-    final history = llmConversationHistory(document, bodyId);
-    final offer = llmToolOffer(
+    final assembly = assembleContext(
       kitApi: kitApi,
       llmBodyId: bodyId,
+      taskInput: prompt,
       repositoryPermission: repositoryPermission,
     );
-    final unavailable = <FilteredTool>[...offer.filtered];
+    final systemText = assembly.instructionText;
+    final history = assembly.history;
+    final unavailable = <FilteredTool>[
+      for (final exclusion in assembly.exclusions)
+        if (exclusion.layer == ContextLayer.tools)
+          FilteredTool(name: exclusion.sourceKitId, reason: exclusion.reason),
+    ];
     final attached = <AgentTool>[];
-    for (final tool in offer.tools) {
+    for (final tool in assembly.tools) {
       final reason = await _repositoryGrantReason(bodyId, tool.name);
       if (reason == null) {
         attached.add(tool);
@@ -547,6 +544,13 @@ class AgentController extends ChangeNotifier {
       'model': model ?? '',
       'provider': provider,
     };
+    _note(
+      runId,
+      RunEventKind.contextAssembled,
+      contextProvenancePayload(assembly),
+      _modelRoute(bodyId),
+    );
+    await flushLedger();
     agentHttpRequestObserver = (request) {
       if (!gate.cancelled && !gate.paused) {
         _transition(runId, RunPhase.modelWait);

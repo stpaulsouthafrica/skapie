@@ -458,50 +458,65 @@ List<SceneObject> toolFrames(SceneDocument document) {
   ];
 }
 
-/// Text cabled into this LLM's Input, otherwise a reply cabled in from another LLM.
-String llmCableInput(SceneDocument document, String llmBodyId) {
+/// One kit-supplied block of request text, kept with its source for provenance.
+class LlmContextPart {
+  const LlmContextPart({
+    required this.sourceKitId,
+    required this.sourceId,
+    required this.text,
+  });
+
+  final String sourceKitId;
+  final String sourceId;
+  final String text;
+}
+
+/// Text cabled into this LLM's Input, otherwise replies cabled in from other LLMs.
+List<LlmContextPart> llmInputParts(SceneDocument document, String llmBodyId) {
   if (llmBodyId.isEmpty) {
-    return '';
+    return const [];
   }
-  final texts = <String>[];
+  final parts = <LlmContextPart>[];
   for (final frame in textFrames(document)) {
     if (!kitHasLink(frame, to: llmBodyId, port: llmInputPort)) {
       continue;
     }
     final content = textKitContent(document, frame).trim();
     if (content.isNotEmpty) {
-      texts.add(content);
+      parts.add(
+        LlmContextPart(
+          sourceKitId: boardTextKitId,
+          sourceId: frame.id,
+          text: content,
+        ),
+      );
     }
   }
-  if (texts.isNotEmpty) {
-    return texts.join('\n\n');
+  if (parts.isNotEmpty) {
+    return parts;
   }
-  final replies = <String>[];
-  for (final body in llmBodies(document)) {
-    if (!kitHasLink(body, to: llmBodyId, port: llmInputPort)) {
-      continue;
-    }
-    final reply = body.props['reply']?.toString().trim() ?? '';
-    if (reply.isNotEmpty) {
-      replies.add(reply);
-    }
-  }
-  return replies.join('\n\n');
+  return _llmReplyParts(document, llmBodyId, llmInputPort);
 }
 
-/// Text cabled into Context, then an upstream reply cabled into Context.
-String llmContextText(SceneDocument document, String llmBodyId) {
+/// Text cabled into Context, then a Check Result, then an upstream reply.
+List<LlmContextPart> llmContextParts(SceneDocument document, String llmBodyId) {
   if (llmBodyId.isEmpty) {
-    return '';
+    return const [];
   }
-  final parts = <String>[];
+  final parts = <LlmContextPart>[];
   for (final frame in textFrames(document)) {
     if (!kitHasLink(frame, to: llmBodyId, port: llmContextPort)) {
       continue;
     }
     final content = textKitContent(document, frame).trim();
     if (content.isNotEmpty) {
-      parts.add(content);
+      parts.add(
+        LlmContextPart(
+          sourceKitId: boardTextKitId,
+          sourceId: frame.id,
+          text: content,
+        ),
+      );
     }
   }
   for (final frame in document.objects) {
@@ -512,19 +527,54 @@ String llmContextText(SceneDocument document, String llmBodyId) {
     }
     final content = textKitContent(document, frame).trim();
     if (content.isNotEmpty && content != 'No check run yet') {
-      parts.add(content);
+      parts.add(
+        LlmContextPart(
+          sourceKitId: codingCheckResultKitId,
+          sourceId: frame.id,
+          text: content,
+        ),
+      );
     }
   }
+  return [...parts, ..._llmReplyParts(document, llmBodyId, llmContextPort)];
+}
+
+List<LlmContextPart> _llmReplyParts(
+  SceneDocument document,
+  String llmBodyId,
+  String port,
+) {
+  final parts = <LlmContextPart>[];
   for (final body in llmBodies(document)) {
-    if (!kitHasLink(body, to: llmBodyId, port: llmContextPort)) {
+    if (!kitHasLink(body, to: llmBodyId, port: port)) {
       continue;
     }
     final reply = body.props['reply']?.toString().trim() ?? '';
     if (reply.isNotEmpty) {
-      parts.add(reply);
+      parts.add(
+        LlmContextPart(
+          sourceKitId: harnessLlmKitId,
+          sourceId: body.id,
+          text: reply,
+        ),
+      );
     }
   }
-  return parts.join('\n\n');
+  return parts;
+}
+
+/// Text cabled into this LLM's Input, otherwise a reply cabled in from another LLM.
+String llmCableInput(SceneDocument document, String llmBodyId) {
+  return [
+    for (final part in llmInputParts(document, llmBodyId)) part.text,
+  ].join('\n\n');
+}
+
+/// Text cabled into Context, then an upstream reply cabled into Context.
+String llmContextText(SceneDocument document, String llmBodyId) {
+  return [
+    for (final part in llmContextParts(document, llmBodyId)) part.text,
+  ].join('\n\n');
 }
 
 /// Turns from every Conversation kit cabled into this LLM, in board order.

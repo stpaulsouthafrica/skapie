@@ -6,6 +6,7 @@ import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/app/full_screen_text_editor.dart';
+import 'package:skapie/app/context_assembly_view.dart';
 import 'package:skapie/app/patch_diff_viewer.dart';
 import 'package:skapie/app/connection_inspector.dart';
 import 'package:skapie/app/llm_kit_input.dart';
@@ -1431,6 +1432,11 @@ class _InspectorPanelState extends State<InspectorPanel> {
                         body: llmBody,
                         kitApi: widget.kitApi,
                         controller: controller,
+                      ),
+                    if (llmBody != null)
+                      ContextAssemblyView(
+                        body: llmBody,
+                        kitApi: widget.kitApi,
                       ),
                     if (llmBody != null && controller != null)
                       _section('Run', [

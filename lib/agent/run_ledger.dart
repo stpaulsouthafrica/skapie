@@ -29,6 +29,7 @@ bool runEvidenceMayDrop(String kind) =>
 enum RunEventKind {
   runRequested,
   graphValidated,
+  contextAssembled,
   stateChanged,
   modelRequestStarted,
   modelRequestFinished,
@@ -545,6 +546,7 @@ String _detailValue(Object? value) {
 String runEventLabel(RunEventKind kind) => switch (kind) {
   RunEventKind.runRequested => 'Run requested',
   RunEventKind.graphValidated => 'Graph validated',
+  RunEventKind.contextAssembled => 'Context assembled',
   RunEventKind.stateChanged => 'Run state changed',
   RunEventKind.modelRequestStarted => 'Model request started',
   RunEventKind.modelRequestFinished => 'Model request finished',

@@ -199,6 +199,26 @@ String toolSchemaDigest(List<AgentTool> tools) {
   return hash.toRadixString(16).padLeft(8, '0');
 }
 
+/// Why a repository-backed tool cannot run now, or null when it can.
+/// Read tools and the patch proposal need a Repository cable and live access.
+Future<String?> repositoryGrantReasonForTool({
+  required SceneDocument document,
+  required String bodyId,
+  required String name,
+  required RepositoryPermission permission,
+}) async {
+  if (!repositoryToolNames.contains(name) && name != proposePatchToolName) {
+    return null;
+  }
+  final frameId = toolFrameIdForName(document, bodyId, name);
+  final path = frameId == null ? '' : repositoryPathForTool(document, frameId);
+  if (path.isEmpty) return 'Repository grant missing for $name';
+  if (!await permission.canRead(path)) {
+    return 'Repository access expired for $name';
+  }
+  return null;
+}
+
 String repositoryPathForTool(SceneDocument document, String toolFrameId) {
   for (final object in document.objects) {
     if (object.props[skapieRoleProp] != 'frame' ||
