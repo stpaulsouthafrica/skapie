@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:skapie/agent/agent_controller.dart';
 import 'package:skapie/agent/llm_request_preview.dart';
 import 'package:skapie/app/full_screen_text_editor.dart';
-import 'package:skapie/app/llm_request_highlight.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
 
-/// Collapsible preview of the request Run will send for the selected LLM kit.
+/// Preview of the request Run will send for the selected LLM kit. The full
+/// request opens in the Full Screen editor. There is no expand chevron here;
+/// inspector previews open full screen only.
 class LlmRequestInformation extends StatefulWidget {
   const LlmRequestInformation({
     super.key,
@@ -27,8 +28,6 @@ class LlmRequestInformation extends StatefulWidget {
 }
 
 class _LlmRequestInformationState extends State<LlmRequestInformation> {
-  var _expanded = false;
-
   @override
   void initState() {
     super.initState();
@@ -128,44 +127,8 @@ class _LlmRequestInformationState extends State<LlmRequestInformation> {
                 onPressed: () => _openFull(text),
                 icon: Icon(Icons.search, size: 16, color: tokens.muted),
               ),
-              IconButton(
-                key: const Key('llm-request-toggle'),
-                tooltip: _expanded ? 'Collapse' : 'Expand',
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints.tightFor(
-                  width: 28,
-                  height: 28,
-                ),
-                onPressed: () => setState(() => _expanded = !_expanded),
-                icon: Icon(
-                  _expanded
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  size: 18,
-                  color: tokens.muted,
-                ),
-              ),
             ],
           ),
-          if (_expanded)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 180),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: tokens.canvas,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: tokens.hairline),
-                ),
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(8),
-                  child: SelectableText.rich(
-                    highlightLlmRequest(text, tokens),
-                    key: const Key('llm-request-information'),
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
     );

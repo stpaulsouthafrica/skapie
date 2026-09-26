@@ -607,8 +607,14 @@ String _boundedBody(String text, {int max = 200}) {
 }
 
 /// Readable multi-line summary. Used by the full-screen preview and tests.
+/// The fixed prefixes (`reason:`, `trust:`, `text:`, `—`) let the editor
+/// color each line without re-reading the model.
+const String contextAssemblyTitle = 'Context assembly';
+const String contextAssemblyExcludedHeading = 'Excluded';
+const String contextAssemblyItemSeparator = ' — ';
+
 String formatContextAssembly(ContextAssembly assembly) {
-  final buffer = StringBuffer('Context assembly');
+  final buffer = StringBuffer(contextAssemblyTitle);
   for (final layer in ContextLayer.values) {
     final items = assembly.itemsFor(layer);
     if (items.isEmpty) {
@@ -618,22 +624,26 @@ String formatContextAssembly(ContextAssembly assembly) {
     for (final item in items) {
       buffer.write(
         '\n${item.order}. ${item.sourceRange}'
-        ' · ${item.provenance.label}'
-        '${item.truncated ? ' · Truncated' : ''}'
-        '\n   ${item.reason}',
+        '$contextAssemblyItemSeparator${item.provenance.label}'
+        '${item.truncated ? ' · Truncated' : ''}',
       );
+      buffer.write('\n   reason: ${item.reason}');
+      buffer.write('\n   trust: ${item.provenance.trust}');
       final body = _boundedBody(item.text);
       if (body.isNotEmpty) {
-        buffer.write('\n   $body');
+        buffer.write('\n   text: $body');
       }
     }
   }
   if (assembly.exclusions.isEmpty) {
     return buffer.toString();
   }
-  buffer.write('\n\nExcluded');
+  buffer.write('\n\n$contextAssemblyExcludedHeading');
   for (final exclusion in assembly.exclusions) {
-    buffer.write('\n${exclusion.sourceKitId} · ${exclusion.reason}');
+    buffer.write(
+      '\n${exclusion.sourceKitId}$contextAssemblyItemSeparator'
+      '${exclusion.reason}',
+    );
   }
   return buffer.toString();
 }

@@ -1427,6 +1427,10 @@ class _InspectorPanelState extends State<InspectorPanel> {
                           controller: controller,
                         ),
                       ]),
+                    // Request Information and Context Assembly are previews.
+                    // Do not add an expand chevron here: inspector previews
+                    // open the Full Screen editor with the magnifying glass
+                    // only, and the full screen keeps the same colored style.
                     if (llmBody != null && controller != null)
                       LlmRequestInformation(
                         body: llmBody,

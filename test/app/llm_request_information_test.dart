@@ -44,7 +44,7 @@ Authorization: <redacted>
     expect(colors['Authorization: '], tokens.muted);
   });
 
-  testWidgets('request information collapses and opens full screen', (
+  testWidgets('request information opens full screen without a chevron', (
     tester,
   ) async {
     final store = SceneStore();
@@ -82,13 +82,9 @@ Authorization: <redacted>
       ),
     );
 
-    expect(find.byKey(const Key('llm-request-information')), findsNothing);
     expect(find.text('Request Information'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('llm-request-toggle')));
-    await tester.pump();
-    expect(find.byKey(const Key('llm-request-information')), findsOneWidget);
-    expect(find.textContaining('hello from the card'), findsOneWidget);
+    expect(find.byKey(const Key('llm-request-toggle')), findsNothing);
+    expect(find.byKey(const Key('llm-request-information')), findsNothing);
 
     await tester.tap(find.byKey(const Key('llm-request-expand')));
     await tester.pumpAndSettle();

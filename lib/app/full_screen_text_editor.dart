@@ -3,17 +3,19 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:skapie/app/context_assembly_highlight.dart';
 import 'package:skapie/app/llm_request_highlight.dart';
 import 'package:skapie/paint/paint.dart';
 
 /// Language the Full Screen text editor colors the text as.
-enum EditorSyntax { plain, json, dart, request }
+enum EditorSyntax { plain, json, dart, request, context }
 
 String editorSyntaxLabel(EditorSyntax syntax) => switch (syntax) {
   EditorSyntax.plain => 'Text',
   EditorSyntax.json => 'JSON',
   EditorSyntax.dart => 'Dart',
   EditorSyntax.request => 'Request',
+  EditorSyntax.context => 'Context',
 };
 
 /// Picks JSON or Dart from the text itself. Anything else stays plain.
@@ -649,6 +651,10 @@ TextSpan highlightEditorText(
 ) {
   if (syntax == EditorSyntax.request) {
     final span = highlightLlmRequest(text, tokens, fontSize: _fontSize);
+    return TextSpan(style: base, children: [span]);
+  }
+  if (syntax == EditorSyntax.context) {
+    final span = highlightContextAssembly(text, tokens, fontSize: _fontSize);
     return TextSpan(style: base, children: [span]);
   }
   if (syntax == EditorSyntax.plain) {

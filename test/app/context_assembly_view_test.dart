@@ -10,7 +10,7 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 
 void main() {
-  testWidgets('Context Assembly preview shows sources and a missing cable', (
+  testWidgets('Context Assembly opens full screen without a chevron', (
     tester,
   ) async {
     final store = SceneStore();
@@ -43,18 +43,19 @@ void main() {
       ),
     );
 
-    final toggle = find.byKey(const Key('context-assembly-toggle'));
-    await tester.ensureVisible(toggle);
-    await tester.tap(toggle);
+    expect(find.byKey(const Key('context-assembly-toggle')), findsNothing);
+    final expand = find.byKey(const Key('context-assembly-expand'));
+    await tester.ensureVisible(expand);
+    await tester.tap(expand);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('context-assembly')), findsOneWidget);
-    expect(find.byKey(const Key('context-layer-task')), findsOneWidget);
-    expect(find.text('Add a text kit'), findsOneWidget);
-    expect(find.text('Not cabled to Conversation'), findsOneWidget);
+    expect(find.byKey(const Key('context-assembly-fullscreen')), findsOneWidget);
+    expect(find.textContaining('Task input'), findsWidgets);
+    expect(find.textContaining('Add a text kit'), findsWidgets);
+    expect(find.textContaining('Not cabled to Conversation'), findsWidgets);
   });
 
-  testWidgets('two unused sources do not collide in the exclusion list', (
+  testWidgets('two unused sources both show in the full screen preview', (
     tester,
   ) async {
     final store = SceneStore();
@@ -81,12 +82,15 @@ void main() {
       ),
     );
 
-    final toggle = find.byKey(const Key('context-assembly-toggle'));
-    await tester.ensureVisible(toggle);
-    await tester.tap(toggle);
+    final expand = find.byKey(const Key('context-assembly-expand'));
+    await tester.ensureVisible(expand);
+    await tester.tap(expand);
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('context-assembly')), findsOneWidget);
-    expect(find.text('Not cabled to Input or Context'), findsNWidgets(2));
+    expect(find.byKey(const Key('context-assembly-fullscreen')), findsOneWidget);
+    expect(
+      find.textContaining('Not cabled to Input or Context'),
+      findsWidgets,
+    );
   });
 }
