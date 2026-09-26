@@ -26,6 +26,7 @@ import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/tools/patch/patch_effect_log.dart';
+import 'package:skapie/tools/patch/effect_recovery.dart';
 import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/check/check_board.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
@@ -116,6 +117,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
   Future<void> _loadEffects() async {
     try {
       await _effects.load();
+      // Settle any apply left in flight by a quit, against the files on disk.
+      await reconcilePendingApplies(_effects);
       if (mounted) setState(() {});
     } catch (error) {
       if (mounted) {

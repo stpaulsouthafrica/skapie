@@ -218,13 +218,15 @@ class AgentController extends ChangeNotifier {
       if (runs.isEmpty) continue;
       final latest = runs.last;
       if (latest.status != RunStatus.interrupted ||
-          _dismissedRecovery.contains(latest.id)) {
+          _dismissedRecovery.contains(latest.id) ||
+          (checkpointStore?.isDismissed(latest.id) ?? false)) {
         continue;
       }
       notices.add(
         RecoveryNotice(
           runId: latest.id,
           bodyId: bodyId,
+          kind: latest.kind,
           uncertain: runRecordEffectUncertain(latest),
           resumable: checkpointStore?.forRun(latest.id) != null,
         ),
@@ -262,7 +264,9 @@ class AgentController extends ChangeNotifier {
     _dismissedRecovery.add(runId);
     final store = checkpointStore;
     if (store != null) {
-      _ledgerWrites = _ledgerWrites.then((_) => store.remove(runId));
+      _ledgerWrites = _ledgerWrites
+          .then((_) => store.dismiss(runId))
+          .then((_) => store.remove(runId));
       await _ledgerWrites;
     }
     notifyListeners();

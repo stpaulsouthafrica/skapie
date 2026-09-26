@@ -169,14 +169,15 @@ void main() {
       ),
     );
 
+    final resumeStore = RunCheckpointStore(
+      file: File('${dir.path}/board.checkpoints.json'),
+    );
     final controller = AgentController(
       kitApi: api,
       session: AgentSession(model: const FakeAgentModel(), kitApi: api),
       runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
       ledgerFile: ledgerFile,
-      checkpointStore: RunCheckpointStore(
-        file: File('${dir.path}/board.checkpoints.json'),
-      ),
+      checkpointStore: resumeStore,
     );
     await controller.loadLedger();
 
@@ -196,6 +197,12 @@ void main() {
 
     await controller.endRun(resumed.id);
     expect(controller.pendingRecovery, isEmpty);
+
+    final reloaded = RunCheckpointStore(
+      file: File('${dir.path}/board.checkpoints.json'),
+    );
+    await reloaded.load();
+    expect(reloaded.isDismissed(resumed.id), isTrue);
   });
 
   test('an effect with no result reloads as uncertain', () async {

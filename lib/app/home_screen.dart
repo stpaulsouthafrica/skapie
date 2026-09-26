@@ -8,6 +8,7 @@ import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/app/command_palette.dart';
 import 'package:skapie/app/coding_workflow_starter.dart';
 import 'package:skapie/app/inspector_panel.dart';
+import 'package:skapie/app/run_recovery_banner.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/keyboard_connect.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -61,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     widget.store.addListener(_onStore);
+    widget.agentController.addListener(_onController);
     _selection.addListener(_onSelection);
   }
 
@@ -71,14 +73,23 @@ class _HomeScreenState extends State<HomeScreen> {
       oldWidget.store.removeListener(_onStore);
       widget.store.addListener(_onStore);
     }
+    if (oldWidget.agentController != widget.agentController) {
+      oldWidget.agentController.removeListener(_onController);
+      widget.agentController.addListener(_onController);
+    }
   }
 
   @override
   void dispose() {
     widget.store.removeListener(_onStore);
+    widget.agentController.removeListener(_onController);
     _selection.removeListener(_onSelection);
     _selection.dispose();
     super.dispose();
+  }
+
+  void _onController() {
+    if (mounted) setState(() {});
   }
 
   void _onStore() {
@@ -610,6 +621,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 agentController: widget.agentController,
                 canvasShortcuts: _canvasShortcuts,
                 onConnect: _openPaletteIfIdle,
+              ),
+              Positioned(
+                top: 16,
+                left: 16,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 360),
+                  child: RunRecoveryBanner(
+                    controller: widget.agentController,
+                    onInspect: (bodyId) {
+                      if (widget.store.document.objectById(bodyId) != null) {
+                        _selection.select(bodyId);
+                      }
+                    },
+                  ),
+                ),
               ),
               if (_selection.selectedIds.isNotEmpty ||
                   _selection.selectedCableIds.isNotEmpty)

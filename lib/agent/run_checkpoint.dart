@@ -115,6 +115,7 @@ class RecoveryNotice {
   const RecoveryNotice({
     required this.runId,
     required this.bodyId,
+    required this.kind,
     required this.uncertain,
     required this.resumable,
   });
@@ -122,11 +123,16 @@ class RecoveryNotice {
   final String runId;
   final String bodyId;
 
+  /// `agent` or `check`.
+  final String kind;
+
   /// An effect started and its result was never seen.
   final bool uncertain;
 
   /// A checkpoint exists, so Continue can carry the counters forward.
   final bool resumable;
+
+  bool get canContinue => kind == 'agent' && resumable && !uncertain;
 }
 
 /// Digest of the board shape: kit identity, cables, and the props that grant or
@@ -180,6 +186,7 @@ class RunCheckpointStore {
 
   final File? file;
   final Map<String, RunCheckpoint> _byRun = {};
+  final Set<String> _dismissed = {};
   bool _loaded = false;
 
   Future<void> load() async {
@@ -213,6 +220,15 @@ class RunCheckpointStore {
 
   RunCheckpoint? forRun(String runId) => _byRun[runId];
 
+  /// True when the user already chose End for this run.
+  bool isDismissed(String runId) => _dismissed.contains(runId);
+
+  Future<void> dismiss(String runId) async {
+    await load();
+    _dismissed.add(runId);
+    await _persist();
+  }
+
   RunCheckpoint? latestFor(String bodyId) {
     RunCheckpoint? latest;
     for (final checkpoint in _byRun.values) {
@@ -238,6 +254,9 @@ class RunCheckpointStore {
   }
 
   void _trim() {
+    while (_dismissed.length > runCheckpointKeep * 2) {
+      _dismissed.remove(_dismissed.first);
+    }
     if (_byRun.length <= runCheckpointKeep) return;
     final ordered = _byRun.values.toList()
       ..sort((a, b) => a.at.compareTo(b.at));
@@ -251,19 +270,28 @@ class RunCheckpointStore {
     'checkpoints': {
       for (final entry in _byRun.entries) entry.key: entry.value.toJson(),
     },
+    if (_dismissed.isNotEmpty) 'dismissed': _dismissed.toList(),
   };
 
   void replaceFromJson(Map<String, Object?> json) {
     _byRun.clear();
+    _dismissed.clear();
     final raw = json['checkpoints'];
-    if (raw is! Map) return;
-    for (final entry in raw.entries) {
-      final value = entry.value;
-      if (value is Map) {
-        final checkpoint = RunCheckpoint.fromJson(
-          Map<String, Object?>.from(value),
-        );
-        _byRun[checkpoint.runId] = checkpoint;
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        final value = entry.value;
+        if (value is Map) {
+          final checkpoint = RunCheckpoint.fromJson(
+            Map<String, Object?>.from(value),
+          );
+          _byRun[checkpoint.runId] = checkpoint;
+        }
+      }
+    }
+    final rawDismissed = json['dismissed'];
+    if (rawDismissed is List) {
+      for (final item in rawDismissed) {
+        _dismissed.add('$item');
       }
     }
   }
