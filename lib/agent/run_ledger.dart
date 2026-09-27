@@ -2,7 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 
 /// Schema for [RunRecord] and [RunEvent]. Bump when the fields change.
-const int runRecordSchemaVersion = 4;
+/// Older files are lifted by [migrateRunRecordJson]; unknown event kinds are
+/// skipped so a newer file cannot stop an older build from opening.
+const int runRecordSchemaVersion = 5;
 
 /// Longest string stored inside one event. Longer text is cut and marked.
 const int runPayloadTextLimit = 280;
@@ -31,11 +33,14 @@ enum RunEventKind {
   graphValidated,
   contextAssembled,
   stateChanged,
+  checkpoint,
+  effectInFlight,
   modelRequestStarted,
   modelRequestFinished,
   toolCallStarted,
   toolCallFinished,
   toolCallUncertain,
+  runResumed,
   runCompleted,
   runFailed,
   runInterrupted,
@@ -43,6 +48,45 @@ enum RunEventKind {
   checkStarted,
   checkOutput,
   checkFinished,
+}
+
+/// An effect began but its result has not been seen. A crash leaves it here.
+const Set<RunEventKind> runEffectInFlightKinds = {
+  RunEventKind.effectInFlight,
+  RunEventKind.toolCallStarted,
+  RunEventKind.checkStarted,
+};
+
+/// The effect settled, one way or another.
+const Set<RunEventKind> runEffectResolvedKinds = {
+  RunEventKind.toolCallFinished,
+  RunEventKind.toolCallUncertain,
+  RunEventKind.checkFinished,
+  RunEventKind.runCompleted,
+  RunEventKind.runFailed,
+  RunEventKind.runInterrupted,
+  RunEventKind.runPaused,
+};
+
+/// True when a run started an effect and never saw a clean result. Such a run
+/// needs inspection before any retry.
+bool runRecordEffectUncertain(RunRecord run) {
+  for (final event in run.events) {
+    if (event.kind == RunEventKind.toolCallUncertain) return true;
+    if (event.kind == RunEventKind.checkFinished &&
+        event.payload['stopUncertain'] == true) {
+      return true;
+    }
+    if (event.kind == RunEventKind.runInterrupted &&
+        event.payload['uncertain'] == true) {
+      return true;
+    }
+  }
+  for (final event in run.events.reversed) {
+    if (runEffectInFlightKinds.contains(event.kind)) return true;
+    if (runEffectResolvedKinds.contains(event.kind)) return false;
+  }
+  return false;
 }
 
 enum RunStatus { running, completed, failed, interrupted, paused }
@@ -95,6 +139,7 @@ class RunRecord {
     required this.bodyId,
     this.schemaVersion = runRecordSchemaVersion,
     this.kind = 'agent',
+    this.resumedFrom,
     List<RunEvent> events = const [],
   }) : events = List.of(events);
 
@@ -102,6 +147,9 @@ class RunRecord {
   final String id;
   final String bodyId;
   final String kind;
+
+  /// The run this one continues, after a resume. Null for a fresh run.
+  final String? resumedFrom;
   final List<RunEvent> events;
 
   RunStatus get status {
@@ -135,23 +183,48 @@ class RunRecord {
     'id': id,
     'bodyId': bodyId,
     'kind': kind,
+    if (resumedFrom != null) 'resumedFrom': resumedFrom,
     'events': [for (final event in events) event.toJson()],
   };
 
   static RunRecord fromJson(Map<String, Object?> json) {
+    return fromMigrated(migrateRunRecordJson(json));
+  }
+
+  /// Reads the lifted shape. Events with an unknown kind are skipped so a file
+  /// written by a newer build still opens.
+  static RunRecord fromMigrated(Map<String, Object?> json) {
     final rawEvents = json['events'];
+    final events = <RunEvent>[];
+    if (rawEvents is List) {
+      for (final item in rawEvents) {
+        if (item is! Map) continue;
+        try {
+          events.add(RunEvent.fromJson(Map<String, Object?>.from(item)));
+        } on FormatException {
+          continue;
+        }
+      }
+    }
     return RunRecord(
       schemaVersion: json['schemaVersion'] as int? ?? runRecordSchemaVersion,
       id: json['id']?.toString() ?? '',
       bodyId: json['bodyId']?.toString() ?? '',
       kind: json['kind']?.toString() ?? 'agent',
-      events: [
-        if (rawEvents is List)
-          for (final item in rawEvents)
-            if (item is Map) RunEvent.fromJson(Map<String, Object?>.from(item)),
-      ],
+      resumedFrom: json['resumedFrom']?.toString(),
+      events: events,
     );
   }
+}
+
+/// Lift an older run record to the current shape. Version 4 added no field
+/// changes that need remapping; add cases here when a version does.
+Map<String, Object?> migrateRunRecordJson(Map<String, Object?> json) {
+  final version = json['schemaVersion'] as int? ?? 0;
+  if (version >= runRecordSchemaVersion) {
+    return json;
+  }
+  return {...json, 'schemaVersion': runRecordSchemaVersion};
 }
 
 /// Saved log of executions. Not part of the scene document.
@@ -186,9 +259,18 @@ class RunLedger {
       if (run.bodyId == bodyId) run,
   ];
 
-  RunRecord begin({required String bodyId, String kind = 'agent'}) {
+  RunRecord begin({
+    required String bodyId,
+    String kind = 'agent',
+    String? resumedFrom,
+  }) {
     _nextId++;
-    final run = RunRecord(id: 'run_$_nextId', bodyId: bodyId, kind: kind);
+    final run = RunRecord(
+      id: 'run_$_nextId',
+      bodyId: bodyId,
+      kind: kind,
+      resumedFrom: resumedFrom,
+    );
     _runs.add(run);
     return run;
   }
@@ -263,13 +345,18 @@ class RunLedger {
       utf8.encode(jsonEncode(toJson())).length >= historyWarnBytes;
 
   /// Runs left open by a quit become interrupted. Completed runs stay completed.
+  /// A run with an unobserved effect is flagged uncertain so it is inspected.
   int closeIncompleteRuns() {
     var closed = 0;
     for (final run in List<RunRecord>.of(_runs)) {
       if (run.isTerminal) {
         continue;
       }
-      append(run.id, RunEventKind.runInterrupted, {'reason': 'reopened'});
+      final uncertainAtClose = runRecordEffectUncertain(run);
+      append(run.id, RunEventKind.runInterrupted, {
+        'reason': 'reopened',
+        if (uncertainAtClose) 'uncertain': true,
+      });
       closed++;
     }
     if (closed > 0) {
@@ -330,7 +417,12 @@ class RunLedgerFile {
     if (text.trim().isEmpty) {
       return;
     }
-    final decoded = jsonDecode(text);
+    Object? decoded;
+    try {
+      decoded = jsonDecode(text);
+    } on FormatException {
+      return;
+    }
     if (decoded is Map) {
       ledger.replaceFromJson(Map<String, Object?>.from(decoded));
       ledger.closeIncompleteRuns();
@@ -543,16 +635,35 @@ String _detailValue(Object? value) {
   return text.substring(0, runPayloadTextLimit);
 }
 
+/// Read-only replay of a stored run. No process runs for this.
+String formatRunReplay(RunRecord run) {
+  final buffer = StringBuffer('Run ${run.id}');
+  if (run.resumedFrom != null) {
+    buffer.write(' · resumed from ${run.resumedFrom}');
+  }
+  buffer.write('\nStatus: ${run.status.name}');
+  for (final event in run.events) {
+    buffer.write('\n${runEventSummary(event)}');
+    for (final line in runEventDetailLines(event)) {
+      buffer.write('\n   $line');
+    }
+  }
+  return buffer.toString();
+}
+
 String runEventLabel(RunEventKind kind) => switch (kind) {
   RunEventKind.runRequested => 'Run requested',
   RunEventKind.graphValidated => 'Graph validated',
   RunEventKind.contextAssembled => 'Context assembled',
   RunEventKind.stateChanged => 'Run state changed',
+  RunEventKind.checkpoint => 'Checkpoint saved',
+  RunEventKind.effectInFlight => 'Effect in flight',
   RunEventKind.modelRequestStarted => 'Model request started',
   RunEventKind.modelRequestFinished => 'Model request finished',
   RunEventKind.toolCallStarted => 'Tool call started',
   RunEventKind.toolCallFinished => 'Tool call finished',
   RunEventKind.toolCallUncertain => 'Tool outcome uncertain',
+  RunEventKind.runResumed => 'Run resumed',
   RunEventKind.runCompleted => 'Run completed',
   RunEventKind.runFailed => 'Run failed',
   RunEventKind.runInterrupted => 'Run interrupted',

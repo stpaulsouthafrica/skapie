@@ -306,6 +306,7 @@ Future<CheckAttempt> invokeRunCheck({
   beginEvidence,
   void Function(String runId, RunEventKind kind, Map<String, Object?> payload)?
   appendEvidence,
+  Future<void> Function()? flushEvidence,
   void Function(String runFrameId)? onRunRequested,
 }) async {
   final document = kitApi.store.document;
@@ -354,6 +355,8 @@ Future<CheckAttempt> invokeRunCheck({
     'cwd': redactCheckText(root),
     'requestedAt': DateTime.now().toUtc().toIso8601String(),
   });
+  // Durably mark the effect in flight before the process starts.
+  await flushEvidence?.call();
   final lineRedactor = CheckLineRedactor();
   final seen = <String>{};
   void recordChunk(String phase, String stream, String text, String at) {

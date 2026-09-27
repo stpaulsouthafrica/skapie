@@ -281,7 +281,7 @@ String reviewDecisionOf(SceneDocument document, String reviewFrameId) {
 
 Map<String, Object?> _refused(String reason) => {'ok': false, 'reason': reason};
 
-String _byteFingerprint(List<int> bytes) {
+String patchByteFingerprint(List<int> bytes) {
   return sha256.convert(bytes).toString();
 }
 
@@ -437,7 +437,7 @@ Future<Map<String, Object?>> proposeTextReplacement({
     return _refused('Replacement makes no change to the file.');
   }
   final mode = (await opened.stat()).mode;
-  final fingerprint = _byteFingerprint(bytes);
+  final fingerprint = patchByteFingerprint(bytes);
   return {
     'ok': true,
     'path': parts.join('/'),
@@ -784,7 +784,7 @@ Future<PatchApplyAttempt> _invokeApplyPatch({
   }
   final current = await file.readAsBytes();
   final base = props['baseFingerprint']?.toString() ?? '';
-  if (current.length > 2 * 1024 * 1024 || _byteFingerprint(current) != base) {
+  if (current.length > 2 * 1024 * 1024 || patchByteFingerprint(current) != base) {
     return const PatchApplyAttempt(
       inert: true,
       wrote: false,
@@ -850,7 +850,7 @@ Future<PatchApplyAttempt> _invokeApplyPatch({
     'path': path,
     'beforeBytes': base64Encode(current),
     'beforeFingerprint': base,
-    'expectedFingerprint': _byteFingerprint(nextBytes),
+    'expectedFingerprint': patchByteFingerprint(nextBytes),
     'createdAt': DateTime.now().toUtc().toIso8601String(),
   };
   var preimageRecorded = false;
@@ -873,7 +873,7 @@ Future<PatchApplyAttempt> _invokeApplyPatch({
             props[proposalFingerprintProp] ||
         connectedWriteScopeFrame(live, applyFrameId)?.id != scope?.id ||
         live.objectById(scope!.id)?.props[writeScopePathProp] != scopePath ||
-        _byteFingerprint(currentBytes) != base ||
+        patchByteFingerprint(currentBytes) != base ||
         !permissionStillLive) {
       await log.update(id, {'state': 'conflict'});
       return const PatchApplyAttempt(
@@ -886,9 +886,9 @@ Future<PatchApplyAttempt> _invokeApplyPatch({
     onWriteAttempted?.call(applyFrameId);
     await file.writeAsBytes(nextBytes, flush: true);
     final observed = await file.readAsBytes();
-    final observedFingerprint = _byteFingerprint(observed);
+    final observedFingerprint = patchByteFingerprint(observed);
     await log.update(id, {
-      'state': observedFingerprint == _byteFingerprint(nextBytes)
+      'state': observedFingerprint == patchByteFingerprint(nextBytes)
           ? 'applied'
           : 'write_uncertain',
       'afterFingerprint': observedFingerprint,
@@ -897,9 +897,9 @@ Future<PatchApplyAttempt> _invokeApplyPatch({
     });
     return PatchApplyAttempt(
       inert: false,
-      wrote: observedFingerprint == _byteFingerprint(nextBytes),
+      wrote: observedFingerprint == patchByteFingerprint(nextBytes),
       effectId: id,
-      reason: observedFingerprint == _byteFingerprint(nextBytes)
+      reason: observedFingerprint == patchByteFingerprint(nextBytes)
           ? 'Applied one file. The observed diff is recorded.'
           : 'Write result differs from the proposal; inspect the file.',
     );
@@ -1038,7 +1038,7 @@ Future<PatchApplyAttempt> _invokeRevertPatch({
     );
   }
   final current = await file.readAsBytes();
-  if (_byteFingerprint(current) != source['afterFingerprint']) {
+  if (patchByteFingerprint(current) != source['afterFingerprint']) {
     return const PatchApplyAttempt(
       inert: true,
       wrote: false,
@@ -1058,13 +1058,13 @@ Future<PatchApplyAttempt> _invokeRevertPatch({
     'root': root,
     'path': path,
     'beforeBytes': base64Encode(current),
-    'beforeFingerprint': _byteFingerprint(current),
-    'expectedFingerprint': _byteFingerprint(before),
+    'beforeFingerprint': patchByteFingerprint(current),
+    'expectedFingerprint': patchByteFingerprint(before),
     'createdAt': DateTime.now().toUtc().toIso8601String(),
   });
   try {
     file = await _scopedExistingFile(root, path);
-    if (_byteFingerprint(await file.readAsBytes()) !=
+    if (patchByteFingerprint(await file.readAsBytes()) !=
             source['afterFingerprint'] ||
         !await permission.canWrite(root)) {
       await effects.update(revertId, {'state': 'conflict'});
@@ -1077,10 +1077,10 @@ Future<PatchApplyAttempt> _invokeRevertPatch({
     }
     await file.writeAsBytes(before, flush: true);
     final observed = await file.readAsBytes();
-    final restored = _byteFingerprint(observed) == source['beforeFingerprint'];
+    final restored = patchByteFingerprint(observed) == source['beforeFingerprint'];
     await effects.update(revertId, {
       'state': restored ? 'applied' : 'write_uncertain',
-      'afterFingerprint': _byteFingerprint(observed),
+      'afterFingerprint': patchByteFingerprint(observed),
       'observedDiff': _displayDiff(
         path,
         utf8.decode(current),

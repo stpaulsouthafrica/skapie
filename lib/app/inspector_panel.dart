@@ -26,6 +26,7 @@ import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/tools/patch/patch_effect_log.dart';
+import 'package:skapie/tools/patch/effect_recovery.dart';
 import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/check/check_board.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
@@ -116,6 +117,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
   Future<void> _loadEffects() async {
     try {
       await _effects.load();
+      // Settle any apply left in flight by a quit, against the files on disk.
+      await reconcilePendingEffects(_effects);
       if (mounted) setState(() {});
     } catch (error) {
       if (mounted) {
@@ -733,6 +736,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
             : (bodyId, details) =>
                   widget.controller!.beginCheckRun(bodyId, details),
         appendEvidence: widget.controller?.appendCheckEvent,
+        flushEvidence: widget.controller?.flushLedger,
         onRunRequested: widget.onCheckRunRequested,
       );
       if (mounted) {
@@ -1822,6 +1826,55 @@ class _InspectorPanelState extends State<InspectorPanel> {
     );
   }
 
+  /// Replay, Resume, and Rerun mean three different things. Keep them apart.
+  /// Replay only looks. Resume continues a checkpoint. Rerun starts fresh.
+  Widget _runActions(
+    String bodyId,
+    RunRecord run,
+    AgentController controller,
+    PaintTokens tokens,
+  ) {
+    final active =
+        controller.runningBodyId == null &&
+        llmCableInput(widget.kitApi.store.document, bodyId).trim().isNotEmpty;
+    final resumable =
+        (run.status == RunStatus.paused ||
+            run.status == RunStatus.interrupted) &&
+        !runRecordEffectUncertain(run) &&
+        controller.checkpointStore?.forRun(run.id) != null;
+    return Wrap(
+      key: const Key('run-actions'),
+      spacing: 4,
+      children: [
+        TextButton(
+          key: const Key('run-action-replay'),
+          onPressed: () => showFullScreenTextEditor(
+            context: context,
+            title: 'Replay · ${run.id}',
+            text: formatRunReplay(run),
+            readOnly: true,
+            syntax: EditorSyntax.plain,
+            surfaceKey: const Key('run-replay-fullscreen'),
+            closeKey: const Key('run-replay-close'),
+          ),
+          child: Text('Replay', style: TextStyle(color: tokens.accent)),
+        ),
+        TextButton(
+          key: const Key('run-action-resume'),
+          onPressed: resumable && active
+              ? () => controller.resumeRun(bodyId, fromRunId: run.id)
+              : null,
+          child: Text('Resume', style: TextStyle(color: tokens.accent)),
+        ),
+        TextButton(
+          key: const Key('run-action-rerun'),
+          onPressed: active ? () => controller.rerunRun(bodyId) : null,
+          child: Text('Rerun', style: TextStyle(color: tokens.muted)),
+        ),
+      ],
+    );
+  }
+
   Widget _runEvidence(String bodyId, AgentController controller) {
     final runs = controller.ledger.runsFor(bodyId);
     RunRecord? run;
@@ -1927,6 +1980,7 @@ class _InspectorPanelState extends State<InspectorPanel> {
                 ],
               ),
         children: [
+          if (run != null) _runActions(bodyId, run, controller, tokens),
           if (controller.ledger.historyWarning)
             Text(
               'Run history is large. Older runs are kept.',
