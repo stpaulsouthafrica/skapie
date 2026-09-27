@@ -35,11 +35,13 @@ class _SpyCheckpointStore extends RunCheckpointStore {
 
   @override
   Future<void> save(RunCheckpoint checkpoint) async {
+    await super.save(checkpoint);
     saved.add(checkpoint);
   }
 
   @override
   Future<void> remove(String runId) async {
+    await super.remove(runId);
     removed.add(runId);
   }
 }
@@ -257,6 +259,34 @@ void main() {
     expect(second.id, isNot(first.id));
     expect(second.resumedFrom, isNull);
     expect(second.status, RunStatus.completed);
+  });
+
+  test('a cancelled run is not revived by a late model result', () async {
+    final controller = buildController();
+    controller.session = AgentSession(model: _PendingModel(), kitApi: api);
+    final tool = api.instantiate(
+      'tools.list_kits',
+      origin: const Offset(400, 400),
+    );
+    attachToolKit(kitApi: api, toolObjectId: tool.first, llmBodyId: llmBody);
+    final model = controller.session.model as _PendingModel;
+
+    final pending = controller.sendUser('kits', targetBodyId: llmBody);
+    await model.started.future;
+    controller.interruptRun();
+    await pending;
+    final run = controller.latestRunFor(llmBody)!;
+    expect(run.status, RunStatus.interrupted);
+
+    model.release.complete(const AgentModelReply(content: 'late'));
+    await Future<void>.delayed(Duration.zero);
+    expect(spy.forRun(run.id), isNull);
+    expect(
+      controller.pendingRecovery
+          .where((notice) => notice.runId == run.id)
+          .any((notice) => notice.resumable),
+      isFalse,
+    );
   });
 
   test('an effect with no result reloads as uncertain', () async {

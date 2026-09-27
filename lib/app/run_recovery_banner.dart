@@ -68,8 +68,10 @@ class RunRecoveryBanner extends StatelessWidget {
                         if (notice.canContinue)
                           TextButton(
                             key: const Key('run-recovery-continue'),
-                            onPressed: () =>
-                                controller.resumeRun(notice.bodyId),
+                            onPressed: () => controller.resumeRun(
+                              notice.bodyId,
+                              fromRunId: notice.runId,
+                            ),
                             child: Text(
                               'Continue',
                               style: TextStyle(color: tokens.accent),

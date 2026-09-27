@@ -6,6 +6,7 @@ import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/agent/run_checkpoint.dart';
 import 'package:skapie/agent/run_ledger.dart';
 import 'package:skapie/app/inspector_panel.dart';
+import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/selection_controller.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
@@ -17,6 +18,13 @@ void main() {
     final store = SceneStore();
     final api = createAppKitApi(store: store);
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
+    final input = api.instantiate(boardTextKitId, origin: const Offset(400, 0));
+    api.updateProps(input.last, {'content': 'carry on'});
+    connectTextToLlm(
+      kitApi: api,
+      textObjectId: input.first,
+      llmBodyId: llm.last,
+    );
     final ledger = RunLedger();
     final run = ledger.begin(bodyId: llm.last);
     ledger.append(run.id, RunEventKind.runRequested, {'bodyId': llm.last});

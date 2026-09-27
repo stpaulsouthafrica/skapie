@@ -42,6 +42,7 @@ Future<PreparedOutcome> reconcilePreparedEffect(
 
 /// Settle every prepared record and return how many were inspected.
 Future<int> reconcilePendingEffects(PatchEffectLog log) async {
+  await log.load();
   final pending = pendingEffectRecords(log);
   for (final record in pending) {
     final outcome = await reconcilePreparedEffect(record);

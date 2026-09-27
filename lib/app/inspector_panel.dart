@@ -1834,9 +1834,13 @@ class _InspectorPanelState extends State<InspectorPanel> {
     AgentController controller,
     PaintTokens tokens,
   ) {
+    final active =
+        controller.runningBodyId == null &&
+        llmCableInput(widget.kitApi.store.document, bodyId).trim().isNotEmpty;
     final resumable =
         (run.status == RunStatus.paused ||
             run.status == RunStatus.interrupted) &&
+        !runRecordEffectUncertain(run) &&
         controller.checkpointStore?.forRun(run.id) != null;
     return Wrap(
       key: const Key('run-actions'),
@@ -1857,14 +1861,14 @@ class _InspectorPanelState extends State<InspectorPanel> {
         ),
         TextButton(
           key: const Key('run-action-resume'),
-          onPressed: resumable
+          onPressed: resumable && active
               ? () => controller.resumeRun(bodyId, fromRunId: run.id)
               : null,
           child: Text('Resume', style: TextStyle(color: tokens.accent)),
         ),
         TextButton(
           key: const Key('run-action-rerun'),
-          onPressed: () => controller.rerunRun(bodyId),
+          onPressed: active ? () => controller.rerunRun(bodyId) : null,
           child: Text('Rerun', style: TextStyle(color: tokens.muted)),
         ),
       ],

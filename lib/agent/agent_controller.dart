@@ -332,6 +332,16 @@ class AgentController extends ChangeNotifier {
     required RunBoundary boundary,
     String? pendingOperationId,
   }) {
+    // A cancelled or finished run is settled. A late model result must not
+    // revive it into a resumable state.
+    if (_gate?.cancelled == true) return;
+    final record = ledger.runById(runId);
+    if (record != null &&
+        (record.status == RunStatus.interrupted ||
+            record.status == RunStatus.completed ||
+            record.status == RunStatus.failed)) {
+      return;
+    }
     _lastBoundary = boundary;
     _note(runId, RunEventKind.checkpoint, {
       'boundary': boundary.name,
