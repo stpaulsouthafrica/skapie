@@ -11,7 +11,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(900, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final ids = api.instantiate(harnessRunControlKitId, origin: Offset.zero);
     await tester.pumpWidget(SkapieApp(store: store, kitApi: api));
     final kit = find.byKey(ValueKey('kit-card-${ids.first}'));

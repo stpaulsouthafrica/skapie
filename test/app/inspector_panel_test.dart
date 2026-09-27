@@ -17,7 +17,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final repository = api.instantiate(
       codingRepositoryKitId,
       origin: Offset.zero,
@@ -76,7 +76,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final first = api.instantiate(boardTextKitId, origin: Offset.zero);
     final second = api.instantiate(
       boardTextKitId,
@@ -314,7 +314,7 @@ void main() {
       'tools.list_kits',
     ]) {
       final store = SceneStore();
-      final kitApi = createAppKitApi(store: store);
+      final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
       final ids = kitApi.instantiate(kitId, origin: Offset.zero);
       final selection = SelectionController()
         ..select(kitId == codingRepositoryKitId ? ids.last : ids.first);
@@ -380,7 +380,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     for (final id in llm) {
       kitApi.updateProps(id, {kitNameProp: 'Blue', kitAccentProp: '#88CCFF'});
@@ -431,7 +431,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final selection = SelectionController()..select(llm.first);
 

@@ -4,137 +4,93 @@ import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/tools/world/kits.dart';
 
-/// Places the same public kits and typed cables available in the Add palette.
-/// No model, patch, or check action is started here.
+/// The lean default board: a task, a model, a thread, an output, a repository
+/// grant, the four coding tools, and the offline Skapie Extensions docs.
+/// Nothing here runs a model or touches disk.
 Rect addCodingWorkflowStarter(KitApi kitApi, {required Offset origin}) {
   if (kitApi.store.document.objects.isNotEmpty) {
     throw StateError('Start on an empty board.');
   }
 
-  const readTools = [
-    'repo_list_files',
-    'repo_search_text',
-    'repo_read_file',
-    'repo_git_status',
-    'repo_git_diff',
-  ];
-  final placements = <(String, Offset)>[
-    (boardTextKitId, const Offset(0, 0)),
-    (harnessLlmKitId, const Offset(700, 0)),
-    (harnessConversationKitId, const Offset(1120, 0)),
-    (codingRepositoryKitId, const Offset(0, 390)),
-    for (var i = 0; i < readTools.length; i++)
-      (worldToolKitId(readTools[i]), Offset(350, 350 + i * 105.0)),
-    (proposePatchKitId, const Offset(700, 790)),
-    (codingPatchProposalKitId, const Offset(1040, 790)),
-    (codingReviewDecisionKitId, const Offset(1410, 790)),
-    (codingApplyPatchKitId, const Offset(1810, 790)),
-    (codingWriteScopeKitId, const Offset(1410, 1030)),
-    (codingCheckSpecKitId, const Offset(1410, 1280)),
-    (codingRunCheckKitId, const Offset(1810, 1280)),
-    (codingCheckResultKitId, const Offset(2190, 1280)),
+  final placements = <({String key, String kitId, Offset at})>[
+    (key: 'task', kitId: boardTextKitId, at: const Offset(0, 0)),
+    (key: 'llm', kitId: harnessLlmKitId, at: const Offset(700, 0)),
+    (
+      key: 'conversation',
+      kitId: harnessConversationKitId,
+      at: const Offset(1120, 0),
+    ),
+    (key: 'output', kitId: boardTextKitId, at: const Offset(700, 420)),
+    (
+      key: 'repository',
+      kitId: codingRepositoryKitId,
+      at: const Offset(0, 390),
+    ),
+    (key: 'read', kitId: worldToolKitId('read'), at: const Offset(350, 350)),
+    (key: 'write', kitId: worldToolKitId('write'), at: const Offset(350, 470)),
+    (key: 'edit', kitId: worldToolKitId('edit'), at: const Offset(350, 590)),
+    (key: 'shell', kitId: worldToolKitId('shell'), at: const Offset(350, 710)),
+    (
+      key: 'extensions',
+      kitId: skapieExtensionsKitId,
+      at: const Offset(1120, 420),
+    ),
   ];
 
   // Check the shelf before mutating the scene. Packages can be reloaded.
-  for (final (kitId, _) in placements) {
-    if (kitApi.getKit(kitId) == null) {
-      throw StateError('Missing public kit: $kitId');
+  for (final entry in placements) {
+    if (kitApi.getKit(entry.kitId) == null) {
+      throw StateError('Missing public kit: ${entry.kitId}');
     }
   }
 
   final frames = <String, String>{};
-  for (final (kitId, position) in placements) {
-    final ids = kitApi.instantiate(kitId, origin: origin + position);
-    frames[kitId] = ids.first;
-    if (kitId == boardTextKitId) {
-      kitApi.updateProps(ids.last, {'content': ''});
-      kitApi.updateProps(ids.first, {kitNameProp: 'Task Text'});
-    }
+  for (final entry in placements) {
+    final ids = kitApi.instantiate(entry.kitId, origin: origin + entry.at);
+    frames[entry.key] = ids.first;
   }
+  kitApi.updateProps(frames['task']!, {
+    'content': '',
+    kitNameProp: 'Task',
+  });
+  kitApi.updateProps(frames['output']!, {kitNameProp: 'Output'});
 
-  void wire(
-    String sourceKit,
-    KitPortKind sourceKind,
-    String targetKit,
-    KitPortKind targetKind,
-  ) {
+  void wire(String sourceKey, KitPortKind sourceKind, String targetKey, KitPortKind targetKind) {
     final ports = kitPorts(kitApi.store.document);
     final from = ports.singleWhere(
-      (port) => port.frameId == frames[sourceKit] && port.kind == sourceKind,
+      (port) => port.frameId == frames[sourceKey] && port.kind == sourceKind,
     );
     final to = ports.singleWhere(
-      (port) => port.frameId == frames[targetKit] && port.kind == targetKind,
+      (port) => port.frameId == frames[targetKey] && port.kind == targetKind,
     );
     if (!kitPortsConnect(from.kind, to.kind)) {
-      throw StateError('Incompatible public ports: $sourceKit → $targetKit');
+      throw StateError('Incompatible public ports: $sourceKey → $targetKey');
     }
     connectKitPorts(kitApi: kitApi, from: from, to: to);
   }
 
+  wire('task', KitPortKind.textOut, 'llm', KitPortKind.llmInput);
   wire(
-    boardTextKitId,
-    KitPortKind.textOut,
-    harnessLlmKitId,
-    KitPortKind.llmInput,
-  );
-  wire(
-    harnessLlmKitId,
+    'llm',
     KitPortKind.llmConversation,
-    harnessConversationKitId,
+    'conversation',
     KitPortKind.conversationIn,
   );
-  for (final toolName in [...readTools, proposePatchToolName]) {
-    final kitId = worldToolKitId(toolName);
-    wire(
-      codingRepositoryKitId,
-      KitPortKind.repositoryOut,
-      kitId,
-      KitPortKind.toolRepository,
-    );
-    wire(kitId, KitPortKind.toolOut, harnessLlmKitId, KitPortKind.llmTools);
-  }
-  wire(
-    proposePatchKitId,
-    KitPortKind.proposalResult,
-    codingPatchProposalKitId,
-    KitPortKind.proposalIn,
-  );
-  wire(
-    codingPatchProposalKitId,
-    KitPortKind.proposalOut,
-    codingReviewDecisionKitId,
-    KitPortKind.reviewIn,
-  );
-  wire(
-    codingReviewDecisionKitId,
-    KitPortKind.reviewOut,
-    codingApplyPatchKitId,
-    KitPortKind.applyIn,
-  );
-  wire(
-    codingWriteScopeKitId,
-    KitPortKind.writeScopeOut,
-    codingApplyPatchKitId,
-    KitPortKind.applyWriteScope,
-  );
-  wire(
-    codingWriteScopeKitId,
-    KitPortKind.writeScopeOut,
-    codingRunCheckKitId,
-    KitPortKind.runCheckWrite,
-  );
-  wire(
-    codingCheckSpecKitId,
-    KitPortKind.checkSpecOut,
-    codingRunCheckKitId,
-    KitPortKind.runCheckSpec,
-  );
-  wire(
-    codingRunCheckKitId,
-    KitPortKind.runCheckResult,
-    codingCheckResultKitId,
-    KitPortKind.checkResultIn,
-  );
+  wire('llm', KitPortKind.llmOutput, 'output', KitPortKind.textIn);
+  wire('extensions', KitPortKind.extensionsOut, 'llm', KitPortKind.llmContext);
 
-  return Rect.fromLTWH(origin.dx, origin.dy, 2470, 1400);
+  wire('repository', KitPortKind.repositoryOut, 'read', KitPortKind.toolRepository);
+  for (final key in ['write', 'edit', 'shell']) {
+    wire(
+      'repository',
+      KitPortKind.repositoryWriteOut,
+      key,
+      KitPortKind.toolWriteScope,
+    );
+  }
+  for (final key in ['read', 'write', 'edit', 'shell']) {
+    wire(key, KitPortKind.toolOut, 'llm', KitPortKind.llmTools);
+  }
+
+  return Rect.fromLTWH(origin.dx, origin.dy, 1500, 850);
 }

@@ -76,7 +76,7 @@ void main() {
           headers: {'content-type': 'application/json'},
         );
       });
-      final kitApi = createAppKitApi(store: SceneStore());
+      final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
       final controller = AgentController(
         kitApi: kitApi,
         session: AgentSession(

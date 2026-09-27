@@ -7,7 +7,7 @@ The **world is the harness.** There is no persistent chat bar. Authoring is:
 
 **Principle kits** hold data or structure. **Specialized kits** have irreducible behavior. `harness.llm` is specialized: title-bar chrome, per-kit model, Needs input, and completion into Output. Frame and body move as one. Text, Conversation, Repository, and tool kits connect through visible cables.
 
-Completions/responses/messages clients live under `lib/providers/`. Text cabled to Context supplies a system message. Individual `tools.*` grants cabled to Tools activate the `AgentSession` tool loop. The `harness.system-prompt` and `harness.tools` packages remain legacy stubs; neither silently modifies a request.
+Completions/responses/messages clients live under `lib/providers/`. Text cabled to Context supplies a system message. Individual `tools.*` grants cabled to Tools activate the `AgentSession` tool loop. The starter ships four tools ([tool kits](tools.md)); the old `harness.system-prompt`, `harness.tools`, and kit-author world tools are demoted to `examples/kits/` ([rebuild notes](phase_12_rebuild_notes.md)).
 
 The **scene document** remains the source of truth. Mutations go `KitApi` → `SceneStore.apply`. The palette instantiates through KitApi. Selection typing updates prompt through KitApi. `AgentController.sendUser` writes reply/error onto a **targeted** LLM kit body. **Kit** / **kit recipe** / **kit package**: [glossary](glossary.md).
 
@@ -146,7 +146,7 @@ When selection is an LLM kit frame or body, the inspector hosts the model picker
 | `harness.system-prompt` | Stub. Editable text. Reserved `attachedTo` prop (empty). Add from the palette. Does not inject. |
 | `harness.tools` | Stub. Lists current kit tool names as text. Reserved `attachedTo`. Does not attach `tools` to the vanilla request. |
 
-Packages: [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json), [`kits/harness.system-prompt/kit.json`](../kits/harness.system-prompt/kit.json), [`kits/harness.tools/kit.json`](../kits/harness.tools/kit.json). World tool grants: [`docs/tools.md`](tools.md). `createAppKitApi` registers the same kit recipes; disk replaces memory.
+Packages: [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json), [`kits/harness.conversation/kit.json`](../kits/harness.conversation/kit.json). Tool grants: [`docs/tools.md`](tools.md). `createAppKitApi` registers the starter recipes; disk replaces memory. Demoted stubs live under [`examples/kits/`](../examples/README.md).
 
 Later turns update the selected LLM kit. No transcript strip. No drop animation.
 

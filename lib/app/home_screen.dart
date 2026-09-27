@@ -9,6 +9,7 @@ import 'package:skapie/app/command_palette.dart';
 import 'package:skapie/app/coding_workflow_starter.dart';
 import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/app/run_recovery_banner.dart';
+import 'package:skapie/app/starter_set.dart';
 import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/keyboard_connect.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -265,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> {
           icon: KitIconKind.box,
         ),
       for (final kit in widget.kitApi.listKits())
-        if (kit.id.startsWith('tools.'))
+        if (starterToolKitIds.contains(kit.id))
           CommandAction(
             id: 'add-${kit.id}',
             label: 'Tool: ${kit.displayName}',
@@ -307,26 +308,14 @@ class _HomeScreenState extends State<HomeScreen> {
         _addCodingWorkflowStarter();
       case 'add-llm':
         _add(harnessLlmKitId);
-      case 'add-run-control':
-        _add(harnessRunControlKitId);
       case 'add-conversation':
         _add(harnessConversationKitId);
       case 'add-repository':
         _add(codingRepositoryKitId);
-      case 'add-patch-proposal':
-        _add(codingPatchProposalKitId);
-      case 'add-review-decision':
-        _add(codingReviewDecisionKitId);
-      case 'add-apply-patch':
-        _add(codingApplyPatchKitId);
-      case 'add-write-scope':
-        _add(codingWriteScopeKitId);
-      case 'add-check-spec':
-        _add(codingCheckSpecKitId);
-      case 'add-run-check':
-        _add(codingRunCheckKitId);
-      case 'add-check-result':
-        _add(codingCheckResultKitId);
+      case 'add-extensions':
+        _add(skapieExtensionsKitId);
+      case 'reload-packages':
+        _reloadPackages();
       case 'add-box':
         _add(boardBoxKitId);
       case 'add-text':
@@ -482,33 +471,12 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Text('Repository'),
       ),
       const PopupMenuItem(
-        value: codingPatchProposalKitId,
-        child: Text('Patch Proposal'),
-      ),
-      const PopupMenuItem(
-        value: codingReviewDecisionKitId,
-        child: Text('Review Decision'),
-      ),
-      const PopupMenuItem(
-        value: codingApplyPatchKitId,
-        child: Text('Apply Patch'),
-      ),
-      const PopupMenuItem(
-        value: codingWriteScopeKitId,
-        child: Text('Write Scope'),
-      ),
-      const PopupMenuItem(
-        value: codingCheckSpecKitId,
-        child: Text('Check Spec'),
-      ),
-      const PopupMenuItem(value: codingRunCheckKitId, child: Text('Run Check')),
-      const PopupMenuItem(
-        value: codingCheckResultKitId,
-        child: Text('Check Result'),
+        value: skapieExtensionsKitId,
+        child: Text('Skapie Extensions'),
       ),
       const PopupMenuItem(value: boardButtonKitId, child: Text('Button')),
       for (final kit in widget.kitApi.listKits())
-        if (kit.id == harnessLlmKitId || kit.id.startsWith('tools.'))
+        if (kit.id == harnessLlmKitId || starterToolKitIds.contains(kit.id))
           PopupMenuItem(
             value: kit.id,
             child: Text(
@@ -516,6 +484,23 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
     ];
+  }
+
+  Future<void> _reloadPackages() async {
+    try {
+      await widget.kitApi.reloadPackages();
+      if (!mounted) return;
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reloaded kit packages from disk.')),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not reload: $error')));
+      }
+    }
   }
 
   Widget _settingsChrome(String? label) {

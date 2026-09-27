@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.edit",
+  "displayName": "Edit",
+  "description": "Replace exact text in one repository file.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.edit",
+        "skapieRole": "frame",
+        "description": "Replace exact text in one repository file.",
+        "requiresWrite": true
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "edit",
+        "fontSize": 14,
+        "toolName": "edit",
+        "attachedTo": "",
+        "requiresWrite": true,
+        "skapieKit": "tools.edit",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

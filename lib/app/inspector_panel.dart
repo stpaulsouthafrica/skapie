@@ -1305,6 +1305,28 @@ class _InspectorPanelState extends State<InspectorPanel> {
     }
   }
 
+  Future<void> _chooseRepositoryWrite(SceneObject frame) async {
+    try {
+      final chosen = await chooseRepositoryWriteFolder(
+        kitApi: widget.kitApi,
+        frameId: frame.id,
+        permission: widget.writePermission,
+        isActive: () => mounted,
+      );
+      if (!mounted || !chosen) return;
+      setState(() => _repositoryError = null);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _repositoryError = '$error');
+      }
+    }
+  }
+
+  String _folderLabel(Object? value) {
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? 'None' : text;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.selection.isMultiple) {
@@ -1457,34 +1479,23 @@ class _InspectorPanelState extends State<InspectorPanel> {
                       _runEvidence(llmBody.id, controller),
                     if (kitIdOf(object) == codingRepositoryKitId)
                       _section('Repository', [
-                        Tooltip(
-                          message:
-                              frame.props[repositoryPathProp]?.toString() ??
-                              'No folder selected',
-                          child: _readOnly(
-                            'Folder',
-                            frame.props[repositoryPathProp]
-                                        ?.toString()
-                                        .trim()
-                                        .isNotEmpty ==
-                                    true
-                                ? frame.props[repositoryPathProp].toString()
-                                : 'Choose a folder',
-                          ),
-                        ),
-                        _readOnly('Permission', 'Read-only'),
                         _readOnly(
-                          'Availability',
-                          (frame.props[repositoryPathProp]?.toString().trim() ??
-                                      '')
-                                  .isEmpty
-                              ? 'Folder not chosen'
-                              : 'Available',
+                          'Read folder',
+                          _folderLabel(frame.props[repositoryPathProp]),
+                        ),
+                        _readOnly(
+                          'Write folder',
+                          _folderLabel(frame.props[repositoryWritePathProp]),
                         ),
                         PaintButton(
                           key: const Key('choose-repository'),
-                          label: 'Choose folder',
+                          label: 'Choose read folder',
                           onPressed: () => _chooseRepository(frame),
+                        ),
+                        PaintButton(
+                          key: const Key('choose-repository-write'),
+                          label: 'Choose write folder',
+                          onPressed: () => _chooseRepositoryWrite(frame),
                         ),
                         if (_repositoryError != null)
                           Text(
@@ -1562,7 +1573,8 @@ class _InspectorPanelState extends State<InspectorPanel> {
                         'Allowed connections',
                         _allowedConnections(object),
                       ),
-                    if (frame.props['requiresRepository'] == true)
+                    if (frame.props['requiresRepository'] == true ||
+                        frame.props['requiresWrite'] == true)
                       _section('Repository input', _repositoryInputs(frame)),
                     if (kitIdOf(object) == codingRepositoryKitId)
                       _section('In / Out', _repositoryOutputs(frame)),
@@ -2141,61 +2153,76 @@ class _InspectorPanelState extends State<InspectorPanel> {
     if (repositories.isEmpty) {
       return [_readOnly('', 'Add a Repository kit', hideLabel: true)];
     }
+    final port = toolFrame.props['requiresWrite'] == true
+        ? toolWritePort
+        : repositoryPort;
     return [
       for (final repository in repositories)
         _connectionRow(
           kit: repository,
           keyId: 'repository-${repository.id}',
-          connected: kitHasLink(
-            repository,
-            to: toolFrame.id,
-            port: repositoryPort,
-          ),
-          onTap: () => _toggleRepository(repository.id, toolFrame.id),
+          connected: kitHasLink(repository, to: toolFrame.id, port: port),
+          onTap: () =>
+              _toggleRepository(repository.id, toolFrame.id, port: port),
         ),
     ];
   }
 
   List<Widget> _repositoryOutputs(SceneObject repositoryFrame) {
-    final tools = [
+    final readTools = [
       for (final frame in toolFrames(widget.store.document))
         if (frame.props['requiresRepository'] == true) frame,
     ];
-    if (tools.isEmpty) {
+    final writeTools = [
+      for (final frame in toolFrames(widget.store.document))
+        if (frame.props['requiresWrite'] == true) frame,
+    ];
+    if (readTools.isEmpty && writeTools.isEmpty) {
       return [_readOnly('', 'Add a repository tool kit', hideLabel: true)];
     }
+    Widget row(SceneObject tool, String port) {
+      return _connectionRow(
+        kit: tool,
+        keyId: 'repository-tool-${tool.id}',
+        connected: kitHasLink(repositoryFrame, to: tool.id, port: port),
+        onTap: () => _toggleRepository(repositoryFrame.id, tool.id, port: port),
+      );
+    }
+
     return [
-      for (final tool in tools)
-        _connectionRow(
-          kit: tool,
-          keyId: 'repository-tool-${tool.id}',
-          connected: kitHasLink(
-            repositoryFrame,
-            to: tool.id,
-            port: repositoryPort,
-          ),
-          onTap: () => _toggleRepository(repositoryFrame.id, tool.id),
-        ),
+      if (readTools.isNotEmpty) ...[
+        _portHeading('Read'),
+        for (final tool in readTools) row(tool, repositoryPort),
+      ],
+      if (writeTools.isNotEmpty) ...[
+        _portHeading('Write'),
+        for (final tool in writeTools) row(tool, toolWritePort),
+      ],
     ];
   }
 
-  void _toggleRepository(String repositoryId, String toolId) {
+  void _toggleRepository(
+    String repositoryId,
+    String toolId, {
+    String port = repositoryPort,
+  }) {
     final repository = widget.store.document.objectById(repositoryId);
     if (repository == null) {
       return;
     }
-    if (kitHasLink(repository, to: toolId, port: repositoryPort)) {
+    if (kitHasLink(repository, to: toolId, port: port)) {
       removeKitLink(
         kitApi: widget.kitApi,
         objectId: repositoryId,
         to: toolId,
-        port: repositoryPort,
+        port: port,
       );
     } else {
       connectRepositoryToTool(
         kitApi: widget.kitApi,
         repositoryFrameId: repositoryId,
         toolFrameId: toolId,
+        port: port,
       );
     }
   }

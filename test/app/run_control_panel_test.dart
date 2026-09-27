@@ -12,7 +12,7 @@ import 'package:skapie/scene/scene.dart';
 
 void main() {
   testWidgets('Run Control starts only its cabled LLM', (tester) async {
-    final api = createAppKitApi(store: SceneStore());
+    final api = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final controller = AgentController(
       kitApi: api,
       session: AgentSession(model: const FakeAgentModel(), kitApi: api),

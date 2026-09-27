@@ -52,7 +52,7 @@ void main() {
   late _SpyCheckpointStore spy;
 
   setUp(() {
-    api = createAppKitApi(store: SceneStore());
+    api = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
     final input = api.instantiate(boardTextKitId, origin: const Offset(400, 0));
     final output = api.instantiate(

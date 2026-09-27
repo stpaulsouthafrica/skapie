@@ -357,12 +357,13 @@ Ordinary kits. They are the visible first principles of the agent harness. See [
 | Id | Package | This phase |
 |---|---|---|
 | `harness.llm` | [`kits/harness.llm/kit.json`](../kits/harness.llm/kit.json) | Specialized compound: panel card, accent hairline, title-bar chrome, per-kit model, Needs input. Compact port rows with connection counts and a status line. The reply is written into text kits cabled from Output. |
-| `harness.system-prompt` | [`kits/harness.system-prompt/kit.json`](../kits/harness.system-prompt/kit.json) | Stub. Editable text. `attachedTo` reserved. |
-| `harness.tools` | [`kits/harness.tools/kit.json`](../kits/harness.tools/kit.json) | Stub. Tool names as text. `attachedTo` reserved. |
+| `harness.conversation` | [`kits/harness.conversation/kit.json`](../kits/harness.conversation/kit.json) | Stores the thread. |
+| `coding.repository` | [`kits/coding.repository/kit.json`](../kits/coding.repository/kit.json) | One card with a read folder and a write folder. |
+| `skapie.extensions` | [`kits/skapie.extensions/kit.json`](../kits/skapie.extensions/kit.json) | Offline pointers to the kit-author docs. |
 
-World-tool grants (`tools.list_kits`, …) are listed in [world tools](tools.md). `createAppKitApi` registers those recipes too.
+The four tool grants (`tools.read`, `tools.write`, `tools.edit`, `tools.shell`) are listed in [tool kits](tools.md). `harness.system-prompt`, `harness.tools`, and the kit-author world tools are demoted to [`examples/kits/`](../examples/README.md).
 
-`createAppKitApi` registers all of these as kit recipes; a loaded package replaces the matching id. No animation.
+`createAppKitApi` registers the starter recipes; a loaded package replaces the matching id. Pass `includeDemotedKits: true` to register the demoted rebuild references. No animation.
 
 ## Dream goal (not scheduled)
 

@@ -14,7 +14,7 @@ void main() {
   testWidgets('a recorded board transfer lights the receiving kit', (
     tester,
   ) async {
-    final api = createAppKitApi(store: SceneStore());
+    final api = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final source = api
         .instantiate(proposePatchKitId, origin: const Offset(-350, -70))
         .first;
@@ -72,7 +72,7 @@ void main() {
   testWidgets('Patch Proposal reveals its new preview when the cable arrives', (
     tester,
   ) async {
-    final api = createAppKitApi(store: SceneStore());
+    final api = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final source = api
         .instantiate(proposePatchKitId, origin: const Offset(-350, -70))
         .first;

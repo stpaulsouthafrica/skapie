@@ -7,6 +7,8 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
+import 'package:skapie/tools/coding/coding_tools.dart';
+import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 import 'package:skapie/tools/repository/repository_tools.dart';
 
@@ -200,6 +202,7 @@ ContextAssembly assembleContext({
   required String taskInput,
   List<ContextExcerpt> excerpts = const [],
   RepositoryPermission repositoryPermission = const SystemRepositoryPermission(),
+  PatchWritePermission writePermission = const SystemPatchWritePermission(),
 }) {
   final document = kitApi.store.document;
   final items = <ContextItem>[];
@@ -317,6 +320,7 @@ ContextAssembly assembleContext({
     kitApi: kitApi,
     llmBodyId: llmBodyId,
     repositoryPermission: repositoryPermission,
+    writePermission: writePermission,
     recordErrors: false,
   );
   final tools = <AgentTool>[];
@@ -333,7 +337,8 @@ ContextAssembly assembleContext({
         text: tool.description,
         order: ++order,
         reason:
-            repositoryToolNames.contains(tool.name) ||
+            codingGrantForName(tool.name) != null ||
+                repositoryToolNames.contains(tool.name) ||
                 tool.name == proposePatchToolName
             ? 'Cabled to Tools; access checked at dispatch'
             : 'Cabled to Tools',
@@ -514,14 +519,15 @@ List<ContextExclusion> _unusedSources(
   return exclusions;
 }
 
-/// Build a preview excerpt from one `repo_read_file` result, or null.
+/// Build a preview excerpt from any file-read result, or null. Read results
+/// carry a path and file content; list and search results do not.
 ContextExcerpt? contextExcerptFromRead({
   required String callId,
   required String toolName,
   required Map<String, Object?> result,
   String? sourceKitId,
 }) {
-  if (toolName != 'repo_read_file' || result['ok'] == false) {
+  if (result['ok'] == false) {
     return null;
   }
   final path = result['path']?.toString() ?? '';

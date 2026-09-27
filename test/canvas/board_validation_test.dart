@@ -11,7 +11,7 @@ void main() {
   late KitApi kitApi;
 
   setUp(() {
-    kitApi = createAppKitApi(store: SceneStore());
+    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
   });
 
   List<String> llmKit() =>
@@ -141,7 +141,7 @@ void main() {
 
     var blockers = check().runBlockers(llm.last);
     expect(blockers.single.kind, BoardIssueKind.missingGrant);
-    expect(blockers.single.message, 'Repository grant missing');
+    expect(blockers.single.message, 'Repository read grant missing');
     expect(blockers.single.frameId, tool.first);
 
     final repository = kitApi.instantiate(

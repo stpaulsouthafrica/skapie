@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "coding.repository",
   "displayName": "Repository",
-  "description": "A user-chosen read-only repository folder for coding tools.",
+  "description": "A user-chosen repository folder with separate read and write grants.",
   "capabilities": [],
   "objects": [
     {
@@ -14,17 +14,18 @@
       "props": {
         "skapieKit": "coding.repository",
         "skapieRole": "frame",
-        "repositoryPath": ""
+        "repositoryPath": "",
+        "repositoryWritePath": ""
       }
     },
     {
       "typeId": "text",
       "x": 12,
-      "y": 44,
+      "y": 40,
       "width": 256,
       "height": 56,
       "props": {
-        "content": "Double-click to choose a repository folder",
+        "content": "Double-click to choose a folder",
         "fontSize": 13,
         "skapieKit": "coding.repository",
         "skapieRole": "body"

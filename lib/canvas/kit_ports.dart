@@ -431,15 +431,16 @@ void connectRepositoryToTool({
   required KitApi kitApi,
   required String repositoryFrameId,
   required String toolFrameId,
+  String port = repositoryPort,
 }) {
   for (final frame in repositoryFrames(kitApi.store.document)) {
     if (frame.id != repositoryFrameId &&
-        kitHasLink(frame, to: toolFrameId, port: repositoryPort)) {
+        kitHasLink(frame, to: toolFrameId, port: port)) {
       removeKitLink(
         kitApi: kitApi,
         objectId: frame.id,
         to: toolFrameId,
-        port: repositoryPort,
+        port: port,
       );
     }
   }
@@ -447,7 +448,7 @@ void connectRepositoryToTool({
     kitApi: kitApi,
     objectId: repositoryFrameId,
     to: toolFrameId,
-    port: repositoryPort,
+    port: port,
   );
 }
 
@@ -531,6 +532,23 @@ List<LlmContextPart> llmContextParts(SceneDocument document, String llmBodyId) {
       parts.add(
         LlmContextPart(
           sourceKitId: codingCheckResultKitId,
+          sourceId: frame.id,
+          text: content,
+        ),
+      );
+    }
+  }
+  for (final frame in document.objects) {
+    if (frame.props[skapieRoleProp] != 'frame' ||
+        kitIdOf(frame) != skapieExtensionsKitId ||
+        !kitHasLink(frame, to: llmBodyId, port: llmContextPort)) {
+      continue;
+    }
+    final content = textKitContent(document, frame).trim();
+    if (content.isNotEmpty) {
+      parts.add(
+        LlmContextPart(
+          sourceKitId: skapieExtensionsKitId,
           sourceId: frame.id,
           text: content,
         ),

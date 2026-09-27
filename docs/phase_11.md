@@ -89,7 +89,7 @@
 
 ## 11.5 — assemble the first complete single-agent workflow
 
-**Goal.** Package the above parts into an editable, **human-stepped** coding-agent example without adding a hidden privileged mode. Phase 12 adds the autonomous multi-turn loop.
+**Goal.** Package the above parts into an editable, **human-stepped** coding-agent example without adding a hidden privileged mode. The former Phase 12 plan added an autonomous multi-turn loop; the active Phase 12 is a lean-host reset ([phase_12.md](phase_12.md)).
 
 **Implementation detail.**
 
@@ -99,7 +99,7 @@
 
    // implemented and automatically tested; hands-on macOS acceptance pending
 
-11.5.2. Keep this first complete flow to **one model turn at a time**. If Conversation is cabled, that kit already holds the earlier exchange for the next user-started turn. The user may also feed a failed Check Result into that later turn through a visible input. The check result does not replace the thread. Do not add automatic planning, retries, resume, background loops, or a generic graph scheduler here; those are Phase 12 work.
+11.5.2. Keep this first complete flow to **one model turn at a time**. If Conversation is cabled, that kit already holds the earlier exchange for the next user-started turn. The user may also feed a failed Check Result into that later turn through a visible input. The check result does not replace the thread. Do not add automatic planning, retries, resume, background loops, or a generic graph scheduler here; those belonged to the archived Phase 12 plan; see [phase_12.md](phase_12.md) for the active direction.
    - **What this is.** One deliberate LLM turn, then the board waits. Conversation keeps the thread for the next turn you start. A failed Check Result can be cabled into Context as extra evidence; it does not wipe Conversation. No auto-plan, auto-retry, or background agent loop in this phase.
    - **How to test.** Complete Propose → Review → Apply → Check once. Confirm nothing starts a second model turn by itself. With Conversation cabled, start a second turn manually and confirm earlier messages are still available. Cable a failed Check Result into LLM Context, start another turn, and confirm the model can see a short check summary while Conversation still holds the thread. Confirm there is no retry/resume/scheduler control that runs without you.
 
@@ -125,4 +125,4 @@
 
 Phase 11 is ready for handoff when the manual and starter flows share one execution path; board, run, grant, and effect data have separate persistence; a tool invocation is visible and attributable; review prevents silent mutation; checks are bounded; and existing boards migrate without losing content. The implementation report should include code paths, schema versions, migration notes, release-build status, automated checks requested by the phase owner, and hands-on macOS acceptance findings. **A successful build alone is not the hands-on result.**
 
-Phase 12 will make this single-agent workflow durable across long tasks, context limits, interruptions, and retries. It should not need to invent another board or kit system.
+Phase 12 was reoriented: lean host, minimal starter agent, and user-authored kits via a rock-solid API. See [phase_12.md](phase_12.md). The earlier durable-loop plan is archived under [docs/archive/](archive/README.md).

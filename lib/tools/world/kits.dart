@@ -3,11 +3,14 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/registry/builtin_types.dart';
 
+/// One tool kit on the board. The package carries only look and metadata; the
+/// host owns the runner behind the matching [toolName].
 class WorldToolKitSpec {
   const WorldToolKitSpec(
     this.toolName,
     this.description, {
     this.requiresRepository = false,
+    this.requiresWrite = false,
     this.displayName,
     this.frameHeight,
   });
@@ -15,6 +18,7 @@ class WorldToolKitSpec {
   final String toolName;
   final String description;
   final bool requiresRepository;
+  final bool requiresWrite;
   final String? displayName;
   final double? frameHeight;
 
@@ -22,52 +26,31 @@ class WorldToolKitSpec {
   double get height => frameHeight ?? toolFrameHeight;
 }
 
+/// The four starter coding tools. Every other tool kit lives in examples/.
 const List<WorldToolKitSpec> worldToolKitSpecs = [
-  WorldToolKitSpec('list_kits', 'List registered kits.'),
-  WorldToolKitSpec('get_kit', 'Get one kit recipe by id.'),
-  WorldToolKitSpec('instantiate_kit', 'Instantiate a kit into the scene.'),
-  WorldToolKitSpec('add_object', 'Add one scene object.'),
-  WorldToolKitSpec('remove_object', 'Remove a scene object by id.'),
-  WorldToolKitSpec('update_frame', 'Patch a scene object frame.'),
   WorldToolKitSpec(
-    'update_props',
-    'Shallow-merge props. Null values remove keys.',
-  ),
-  WorldToolKitSpec('set_locked', 'Set SceneObject.locked.'),
-  WorldToolKitSpec('save_kit', 'Write a kit package to disk and register it.'),
-  WorldToolKitSpec('reload_packages', 'Reload kit packages from disk.'),
-  WorldToolKitSpec('register_kit', 'Register an ephemeral in-memory kit.'),
-  WorldToolKitSpec(
-    'repo_list_files',
-    'List source files in the connected repository.',
+    'read',
+    'List, search, or read files in the connected repository.',
     requiresRepository: true,
+    displayName: 'Read',
   ),
   WorldToolKitSpec(
-    'repo_search_text',
-    'Search text in the connected repository.',
-    requiresRepository: true,
+    'write',
+    'Create or replace one file in the connected repository.',
+    requiresWrite: true,
+    displayName: 'Write',
   ),
   WorldToolKitSpec(
-    'repo_read_file',
-    'Read a bounded range of a repository file.',
-    requiresRepository: true,
+    'edit',
+    'Replace exact text in one repository file.',
+    requiresWrite: true,
+    displayName: 'Edit',
   ),
   WorldToolKitSpec(
-    'repo_git_status',
-    'Read Git branch and working tree status.',
-    requiresRepository: true,
-  ),
-  WorldToolKitSpec(
-    'repo_git_diff',
-    'Read a bounded Git diff.',
-    requiresRepository: true,
-  ),
-  WorldToolKitSpec(
-    proposePatchToolName,
-    'Propose one exact text replacement in an existing file. Does not write.',
-    displayName: 'Propose Patch',
-    frameHeight: proposePatchFrameHeight,
-    requiresRepository: true,
+    'shell',
+    'Run a command with the repository as its working folder.',
+    requiresWrite: true,
+    displayName: 'Shell',
   ),
 ];
 
@@ -101,10 +84,7 @@ void fitPlacedToolKits(KitApi kitApi) {
         kitApi.updateProps(frame.id, {'description': seeded});
       }
     }
-    final intendedHeight = kitIdOf(frame) == proposePatchKitId
-        ? proposePatchFrameHeight
-        : toolFrameHeight;
-    if ((frame.height - intendedHeight).abs() <= 0.5) {
+    if ((frame.height - toolFrameHeight).abs() <= 0.5) {
       continue;
     }
     final document = kitApi.store.document;
@@ -112,17 +92,24 @@ void fitPlacedToolKits(KitApi kitApi) {
       if (object.id == frame.id || !kitChildBelongsToFrame(object, frame)) {
         continue;
       }
-      if (object.y + object.height <= frame.y + intendedHeight + 0.5) {
+      if (object.y + object.height <= frame.y + toolFrameHeight + 0.5) {
         continue;
       }
       kitApi.updateFrame(
         id: object.id,
         y: frame.y + kitBarWorld + 4,
-        height: intendedHeight - kitBarWorld - 8,
+        height: toolFrameHeight - kitBarWorld - 8,
       );
     }
-    kitApi.updateFrame(id: frame.id, height: intendedHeight);
+    kitApi.updateFrame(id: frame.id, height: toolFrameHeight);
   }
+}
+
+Map<String, Object?> _grantProps(WorldToolKitSpec spec, String id) {
+  return {
+    if (spec.requiresRepository) 'requiresRepository': true,
+    if (spec.requiresWrite) 'requiresWrite': true,
+  };
 }
 
 Map<String, Object?> worldToolKitJson(WorldToolKitSpec spec) {
@@ -144,7 +131,7 @@ Map<String, Object?> worldToolKitJson(WorldToolKitSpec spec) {
           skapieKitProp: id,
           skapieRoleProp: 'frame',
           'description': spec.description,
-          if (spec.requiresRepository) 'requiresRepository': true,
+          ..._grantProps(spec, id),
         },
       },
       {
@@ -158,7 +145,7 @@ Map<String, Object?> worldToolKitJson(WorldToolKitSpec spec) {
           'fontSize': 14,
           'toolName': spec.toolName,
           attachedToProp: '',
-          if (spec.requiresRepository) 'requiresRepository': true,
+          ..._grantProps(spec, id),
           skapieKitProp: id,
           skapieRoleProp: 'grant',
         },
@@ -183,7 +170,7 @@ KitRecipe worldToolKitRecipe(WorldToolKitSpec spec) {
           skapieKitProp: id,
           skapieRoleProp: 'frame',
           'description': spec.description,
-          if (spec.requiresRepository) 'requiresRepository': true,
+          ..._grantProps(spec, id),
         },
       ),
       KitObjectSpec(
@@ -197,7 +184,7 @@ KitRecipe worldToolKitRecipe(WorldToolKitSpec spec) {
           'fontSize': 14,
           'toolName': spec.toolName,
           attachedToProp: '',
-          if (spec.requiresRepository) 'requiresRepository': true,
+          ..._grantProps(spec, id),
           skapieKitProp: id,
           skapieRoleProp: 'grant',
         },

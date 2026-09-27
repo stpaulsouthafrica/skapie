@@ -19,7 +19,7 @@ import 'package:skapie/tools/repository/repository_permission.dart';
 void main() {
   late KitApi api;
 
-  setUp(() => api = createAppKitApi(store: SceneStore()));
+  setUp(() => api = createAppKitApi(includeDemotedKits: true, store: SceneStore()));
 
   test('terminal states do not allow more work in the same run', () {
     expect(runPhaseCanMove(RunPhase.ready, RunPhase.validating), true);
@@ -582,7 +582,7 @@ void main() {
       AgentModel model,
       ResolvedAgentRuntime runtime,
     ) async {
-      final kitApi = createAppKitApi(store: SceneStore());
+      final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
       final controller = AgentController(
         kitApi: kitApi,
         session: AgentSession(model: model, kitApi: kitApi),

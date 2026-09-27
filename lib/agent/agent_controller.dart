@@ -25,6 +25,7 @@ import 'package:skapie/providers/model_surface.dart';
 import 'package:skapie/providers/opencode_go/opencode_go_catalog.dart';
 import 'package:skapie/providers/vanilla_client.dart';
 import 'package:skapie/tools/attach.dart';
+import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 
 enum AgentToolActivityState { running, completed, failed, uncertain }
@@ -57,6 +58,7 @@ class AgentController extends ChangeNotifier {
     this.prefs,
     this.vanilla,
     this.repositoryPermission = const SystemRepositoryPermission(),
+    this.writePermission = const SystemPatchWritePermission(),
     RunLedger? ledger,
     this.ledgerFile,
     this.checkpointStore,
@@ -66,6 +68,7 @@ class AgentController extends ChangeNotifier {
   final AgentPrefsStore? prefsStore;
   final AgentRuntimeSources sources;
   final RepositoryPermission repositoryPermission;
+  final PatchWritePermission writePermission;
   final RunLedger ledger;
   final RunLedgerFile? ledgerFile;
   final RunCheckpointStore? checkpointStore;
@@ -680,7 +683,8 @@ class AgentController extends ChangeNotifier {
       document: kitApi.store.document,
       bodyId: bodyId,
       name: name,
-      permission: repositoryPermission,
+      readPermission: repositoryPermission,
+      writePermission: writePermission,
     );
   }
 
@@ -705,6 +709,7 @@ class AgentController extends ChangeNotifier {
       llmBodyId: bodyId,
       taskInput: prompt,
       repositoryPermission: repositoryPermission,
+      writePermission: writePermission,
     );
     final systemText = assembly.instructionText;
     final history = assembly.history;
@@ -867,6 +872,7 @@ class AgentController extends ChangeNotifier {
                 kitApi: kitApi,
                 llmBodyId: bodyId,
                 repositoryPermission: repositoryPermission,
+                writePermission: writePermission,
               );
               final allowed = current.names.toSet();
               if (attached.any((tool) => !allowed.contains(tool.name))) {
@@ -885,6 +891,7 @@ class AgentController extends ChangeNotifier {
                 kitApi: kitApi,
                 llmBodyId: bodyId,
                 repositoryPermission: repositoryPermission,
+                writePermission: writePermission,
               );
               if (!current.names.contains(name)) {
                 return 'Tool grant or connection is no longer valid: $name';

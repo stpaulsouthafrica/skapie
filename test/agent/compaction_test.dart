@@ -16,7 +16,7 @@ import 'package:skapie/tools/repository/repository_permission.dart';
 void main() {
   late KitApi api;
 
-  setUp(() => api = createAppKitApi(store: SceneStore()));
+  setUp(() => api = createAppKitApi(includeDemotedKits: true, store: SceneStore()));
 
   test('compaction replaces a turn span but keeps the original turns', () {
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);

@@ -20,7 +20,7 @@ void main() {
   late File watched;
 
   setUp(() async {
-    kitApi = createAppKitApi(store: SceneStore());
+    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     scratch = await Directory.systemTemp.createTemp('skapie-11-3-1-');
     watched = File('${scratch.path}/watched.txt');
     await watched.writeAsString('untouched\n');

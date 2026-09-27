@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "skapie.extensions",
+  "displayName": "Skapie Extensions",
+  "description": "Pointers to bundled local kit-author and Kit API docs.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 320,
+      "height": 200,
+      "props": {
+        "skapieKit": "skapie.extensions",
+        "skapieRole": "frame"
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 40,
+      "width": 296,
+      "height": 148,
+      "props": {
+        "content": "Skapie Extensions — author a kit package offline\n\nA kit package is a folder kits/<id>/ with kit.json:\nschemaVersion: 1, id (same as folder), displayName,\ndescription (optional), capabilities: [], objects: [].\nEach object: typeId (box, text, button, debug.rect), x, y, width, height, props.\n\nAdd a tool by setting props.toolName on an object and cabling Output to the LLM Tools port. The host must own that runner.\n\nLocal docs: docs/kit_author.md, docs/kit_api.md, docs/kit_packages.md",
+        "fontSize": 12,
+        "skapieKit": "skapie.extensions",
+        "skapieRole": "body"
+      }
+    }
+  ]
+}

@@ -11,11 +11,12 @@
 - [Tool kits](tools.md) — host runner vs visible grant; world and repository tools
 - [Providers catalog](providers.md) — OpenCode Go seating chart, Connect merge, three vanilla surfaces
 - [Paint](paint.md) — cosmetic tokens, dark chrome, transient settings
-- [Phase roadmap overview](phase_11_roadmap.md) — product direction through the Phase 20 complete-product gate
+- [Phase roadmap overview](phase_11_roadmap.md) — historical overview; active plan restarts at Phase 12
 - [Phase 11](phase_11.md) — inspectable coding-agent board and detailed implementation slices
-- [Phase 12](phase_12.md) — reliable single-agent loop
-- [Phase 13](phase_13.md) — extensible kit platform
-- [Phase 14](phase_14.md) — composable swarms
-- [Phase 15](phase_15.md) — engineer-ready product gate and Phases 16–20 horizon
+- [Phase 12](phase_12.md) — lean host, starter agent, extensibility seam (**implemented**)
+- [Phase 12 inventory](phase_12_inventory.md) — packages and host special-cases, tagged keep / archive / rebuild
+- [Phase 12 rebuild notes](phase_12_rebuild_notes.md) — how a user would rebuild demoted flows
+- [Kit author guide](kit_author.md) — bundled offline guide for creating a package
+- [Archived Phase 12–15](archive/README.md) — former reliable-loop / kit-platform / swarm / beta plan (historical only)
 
 See also the product overview and run instructions in the [root README](../README.md).

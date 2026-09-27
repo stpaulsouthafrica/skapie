@@ -90,7 +90,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final text = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(-220, -20),
@@ -171,7 +171,7 @@ void main() {
 
   testWidgets('Shift click adds and removes individual kits', (tester) async {
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final first = api.instantiate(
       boardTextKitId,
       origin: const Offset(-220, -20),
@@ -274,7 +274,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final first = api.instantiate(
       boardTextKitId,
       origin: const Offset(-220, -20),
@@ -332,7 +332,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final first = api.instantiate(boardTextKitId, origin: Offset.zero);
     final second = api.instantiate(
       boardTextKitId,
@@ -394,7 +394,7 @@ void main() {
 
   testWidgets('drag LLM kit moves frame and body together', (tester) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final frame = store.document.objects.firstWhere(
       (object) => object.props[skapieRoleProp] == 'frame',
@@ -436,7 +436,7 @@ void main() {
 
   testWidgets('hovering a tool shows its description', (tester) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate('tools.list_kits', origin: Offset.zero);
     final frame = store.document.objects.firstWhere(
       (object) => object.props[skapieRoleProp] == 'frame',
@@ -472,7 +472,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate('tools.list_kits', origin: Offset.zero);
     final frame = store.document.objects.firstWhere(
       (object) => object.props[skapieRoleProp] == 'frame',
@@ -510,7 +510,7 @@ void main() {
 
   testWidgets('Delete on LLM body removes the whole compound', (tester) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final body = store.document.objects.firstWhere(
       (object) => object.props[skapieRoleProp] == 'body',
@@ -549,7 +549,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate('tools.list_kits', origin: Offset.zero);
     final grant = store.document.objects.firstWhere(
       (object) => object.props[skapieRoleProp] == 'grant',
@@ -737,7 +737,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate(boardTextKitId, origin: const Offset(-140, -75));
     final selection = SelectionController();
     await tester.pumpWidget(
@@ -779,7 +779,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate(
       codingReviewDecisionKitId,
       origin: const Offset(-140, -60),
@@ -804,7 +804,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final ids = kitApi.instantiate(
       codingRepositoryKitId,
       origin: const Offset(-140, -65),
@@ -841,18 +841,18 @@ void main() {
     );
     expect(
       store.document.objectById(ids.last)!.props['content'],
-      'my-repository\nRead-only repository',
+      'Read: my-repository\nWrite: none',
     );
     expect(find.byKey(const Key('inline-text-edit')), findsNothing);
     expect(find.byKey(const Key('text-kit-editor')), findsNothing);
-    expect(find.text('my-repository'), findsOneWidget);
+    expect(find.textContaining('my-repository'), findsWidgets);
   });
 
   testWidgets('double-click Write Scope chooses its separate write folder', (
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final ids = kitApi.instantiate(
       codingWriteScopeKitId,
       origin: const Offset(-140, -60),
@@ -890,7 +890,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final ids = kitApi.instantiate(
       codingPatchProposalKitId,
       origin: const Offset(-140, -60),
@@ -921,7 +921,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final conversation = kitApi.instantiate(
       harnessConversationKitId,
       origin: const Offset(-140, -75),
@@ -984,7 +984,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final text = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(-420, -60),
@@ -1044,7 +1044,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final text = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(-420, -60),
@@ -1105,7 +1105,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final text = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(-220, -20),
@@ -1179,7 +1179,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final text = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(-220, -20),
@@ -1239,7 +1239,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final text = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(-220, -20),
@@ -1285,7 +1285,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -1342,7 +1342,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -1393,7 +1393,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final reply = kitApi.instantiate(
       boardTextKitId,
@@ -1441,7 +1441,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     kitApi.instantiate(harnessLlmKitId, origin: const Offset(500, 0));
     await tester.pumpWidget(
@@ -1472,7 +1472,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     kitApi.instantiate(harnessLlmKitId, origin: const Offset(500, 0));
     final selection = SelectionController();
@@ -1515,7 +1515,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     kitApi.instantiate(harnessLlmKitId, origin: const Offset(500, 0));
     final selection = SelectionController();
@@ -1553,7 +1553,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final controller = AgentController(
       kitApi: kitApi,
@@ -1594,7 +1594,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -1661,7 +1661,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     await tester.pumpWidget(
       MaterialApp(
@@ -1706,7 +1706,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final text = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(-420, -60),
@@ -1754,7 +1754,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(store: store);
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
     final text = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(-220, -60),

@@ -20,7 +20,7 @@ void main() {
   late List<String> repository;
 
   setUp(() {
-    kitApi = createAppKitApi(store: SceneStore());
+    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     text = kitApi.instantiate(boardTextKitId, origin: const Offset(-400, 0));
     kitApi.updateProps(text.last, {'content': 'hello from the card'});

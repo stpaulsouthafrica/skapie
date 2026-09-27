@@ -15,7 +15,7 @@ void main() {
 
   setUp(() {
     store = SceneStore();
-    kitApi = createAppKitApi(store: store);
+    kitApi = createAppKitApi(includeDemotedKits: true, store: store);
   });
 
   test('scripted add_object puts a box on the scene via KitApi', () async {
@@ -34,6 +34,7 @@ void main() {
         const AgentModelReply(content: 'Added a box.'),
       ]),
       kitApi: kitApi,
+      tools: createWorldTools(kitApi),
     );
 
     await session.sendUser('add a box');
@@ -68,6 +69,7 @@ void main() {
         const AgentModelReply(content: 'Spawned note card.'),
       ]),
       kitApi: kitApi,
+      tools: createWorldTools(kitApi),
     );
 
     await session.sendUser('note');
@@ -94,6 +96,7 @@ void main() {
           const AgentModelReply(content: 'I could not do that.'),
         ]),
         kitApi: kitApi,
+        tools: createWorldTools(kitApi),
       );
 
       await session.sendUser('nope');
@@ -126,6 +129,7 @@ void main() {
           const AgentModelReply(content: 'skipped'),
         ]),
         kitApi: kitApi,
+        tools: createWorldTools(kitApi),
       );
 
       await session.sendUser('bad type');
@@ -150,6 +154,7 @@ void main() {
         const AgentModelReply(content: 'listed'),
       ]),
       kitApi: kitApi,
+      tools: createWorldTools(kitApi),
     );
 
     await session.sendUser('kits');
@@ -175,6 +180,7 @@ void main() {
         const AgentModelReply(content: 'recovered'),
       ]),
       kitApi: kitApi,
+      tools: createWorldTools(kitApi),
     );
 
     await session.sendUser('bad json');
@@ -212,6 +218,7 @@ void main() {
         httpClient: client,
       ),
       kitApi: kitApi,
+      tools: createWorldTools(kitApi),
       includeTools: false,
     );
     await session.sendUser('hi');
@@ -232,6 +239,7 @@ void main() {
     final session = AgentSession(
       model: ScriptedAgentModel(replies),
       kitApi: kitApi,
+      tools: createWorldTools(kitApi),
       maxToolIterations: 8,
     );
 

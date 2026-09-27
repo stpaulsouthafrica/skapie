@@ -70,7 +70,7 @@ void main() {
   late Directory root;
 
   setUp(() async {
-    api = createAppKitApi(store: SceneStore());
+    api = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     root = await Directory.systemTemp.createTemp('skapie-flow-');
     await File('${root.path}/file.txt').writeAsString('before\n');
   });

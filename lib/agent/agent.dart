@@ -4,16 +4,16 @@ import 'package:skapie/agent/agent_tool.dart';
 import 'package:skapie/agent/agent_tool_dispatcher.dart';
 import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/kit_api/kit_api.dart';
-import 'package:skapie/tools/world/register.dart';
 
 export 'package:skapie/agent/agent_tool.dart';
 export 'package:skapie/agent/agent_tool_dispatcher.dart';
 export 'package:skapie/agent/kit_agent_tools.dart';
 
 const String defaultAgentSystemPrompt =
-    'You are Skapie\'s canvas agent. Use kit tools to change the scene. '
-    'Prefer instantiate_kit, list_kits, and add_object rather than inventing UI. '
-    'Say kit, kit recipe, or kit package — never bare "recipe".';
+    'You are Skapie\'s canvas coding agent. You have four tools — read, write, '
+    'edit, and shell — scoped to the repository the user granted. Read before '
+    'you change anything, keep edits small and exact, and say kit, kit recipe, '
+    'or kit package — never bare "recipe".';
 
 const int defaultMaxToolIterations = 8;
 
@@ -164,7 +164,7 @@ class AgentSession {
     this.startToolCalls = 0,
     this.startOutputChars = 0,
   }) : id = id ?? 'agent_${DateTime.now().microsecondsSinceEpoch}',
-       _tools = tools ?? createWorldTools(kitApi),
+       _tools = tools ?? const <AgentTool>[],
        _messages = [
          AgentMessage(
            role: AgentRole.system,

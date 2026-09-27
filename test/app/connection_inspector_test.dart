@@ -38,7 +38,7 @@ void main() {
   testWidgets('a Text → LLM Input cable shows both ends and the text', (
     tester,
   ) async {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -77,7 +77,7 @@ void main() {
   testWidgets('a Repository → read tool cable reads as a grant', (
     tester,
   ) async {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final tool = kitApi.instantiate(
       worldToolKitId('repo_list_files'),
       origin: Offset.zero,

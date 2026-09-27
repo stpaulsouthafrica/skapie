@@ -3,8 +3,7 @@ import 'dart:ui';
 import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
-import 'package:skapie/tools/patch/patch_board.dart';
-import 'package:skapie/tools/check/check_board.dart';
+import 'package:skapie/tools/demoted/demoted_kits.dart';
 import 'package:skapie/tools/world/kits.dart';
 
 const String demoNoteCardKitId = 'demo.note-card';
@@ -64,6 +63,14 @@ const String llmTextOutPort = 'text';
 const String toolLastUsedProp = 'lastUsedAt';
 const String repositoryPort = 'repository';
 const String repositoryPathProp = 'repositoryPath';
+
+/// The Repository kit's second grant: a folder the coding tools may write to.
+const String repositoryWritePort = 'repositoryWrite';
+const String repositoryWritePathProp = 'repositoryWritePath';
+
+/// Link port on a coding tool that takes the Repository write grant.
+const String toolWritePort = 'writeGrant';
+const String skapieExtensionsKitId = 'skapie.extensions';
 const String kitNameProp = 'name';
 const String kitAccentProp = 'accent';
 const double kitRadius = 8;
@@ -310,6 +317,7 @@ const KitRecipe codingRepositoryRecipe = KitRecipe(
         skapieKitProp: codingRepositoryKitId,
         skapieRoleProp: 'frame',
         repositoryPathProp: '',
+        repositoryWritePathProp: '',
       },
     ),
     KitObjectSpec(
@@ -319,9 +327,50 @@ const KitRecipe codingRepositoryRecipe = KitRecipe(
       width: 256,
       height: 56,
       props: {
-        'content': 'Double-click to choose a repository folder',
+        'content': 'Double-click to choose a folder',
         'fontSize': 13,
         skapieKitProp: codingRepositoryKitId,
+        skapieRoleProp: 'body',
+      },
+    ),
+  ],
+);
+
+/// Offline pointer to the bundled kit-author docs. Cable to Context so the
+/// model can answer schema questions without the network.
+const String skapieExtensionsBody =
+    'Skapie Extensions — author a kit package offline\n\n'
+    'A kit package is a folder kits/<id>/ with kit.json:\n'
+    'schemaVersion: 1, id (same as folder), displayName,\n'
+    'description (optional), capabilities: [], objects: [].\n'
+    'Each object: typeId (box, text, button, debug.rect), x, y, width, '
+    'height, props.\n\n'
+    'Add a tool by setting props.toolName on an object and cabling Output to '
+    'the LLM Tools port. The host must own that runner.\n\n'
+    'Local docs: docs/kit_author.md, docs/kit_api.md, docs/kit_packages.md';
+
+const KitRecipe skapieExtensionsRecipe = KitRecipe(
+  id: skapieExtensionsKitId,
+  displayName: 'Skapie Extensions',
+  objects: [
+    KitObjectSpec(
+      typeId: boxTypeId,
+      x: 0,
+      y: 0,
+      width: 320,
+      height: 200,
+      props: {skapieKitProp: skapieExtensionsKitId, skapieRoleProp: 'frame'},
+    ),
+    KitObjectSpec(
+      typeId: textTypeId,
+      x: 12,
+      y: 40,
+      width: 296,
+      height: 148,
+      props: {
+        'content': skapieExtensionsBody,
+        'fontSize': 12,
+        skapieKitProp: skapieExtensionsKitId,
         skapieRoleProp: 'body',
       },
     ),
@@ -711,10 +760,13 @@ SceneObject _nameFrame(SceneDocument document, SceneObject object) {
   return object;
 }
 
+/// The default shelf is the lean starter. Pass [includeDemotedKits] to also
+/// register the demoted rebuild-reference kits (used by tests and research).
 KitApi createAppKitApi({
   required SceneStore store,
   ObjectRegistry? registry,
   KitPackageStore? packages,
+  bool includeDemotedKits = false,
 }) {
   final api = KitApi(
     store: store,
@@ -726,13 +778,12 @@ KitApi createAppKitApi({
   api.registerKit(boardBoxRecipe);
   api.registerKit(boardButtonRecipe);
   api.registerKit(harnessLlmRecipe);
-  api.registerKit(harnessRunControlRecipe);
   api.registerKit(harnessConversationRecipe);
   api.registerKit(codingRepositoryRecipe);
-  api.registerKit(harnessSystemPromptRecipe);
-  api.registerKit(harnessToolsRecipe);
+  api.registerKit(skapieExtensionsRecipe);
   registerWorldToolKits(api);
-  registerPatchKits(api);
-  registerCheckKits(api);
+  if (includeDemotedKits) {
+    registerDemotedKits(api);
+  }
   return api;
 }

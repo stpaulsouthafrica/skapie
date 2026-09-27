@@ -27,6 +27,11 @@ const List<CommandAction> defaultCommandActions = [
     label: 'Add Repository',
     icon: KitIconKind.box,
   ),
+  CommandAction(
+    id: 'add-extensions',
+    label: 'Add Skapie Extensions',
+    icon: KitIconKind.text,
+  ),
   CommandAction(id: 'add-text', label: 'Add Text', icon: KitIconKind.text),
   CommandAction(id: 'add-box', label: 'Add Box', icon: KitIconKind.box),
   CommandAction(
@@ -35,44 +40,9 @@ const List<CommandAction> defaultCommandActions = [
     icon: KitIconKind.button,
   ),
   CommandAction(
-    id: 'add-patch-proposal',
-    label: 'Add Patch Proposal',
+    id: 'reload-packages',
+    label: 'Reload kit packages',
     icon: KitIconKind.box,
-  ),
-  CommandAction(
-    id: 'add-review-decision',
-    label: 'Add Review Decision',
-    icon: KitIconKind.box,
-  ),
-  CommandAction(
-    id: 'add-apply-patch',
-    label: 'Add Apply Patch',
-    icon: KitIconKind.box,
-  ),
-  CommandAction(
-    id: 'add-write-scope',
-    label: 'Add Write Scope',
-    icon: KitIconKind.box,
-  ),
-  CommandAction(
-    id: 'add-check-spec',
-    label: 'Add Check Spec',
-    icon: KitIconKind.box,
-  ),
-  CommandAction(
-    id: 'add-run-check',
-    label: 'Add Run Check',
-    icon: KitIconKind.button,
-  ),
-  CommandAction(
-    id: 'add-check-result',
-    label: 'Add Check Result',
-    icon: KitIconKind.box,
-  ),
-  CommandAction(
-    id: 'add-run-control',
-    label: 'Add Run Control',
-    icon: KitIconKind.button,
   ),
   CommandAction(id: 'settings', label: 'Settings', icon: KitIconKind.settings),
 ];

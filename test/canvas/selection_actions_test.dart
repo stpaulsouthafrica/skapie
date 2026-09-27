@@ -12,7 +12,7 @@ void main() {
     'group move keeps kit members together, skips locked kits, undoes once',
     () {
       final store = SceneStore();
-      final api = createAppKitApi(store: store);
+      final api = createAppKitApi(includeDemotedKits: true, store: store);
       final first = api.instantiate(boardTextKitId, origin: Offset.zero);
       final second = api.instantiate(
         boardTextKitId,
@@ -49,7 +49,7 @@ void main() {
 
   test('group color changes only selected cable and kit, with one undo', () {
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final first = api.instantiate(boardTextKitId, origin: Offset.zero);
     final second = api.instantiate(
       boardTextKitId,
@@ -132,7 +132,7 @@ void main() {
 
   test('group delete refreshes a surviving LLM tool label in one undo', () {
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
     final tool = api.instantiate(
       'tools.list_kits',
@@ -170,7 +170,7 @@ void main() {
 
   test('cable-only group actions leave unselected links alone', () {
     final store = SceneStore();
-    final api = createAppKitApi(store: store);
+    final api = createAppKitApi(includeDemotedKits: true, store: store);
     final text = api.instantiate(boardTextKitId, origin: Offset.zero);
     final firstLlm = api.instantiate(
       harnessLlmKitId,
@@ -239,7 +239,7 @@ void main() {
     'group delete removes selected kits and cables, then one undo restores',
     () {
       final store = SceneStore();
-      final api = createAppKitApi(store: store);
+      final api = createAppKitApi(includeDemotedKits: true, store: store);
       final first = api.instantiate(boardTextKitId, origin: Offset.zero);
       final second = api.instantiate(
         boardTextKitId,

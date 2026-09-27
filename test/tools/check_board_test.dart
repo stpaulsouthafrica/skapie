@@ -64,7 +64,7 @@ void main() {
 
   setUp(() async {
     scratch = await Directory.systemTemp.createTemp('skapie-check-');
-    kitApi = createAppKitApi(store: SceneStore());
+    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
   });
   tearDown(() async => scratch.delete(recursive: true));
 

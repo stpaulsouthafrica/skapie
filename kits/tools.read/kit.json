@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.read",
+  "displayName": "Read",
+  "description": "List, search, or read files in the connected repository.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.read",
+        "skapieRole": "frame",
+        "description": "List, search, or read files in the connected repository.",
+        "requiresRepository": true
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "read",
+        "fontSize": 14,
+        "toolName": "read",
+        "attachedTo": "",
+        "requiresRepository": true,
+        "skapieKit": "tools.read",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

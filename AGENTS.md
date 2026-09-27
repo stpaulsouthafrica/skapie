@@ -1,8 +1,8 @@
 Hello. I am Anthony, the owner of the Skapie project.
 
-On every turn, name the layer first: KIT PACKAGE (`kits/<id>/`) or HOST/core (`lib/`), and briefly explain why and the files touched.
+On every turn, name the layer first: KIT PACKAGE (`kits/<id>/`) | HOST (`lib/`) | GRANT | BOARD. Say the kit id if any, give a one-sentence Change, and stop after this layer. Briefly explain why and the files touched.
 
--Start each new phase on a seperate worktree.
+-Stay on main
 -Use good coding practices.
 -Do not copy and paste code, ever. Build re-useable, modular code systems. If you come across code that can be simplified, for any of the reasons in this file, fix it.
 -Keep the file system as modular as possible. One topic = one file.

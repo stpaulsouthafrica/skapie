@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.write",
+  "displayName": "Write",
+  "description": "Create or replace one file in the connected repository.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.write",
+        "skapieRole": "frame",
+        "description": "Create or replace one file in the connected repository.",
+        "requiresWrite": true
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "write",
+        "fontSize": 14,
+        "toolName": "write",
+        "attachedTo": "",
+        "requiresWrite": true,
+        "skapieKit": "tools.write",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

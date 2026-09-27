@@ -18,7 +18,7 @@ void main() {
   });
 
   test('a mixed board keeps every port and cable from saved links', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -40,6 +40,8 @@ void main() {
       worldToolKitId('repo_list_files'),
       origin: const Offset(-400, 400),
     );
+    kitApi.instantiate(worldToolKitId('write'), origin: const Offset(-400, 500));
+    kitApi.instantiate(skapieExtensionsKitId, origin: const Offset(1000, 400));
     kitApi.instantiate(proposePatchKitId, origin: const Offset(-400, 600));
     kitApi.instantiate(codingPatchProposalKitId, origin: const Offset(0, 600));
     kitApi.instantiate(
@@ -129,8 +131,8 @@ void main() {
   });
 
   test('a dragged Text → LLM Input cable writes the same link as before', () {
-    final dragged = createAppKitApi(store: SceneStore());
-    final direct = createAppKitApi(store: SceneStore());
+    final dragged = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    final direct = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     for (final kitApi in [dragged, direct]) {
       kitApi.instantiate(harnessLlmKitId, origin: const Offset(400, 0));
       kitApi.instantiate(boardTextKitId, origin: Offset.zero);
@@ -186,7 +188,7 @@ void main() {
   });
 
   test('older single-target props still draw their cable', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -202,7 +204,7 @@ void main() {
   });
 
   test('a single-input port keeps only the newest cable', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final first = kitApi.instantiate(
       codingRepositoryKitId,
       origin: const Offset(-800, 0),

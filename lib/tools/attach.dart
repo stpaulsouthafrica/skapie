@@ -7,7 +7,9 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/shared/text_digest.dart';
+import 'package:skapie/tools/coding/coding_tools.dart';
 import 'package:skapie/tools/patch/patch_board.dart';
+import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 import 'package:skapie/tools/repository/repository_tools.dart';
 
@@ -109,21 +111,26 @@ List<AgentTool> worldToolsForLlm({
   required String llmBodyId,
   RepositoryPermission repositoryPermission =
       const SystemRepositoryPermission(),
+  PatchWritePermission writePermission = const SystemPatchWritePermission(),
   bool recordErrors = true,
 }) {
   return llmToolOffer(
     kitApi: kitApi,
     llmBodyId: llmBodyId,
     repositoryPermission: repositoryPermission,
+    writePermission: writePermission,
     recordErrors: recordErrors,
   ).tools;
 }
 
+/// Resolve the coding tools cabled to [llmBodyId] from the board. A tool with
+/// its read or write grant cable missing is filtered with a reason.
 LlmToolOffer llmToolOffer({
   required KitApi kitApi,
   required String llmBodyId,
   RepositoryPermission repositoryPermission =
       const SystemRepositoryPermission(),
+  PatchWritePermission writePermission = const SystemPatchWritePermission(),
   bool recordErrors = true,
 }) {
   final document = kitApi.store.document;
@@ -150,33 +157,74 @@ LlmToolOffer llmToolOffer({
       filtered.add(FilteredTool(name: name, reason: 'Duplicate tool'));
       continue;
     }
+    // Demoted tools (repo_*, propose_patch) stay resolvable only while their
+    // kit package is loaded from examples/. They are rebuild references.
+    final grant = codingGrantForName(name);
+    final legacyRead =
+        repositoryToolNames.contains(name) || name == proposePatchToolName;
+    final worldAuthor = byName.containsKey(name);
+    if (grant == null && !legacyRead && !worldAuthor) {
+      filtered.add(FilteredTool(name: name, reason: 'Unknown tool'));
+      if (recordErrors) {
+        kitApi.updateProps(object.id, {
+          'error': 'Unknown tool: $name',
+          'content': 'Unknown tool: $name',
+        });
+      }
+      continue;
+    }
     final frame = kitFrameForSelection(
       document: document,
       selectedId: object.id,
     );
-    final path = frame == null ? '' : repositoryPathForTool(document, frame.id);
-    if ((repositoryToolNames.contains(name) || name == proposePatchToolName) &&
-        path.isEmpty) {
+    final readPath = frame == null
+        ? ''
+        : repositoryPathForTool(document, frame.id);
+    final writePath = frame == null
+        ? ''
+        : repositoryWritePathForTool(document, frame.id);
+    if ((legacyRead || grant == CodingGrant.read) && readPath.isEmpty) {
       filtered.add(
-        FilteredTool(name: name, reason: 'Repository grant missing'),
+        FilteredTool(
+          name: name,
+          reason: legacyRead
+              ? 'Repository grant missing'
+              : 'Repository read grant missing',
+        ),
       );
       continue;
     }
-    final tool =
-        byName[name] ??
-        repositoryToolForName(
-          name,
-          repositoryPath: path,
-          permission: repositoryPermission,
-        ) ??
-        (name == proposePatchToolName && frame != null
-            ? proposePatchTool(
-                kitApi: kitApi,
-                proposeFrameId: frame.id,
-                repositoryPath: path,
-                permission: repositoryPermission,
-              )
-            : null);
+    if (grant == CodingGrant.write && writePath.isEmpty) {
+      filtered.add(
+        FilteredTool(name: name, reason: 'Repository write grant missing'),
+      );
+      continue;
+    }
+    AgentTool? tool;
+    if (grant != null) {
+      tool = codingToolForName(
+        name,
+        readPath: readPath,
+        writePath: writePath,
+        readPermission: repositoryPermission,
+        writePermission: writePermission,
+      );
+    } else if (legacyRead && name != proposePatchToolName) {
+      tool = repositoryToolForName(
+        name,
+        repositoryPath: readPath,
+        permission: repositoryPermission,
+      );
+    } else if (name == proposePatchToolName && frame != null) {
+      tool = proposePatchTool(
+        kitApi: kitApi,
+        proposeFrameId: frame.id,
+        repositoryPath: readPath,
+        permission: repositoryPermission,
+      );
+    } else {
+      tool = byName[name];
+    }
     if (tool == null) {
       filtered.add(FilteredTool(name: name, reason: 'Unknown tool'));
       if (recordErrors) {
@@ -201,34 +249,79 @@ String toolSchemaDigest(List<AgentTool> tools) {
   );
 }
 
-/// Why a repository-backed tool cannot run now, or null when it can.
-/// Read tools and the patch proposal need a Repository cable and live access.
+/// Why a grant-backed coding tool cannot run now, or null when it can.
 Future<String?> repositoryGrantReasonForTool({
   required SceneDocument document,
   required String bodyId,
   required String name,
-  required RepositoryPermission permission,
+  required RepositoryPermission readPermission,
+  PatchWritePermission writePermission = const SystemPatchWritePermission(),
 }) async {
-  if (!repositoryToolNames.contains(name) && name != proposePatchToolName) {
+  final grant = codingGrantForName(name);
+  final legacyRead =
+      repositoryToolNames.contains(name) || name == proposePatchToolName;
+  if (grant == null && !legacyRead) {
     return null;
   }
   final frameId = toolFrameIdForName(document, bodyId, name);
-  final path = frameId == null ? '' : repositoryPathForTool(document, frameId);
-  if (path.isEmpty) return 'Repository grant missing for $name';
-  if (!await permission.canRead(path)) {
-    return 'Repository access expired for $name';
+  if (frameId == null) {
+    return 'Tool is not connected for this turn: $name';
+  }
+  if (legacyRead) {
+    final path = repositoryPathForTool(document, frameId);
+    if (path.isEmpty) return 'Repository grant missing for $name';
+    if (!await readPermission.canRead(path)) {
+      return 'Repository access expired for $name';
+    }
+    return null;
+  }
+  if (grant == CodingGrant.read) {
+    final path = repositoryPathForTool(document, frameId);
+    if (path.isEmpty) return 'Repository read grant missing for $name';
+    if (!await readPermission.canRead(path)) {
+      return 'Repository read access expired for $name';
+    }
+    return null;
+  }
+  final path = repositoryWritePathForTool(document, frameId);
+  if (path.isEmpty) return 'Repository write grant missing for $name';
+  if (!await writePermission.canWrite(path)) {
+    return 'Repository write access expired for $name';
   }
   return null;
 }
 
 String repositoryPathForTool(SceneDocument document, String toolFrameId) {
+  return _grantPathForTool(
+    document,
+    toolFrameId,
+    port: repositoryPort,
+    prop: repositoryPathProp,
+  );
+}
+
+String repositoryWritePathForTool(SceneDocument document, String toolFrameId) {
+  return _grantPathForTool(
+    document,
+    toolFrameId,
+    port: toolWritePort,
+    prop: repositoryWritePathProp,
+  );
+}
+
+String _grantPathForTool(
+  SceneDocument document,
+  String toolFrameId, {
+  required String port,
+  required String prop,
+}) {
   for (final object in document.objects) {
     if (object.props[skapieRoleProp] != 'frame' ||
         kitIdOf(object) != codingRepositoryKitId ||
-        !kitHasLink(object, to: toolFrameId, port: repositoryPort)) {
+        !kitHasLink(object, to: toolFrameId, port: port)) {
       continue;
     }
-    return object.props[repositoryPathProp]?.toString().trim() ?? '';
+    return object.props[prop]?.toString().trim() ?? '';
   }
   return '';
 }

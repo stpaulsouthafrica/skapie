@@ -115,7 +115,7 @@ Call these on `KitApi`, not `KitPackageStore` (store is internal + tests).
 
 ## Current capability boundary
 
-`coding.repository` and the `tools.repo_*` kits are ordinary package recipes. Their native folder permission and runners are implemented by the host app. A package with an unknown `toolName` does not become executable. See [tool kits](tools.md) and the [Phase 11 roadmap](phase_11_roadmap.md).
+`coding.repository` and the four starter tools (`tools.read`, `tools.write`, `tools.edit`, `tools.shell`) are ordinary package recipes. Their native folder permission and runners are implemented by the host app. A package with an unknown `toolName` does not become executable. The old `tools.repo_*` and kit-author world tools now live under [`examples/kits/`](../examples/README.md). See [tool kits](tools.md) and the [Phase 12 inventory](phase_12_inventory.md).
 
 ## Later direction
 

@@ -23,7 +23,7 @@ void main() {
   late KitApi kitApi;
 
   setUp(() {
-    kitApi = createAppKitApi(store: SceneStore());
+    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
   });
 
   test(

@@ -70,7 +70,7 @@ void main() {
     expect(find.byKey(const Key('command-palette')), findsOneWidget);
   });
 
-  testWidgets('palette search places Run Control without attaching tools', (
+  testWidgets('palette search places Skapie Extensions without attaching tools', (
     tester,
   ) async {
     final store = SceneStore();
@@ -83,10 +83,10 @@ void main() {
         of: find.byKey(const Key('command-palette-search')),
         matching: find.byType(TextField),
       ),
-      'run control',
+      'skapie extensions',
     );
     await tester.pump();
-    expect(find.text('Add Run Control'), findsOneWidget);
+    expect(find.text('Add Skapie Extensions'), findsOneWidget);
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 
@@ -95,14 +95,8 @@ void main() {
     expect(objects, hasLength(2));
     expect(
       objects.every(
-        (object) => object.props[skapieKitProp] == harnessRunControlKitId,
+        (object) => object.props[skapieKitProp] == skapieExtensionsKitId,
       ),
-      isTrue,
-    );
-    final ports = kitPorts(store.document);
-    expect(ports.any((port) => port.kind == KitPortKind.runControlOut), isTrue);
-    expect(
-      ports.any((port) => port.kind == KitPortKind.runCheckFeedback),
       isTrue,
     );
   });
@@ -187,12 +181,10 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('command-palette')), findsOneWidget);
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pump();
+    for (var i = 0; i < 4; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+    }
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
 
@@ -284,7 +276,7 @@ void main() {
     await tester.pump();
 
     expect(find.byKey(const Key('command-palette')), findsNothing);
-    expect(sceneCables(store.document), hasLength(21));
+    expect(sceneCables(store.document), hasLength(12));
     expect(controller.ledger.runs, isEmpty);
     expect(
       kitApi.store.document.objects.where(
@@ -373,9 +365,7 @@ void main() {
     expect(find.text('Agent settings'), findsOneWidget);
   });
 
-  testWidgets('palette Tool: list_kits instantiates tools.list_kits', (
-    tester,
-  ) async {
+  testWidgets('palette Tool: Read instantiates tools.read', (tester) async {
     final store = SceneStore();
     final kitApi = createAppKitApi(store: store);
     await pumpHome(tester, store: store, kitApi: kitApi);
@@ -384,16 +374,16 @@ void main() {
     await tester.pump();
     await tester.enterText(
       find.byKey(const Key('command-palette-search')),
-      'list_kits',
+      'read',
     );
     await tester.pump();
-    await tester.tap(find.text('Tool: list_kits'));
+    await tester.tap(find.text('Tool: Read'));
     await tester.pump();
 
     expect(find.byKey(const Key('command-palette')), findsNothing);
     expect(
       store.document.objects.where(
-        (object) => object.props[skapieKitProp] == 'tools.list_kits',
+        (object) => object.props[skapieKitProp] == 'tools.read',
       ),
       isNotEmpty,
     );
@@ -419,10 +409,10 @@ void main() {
     await tester.pump();
     await tester.enterText(
       find.byKey(const Key('command-palette-search')),
-      'list_kits',
+      'read',
     );
     await tester.pump();
-    await tester.tap(find.text('Tool: list_kits'));
+    await tester.tap(find.text('Tool: Read'));
     await tester.pump();
 
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
@@ -439,10 +429,10 @@ void main() {
       (object) => object.props[skapieRoleProp] == 'body',
     );
     final grant = store.document.objects.firstWhere(
-      (object) => object.props['toolName'] == 'list_kits',
+      (object) => object.props['toolName'] == 'read',
     );
     expect(kitHasLink(grant, to: llmBody.id, port: llmToolsPort), isTrue);
-    expect(llmBody.props['content'], contains('Tools: list_kits'));
+    expect(llmBody.props['content'], contains('Tools: read'));
   });
 
   testWidgets('settings Use Fake swaps session and does not resize canvas', (

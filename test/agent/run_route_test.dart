@@ -13,7 +13,7 @@ void main() {
   test(
     'a model event lights the input cable and leaves the tool cable still',
     () {
-      final kitApi = createAppKitApi(store: SceneStore());
+      final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
       final text = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
       final llm = kitApi.instantiate(
         harnessLlmKitId,

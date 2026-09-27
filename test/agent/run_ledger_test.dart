@@ -17,7 +17,7 @@ void main() {
   late KitApi kitApi;
 
   setUp(() {
-    kitApi = createAppKitApi(store: SceneStore());
+    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
   });
 
   test(
@@ -296,7 +296,7 @@ void main() {
       final scene = File('${dir.path}/board.json');
       await scene.writeAsString('{"objects":[]}\n');
       final store = SceneStore(persistence: SceneFilePersistence(scene));
-      final api = createAppKitApi(store: store);
+      final api = createAppKitApi(includeDemotedKits: true, store: store);
       final file = RunLedgerFile.besideScene(store.sceneFilePath)!;
       final controller = AgentController(
         kitApi: api,

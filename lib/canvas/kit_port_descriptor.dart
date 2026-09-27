@@ -11,7 +11,10 @@ enum KitPortKind {
   conversationIn,
   conversationOut,
   repositoryOut,
+  repositoryWriteOut,
   toolRepository,
+  toolWriteScope,
+  extensionsOut,
   llmInput,
   llmContext,
   llmConversation,
@@ -210,6 +213,16 @@ const List<KitPortSpec> repositoryKitPorts = [
     liveProp: repositoryPathProp,
     liveMessage: 'Repository has no folder',
   ),
+  KitPortSpec(
+    id: repositoryWritePort,
+    kind: KitPortKind.repositoryWriteOut,
+    label: 'Write',
+    direction: PortDirection.output,
+    value: PortValue.writeScope,
+    placement: PortPlacement.middle(PortSide.right),
+    liveProp: repositoryWritePathProp,
+    liveMessage: 'Repository has no write folder',
+  ),
 ];
 
 const KitPortSpec toolOutPort = KitPortSpec(
@@ -221,6 +234,40 @@ const KitPortSpec toolOutPort = KitPortSpec(
   placement: PortPlacement.middle(PortSide.right),
 );
 
+/// Tool grant inputs. A tool kit shows the read input, the write input, or both
+/// depending on the props its package declares.
+List<KitPortSpec> worldToolKitPortsFor(SceneObject frame) {
+  return [
+    if (frame.props['requiresRepository'] == true)
+      const KitPortSpec(
+        id: repositoryPort,
+        kind: KitPortKind.toolRepository,
+        label: 'Repository',
+        direction: PortDirection.input,
+        value: PortValue.repository,
+        placement: PortPlacement.middle(PortSide.left),
+        multiplicity: PortMultiplicity.one,
+        requiredGroup: repositoryPort,
+        requiredMessage: 'Repository read grant missing',
+      ),
+    if (frame.props['requiresWrite'] == true)
+      const KitPortSpec(
+        id: toolWritePort,
+        kind: KitPortKind.toolWriteScope,
+        label: 'Write',
+        direction: PortDirection.input,
+        value: PortValue.writeScope,
+        placement: PortPlacement.middle(PortSide.left),
+        multiplicity: PortMultiplicity.one,
+        requiredGroup: toolWritePort,
+        requiredMessage: 'Repository write grant missing',
+      ),
+    toolOutPort,
+  ];
+}
+
+/// Ports for the kits that carry every possible grant input. Used only to build
+/// the kind -> spec lookup; actual kits use [worldToolKitPortsFor].
 const List<KitPortSpec> worldToolKitPorts = [
   KitPortSpec(
     id: repositoryPort,
@@ -230,9 +277,19 @@ const List<KitPortSpec> worldToolKitPorts = [
     value: PortValue.repository,
     placement: PortPlacement.middle(PortSide.left),
     multiplicity: PortMultiplicity.one,
-    requiresProp: 'requiresRepository',
     requiredGroup: repositoryPort,
-    requiredMessage: 'Repository grant missing',
+    requiredMessage: 'Repository read grant missing',
+  ),
+  KitPortSpec(
+    id: toolWritePort,
+    kind: KitPortKind.toolWriteScope,
+    label: 'Write',
+    direction: PortDirection.input,
+    value: PortValue.writeScope,
+    placement: PortPlacement.middle(PortSide.left),
+    multiplicity: PortMultiplicity.one,
+    requiredGroup: toolWritePort,
+    requiredMessage: 'Repository write grant missing',
   ),
   toolOutPort,
 ];
@@ -488,11 +545,23 @@ const List<KitPortSpec> llmKitPorts = [
   ),
 ];
 
+const List<KitPortSpec> extensionsKitPorts = [
+  KitPortSpec(
+    id: 'out',
+    kind: KitPortKind.extensionsOut,
+    label: 'Docs',
+    direction: PortDirection.output,
+    value: PortValue.text,
+    placement: PortPlacement.footer(PortSide.right),
+  ),
+];
+
 /// Built-in kits and their ports. World tool kits share [worldToolKitPorts].
 const Map<String, List<KitPortSpec>> builtinKitPorts = {
   boardTextKitId: textKitPorts,
   harnessConversationKitId: conversationKitPorts,
   codingRepositoryKitId: repositoryKitPorts,
+  skapieExtensionsKitId: extensionsKitPorts,
   harnessLlmKitId: llmKitPorts,
   harnessRunControlKitId: runControlKitPorts,
   proposePatchKitId: proposePatchKitPorts,
@@ -540,7 +609,9 @@ List<KitPortSpec> kitPortSpecsFor(SceneObject frame) {
   }
   final specs =
       builtinKitPorts[kitId] ??
-      (isWorldToolKit(frame) ? worldToolKitPorts : const <KitPortSpec>[]);
+      (isWorldToolKit(frame)
+          ? worldToolKitPortsFor(frame)
+          : const <KitPortSpec>[]);
   return [
     for (final spec in specs)
       if (spec.requiresProp == null || frame.props[spec.requiresProp] == true)

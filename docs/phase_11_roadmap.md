@@ -1,16 +1,14 @@
-# Skapie product direction, Phases 11–20
+# Skapie product direction (Phase 11 record + active Phase 12)
 
 The board is the workspace. A person can assemble a coding agent or swarm from visible, small kits and can create another board for another world. Every model input, tool grant, call, permission, effect, and result should be understandable from the board and its run evidence. Animation follows real events and can be reduced or hidden.
 
 The detailed implementation handoffs are separate documents:
 
-- [Phase 11 — inspectable coding-agent board](phase_11.md): audit the current read-only slice; add typed ports, durable run evidence, reviewed patches, bounded checks, and a manually reproducible starter agent.
-- [Phase 12 — reliable single-agent loop](phase_12.md): bounded turns, context provenance, checkpoint/resume, safe retries, evaluation, and full task completion.
-- [Phase 13 — extensible kit platform](phase_13.md): public package/port contracts, saved compositions, scoped capability registry, one non-coding adapter proof, authoring, and composition portability.
-- [Phase 14 — swarms from small parts](phase_14.md): independent agent instances, explicit delegation, concurrency and isolation, result integration, and swarm observability.
-- [Phase 15 — engineer-ready product](phase_15.md): first-run construction, large-board navigation, sharing, coding ergonomics, accessibility, performance, and a public beta gate.
+- [Phase 11 — inspectable coding-agent board](phase_11.md): typed ports, run evidence, reviewed patches, bounded checks, and a manually reproducible starter agent (historical implementation record).
+- [Phase 12 — lean host, starter agent, extensibility seam](phase_12.md): **active** cleanup and reorientation. Minimal starter (LLM, I/O, conversation, repository, read/write/edit/shell, Extensions docs). Rock-solid host API; user-authored kits instead of shipping more first-party kits.
+- [Archived Phase 12–15](archive/README.md): former reliable-loop / kit-platform / swarm / beta plan. Kept for archaeology and for kit-author lessons. Do not implement against these unless a task says to learn from them.
 
-[Phase 15's final section](phase_15.md#phase-15-exit-and-the-road-to-phase-20) sketches Phases 16–20 and defines the complete-product gate. These are proposals for implementation agents, not a claim that later phases already exist.
+Phases 13–15 will be rewritten after Phase 12’s gate. Older sketches of Phases 16–20 live in the archived Phase 15 doc.
 
 ## Research synthesis
 

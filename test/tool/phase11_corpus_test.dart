@@ -80,7 +80,7 @@ void main() {
 
   Future<({KitApi api, String applyId, File scene})>
   acceptedBoardPatch() async {
-    final api = createAppKitApi(store: SceneStore());
+    final api = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final propose = api.instantiate(proposePatchKitId, origin: Offset.zero);
     final proposal = api.instantiate(
       codingPatchProposalKitId,

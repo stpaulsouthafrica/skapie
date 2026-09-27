@@ -88,7 +88,13 @@ String connectionExplanation(KitPortKind? from, KitPortKind? to) {
     (KitPortKind.llmConversation, KitPortKind.conversationIn) =>
       'Stores this exchange for the next turn you start.',
     (KitPortKind.repositoryOut, KitPortKind.toolRepository) =>
-      'Grants this tool access to the chosen repository folder.',
+      'Grants this tool read access to the chosen repository folder.',
+    (KitPortKind.repositoryWriteOut, KitPortKind.toolWriteScope) =>
+      'Grants this tool write access to the chosen repository folder.',
+    (KitPortKind.extensionsOut, KitPortKind.llmContext) =>
+      'Adds the offline kit-author docs to the next turn.',
+    (KitPortKind.llmOutput, KitPortKind.textIn) =>
+      'Writes the model reply into this text kit.',
     (KitPortKind.toolOut, KitPortKind.llmTools) =>
       'Offers this tool to the LLM. The model chooses whether to call it.',
     (KitPortKind.proposalResult, KitPortKind.proposalIn) =>

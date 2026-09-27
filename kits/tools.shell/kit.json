@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "tools.shell",
+  "displayName": "Shell",
+  "description": "Run a command with the repository as its working folder.",
+  "capabilities": [],
+  "objects": [
+    {
+      "typeId": "box",
+      "x": 0,
+      "y": 0,
+      "width": 200,
+      "height": 64,
+      "props": {
+        "skapieKit": "tools.shell",
+        "skapieRole": "frame",
+        "description": "Run a command with the repository as its working folder.",
+        "requiresWrite": true
+      }
+    },
+    {
+      "typeId": "text",
+      "x": 12,
+      "y": 36,
+      "width": 176,
+      "height": 20,
+      "props": {
+        "content": "shell",
+        "fontSize": 14,
+        "toolName": "shell",
+        "attachedTo": "",
+        "requiresWrite": true,
+        "skapieKit": "tools.shell",
+        "skapieRole": "grant"
+      }
+    }
+  ]
+}

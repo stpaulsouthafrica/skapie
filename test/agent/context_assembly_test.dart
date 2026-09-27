@@ -8,7 +8,7 @@ import 'package:skapie/tools/attach.dart';
 void main() {
   late KitApi api;
 
-  setUp(() => api = createAppKitApi(store: SceneStore()));
+  setUp(() => api = createAppKitApi(includeDemotedKits: true, store: SceneStore()));
 
   test('each request source keeps its kit and provenance', () {
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);

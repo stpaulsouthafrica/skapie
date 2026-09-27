@@ -68,12 +68,20 @@ void main() {
     );
   });
 
-  test('createAppKitApi registers harness kits', () {
+  test('createAppKitApi registers the lean starter shelf', () {
     final api = createAppKitApi(store: SceneStore());
     expect(api.getKit(harnessLlmKitId), isNotNull);
     expect(api.getKit(harnessConversationKitId), isNotNull);
-    expect(api.getKit(harnessSystemPromptKitId), isNotNull);
-    expect(api.getKit(harnessToolsKitId), isNotNull);
+    expect(api.getKit(codingRepositoryKitId), isNotNull);
+    expect(api.getKit(skapieExtensionsKitId), isNotNull);
+    for (final name in ['read', 'write', 'edit', 'shell']) {
+      expect(api.getKit('tools.$name'), isNotNull, reason: name);
+    }
+    // Demoted kits are not registered by default.
+    expect(api.getKit(harnessRunControlKitId), isNull);
+    expect(api.getKit(harnessSystemPromptKitId), isNull);
+    expect(api.getKit(harnessToolsKitId), isNull);
+    expect(api.getKit('tools.list_kits'), isNull);
   });
 
   test('rejects missing schemaVersion', () {

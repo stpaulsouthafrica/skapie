@@ -14,7 +14,7 @@ import 'package:skapie/tools/world/kits.dart';
 
 void main() {
   test('ports sit on the section they belong to', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final text = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
     final llm = kitApi.instantiate(
       harnessLlmKitId,
@@ -80,7 +80,7 @@ void main() {
   });
 
   test('a text kit is only as tall as its two-line preview', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final ids = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
     final frame = kitApi.store.document.objectById(ids.first)!;
     expect(frame.height, textFrameHeight);
@@ -90,7 +90,7 @@ void main() {
   });
 
   test('output count ignores connections whose target was deleted', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = kitApi.instantiate(
       harnessLlmKitId,
       origin: const Offset(400, 0),
@@ -140,7 +140,7 @@ void main() {
   });
 
   test('text cabled into Input becomes the LLM prompt', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final text = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
     final llm = kitApi.instantiate(
       harnessLlmKitId,
@@ -185,7 +185,7 @@ void main() {
   });
 
   test('context text and a cabled conversation become the next request', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final text = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
     final conversation = kitApi.instantiate(
       harnessConversationKitId,
@@ -253,7 +253,7 @@ void main() {
   });
 
   test('LLM Conversation leaves on the right and lands on Conversation In', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final conversation = kitApi.instantiate(
       harnessConversationKitId,
       origin: Offset.zero,
@@ -307,7 +307,7 @@ void main() {
   });
 
   test('LLM output writes the reply into a cabled text kit', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = kitApi.instantiate(
       harnessLlmKitId,
       origin: const Offset(400, 0),
@@ -337,7 +337,7 @@ void main() {
   });
 
   test('ports list connection counts and a drag can start on an input', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = kitApi.instantiate(
       harnessLlmKitId,
       origin: const Offset(400, 0),
@@ -576,7 +576,7 @@ void main() {
   });
 
   test('a tool call lights the tools cable and the repository cable', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = kitApi.instantiate(
       harnessLlmKitId,
       origin: const Offset(400, 0),
@@ -642,7 +642,7 @@ void main() {
   });
 
   test('a run needs Output or Conversation', () {
-    final kitApi = createAppKitApi(store: SceneStore());
+    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     expect(llmRunHasSink(kitApi.store.document, llm.last), isFalse);
     final text = kitApi.instantiate(
