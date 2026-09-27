@@ -289,6 +289,18 @@ void main() {
     );
   });
 
+  test('an uncertain tool effect keeps the run uncertain', () {
+    final ledger = RunLedger();
+    final run = ledger.begin(bodyId: 'b');
+    ledger.append(run.id, RunEventKind.runRequested, const {});
+    ledger.append(run.id, RunEventKind.toolCallStarted, const {'callId': 'c1'});
+    ledger.append(run.id, RunEventKind.toolCallUncertain, const {
+      'callId': 'c1',
+    });
+    ledger.append(run.id, RunEventKind.runPaused, const {});
+    expect(runRecordEffectUncertain(run), isTrue);
+  });
+
   test('an effect with no result reloads as uncertain', () async {
     final dir = await Directory.systemTemp.createTemp('skapie-uncertain-');
     addTearDown(() => dir.delete(recursive: true));

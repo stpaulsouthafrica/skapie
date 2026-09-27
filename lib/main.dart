@@ -177,8 +177,12 @@ Future<AgentController> bootstrapAgentController({
     checkpointStore: checkpointStore,
   );
   await controller.loadLedger();
-  await reconcilePendingEffects(
-    PatchEffectLog.besideScene(kitApi.store.sceneFilePath),
-  );
+  try {
+    await reconcilePendingEffects(
+      PatchEffectLog.besideScene(kitApi.store.sceneFilePath),
+    );
+  } catch (error) {
+    debugPrint('Skapie: could not reconcile patch effects: $error');
+  }
   return controller;
 }

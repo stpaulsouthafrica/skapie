@@ -119,9 +119,13 @@ class _SkapieAppState extends State<SkapieApp> {
       checkpointStore: checkpointStore,
     );
     await nextController.loadLedger();
-    await reconcilePendingEffects(
-      PatchEffectLog.besideScene(nextStore.sceneFilePath),
-    );
+    try {
+      await reconcilePendingEffects(
+        PatchEffectLog.besideScene(nextStore.sceneFilePath),
+      );
+    } catch (_) {
+      // A bad effect log must not stop the board from opening.
+    }
     nextController.rememberCatalog(_controller.catalogModels);
     if (!mounted) {
       return;

@@ -68,15 +68,19 @@ const Set<RunEventKind> runEffectResolvedKinds = {
   RunEventKind.runPaused,
 };
 
-/// True when a run started an effect and never saw it finish. Such a run needs
-/// inspection before any retry.
+/// True when a run started an effect and never saw a clean result. Such a run
+/// needs inspection before any retry.
 bool runRecordEffectUncertain(RunRecord run) {
-  if (run.events.any(
-    (event) =>
-        event.kind == RunEventKind.runInterrupted &&
-        event.payload['uncertain'] == true,
-  )) {
-    return true;
+  for (final event in run.events) {
+    if (event.kind == RunEventKind.toolCallUncertain) return true;
+    if (event.kind == RunEventKind.checkFinished &&
+        event.payload['stopUncertain'] == true) {
+      return true;
+    }
+    if (event.kind == RunEventKind.runInterrupted &&
+        event.payload['uncertain'] == true) {
+      return true;
+    }
   }
   for (final event in run.events.reversed) {
     if (runEffectInFlightKinds.contains(event.kind)) return true;

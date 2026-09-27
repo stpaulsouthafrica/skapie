@@ -62,6 +62,9 @@ full suite passes (471 tests).
 - A late model result after Stop could revive a run as resumable.
 - The recovery banner and inspector disagreed about an uncertain run.
 - The inspector Resume and Rerun buttons were enabled when they could not act.
+- A run abandoned mid-tool by Stop or Pause was treated as settled, so the
+  inspector offered Resume. An uncertain tool result now keeps the run
+  uncertain, so it needs inspection before any retry.
 
 ## Verification
 
@@ -79,7 +82,12 @@ full suite passes (471 tests).
   hook is left for later.
 - Approval-decision and patch-result boundaries are recorded through the patch
   effect log, not the agent ledger. Proposal and apply events in the ledger
-  remain 12.3.
+  remain 12.3. A `write_uncertain` apply is settled by reconciliation; the
+  apply panel does not yet show it as a separate marker.
+- A paused run whose effect was uncertain is not offered in the banner (only
+  interrupted runs are); its inspector Resume is disabled, so it must be
+  inspected or rerun. Surfacing paused-uncertain runs in the banner is a later
+  polish.
 - Checks are separate `check` runs in the same ledger. Their reconciliation is
   the uncertainty flag; there is no repository re-read for a check, which is
   honest for `git diff --check`.

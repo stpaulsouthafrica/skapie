@@ -815,11 +815,14 @@ class AgentController extends ChangeNotifier {
                     ),
                     _modelRoute(bodyId),
                   );
-                  _saveCheckpoint(
-                    runId: runId,
-                    bodyId: bodyId,
-                    boundary: RunBoundary.modelResult,
-                  );
+                  // A settled run must not be revived by a late model result.
+                  if (identical(_gate, gate)) {
+                    _saveCheckpoint(
+                      runId: runId,
+                      bodyId: bodyId,
+                      boundary: RunBoundary.modelResult,
+                    );
+                  }
                   await flushLedger();
                 },
           ),
