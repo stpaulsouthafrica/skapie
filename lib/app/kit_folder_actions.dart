@@ -40,22 +40,6 @@ Future<bool> chooseRepositoryWriteFolder({
   return true;
 }
 
-Future<bool> chooseWriteScopeFolder({
-  required KitApi kitApi,
-  required String frameId,
-  required PatchWritePermission permission,
-  bool Function()? isActive,
-}) async {
-  final path = await permission.chooseDirectory();
-  if (path == null || path.isEmpty) return false;
-  if (isActive != null && !isActive()) return false;
-  final frame = kitApi.store.document.objectById(frameId);
-  if (frame == null || kitIdOf(frame) != codingWriteScopeKitId) return false;
-
-  kitApi.updateProps(frameId, {writeScopePathProp: path});
-  return true;
-}
-
 void _refreshRepositoryBody(KitApi kitApi, String frameId) {
   final frame = kitApi.store.document.objectById(frameId);
   if (frame == null) return;

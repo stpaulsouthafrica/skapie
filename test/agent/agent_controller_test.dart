@@ -23,7 +23,7 @@ void main() {
   late KitApi kitApi;
 
   setUp(() {
-    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    kitApi = createAppKitApi(store: SceneStore());
   });
 
   test(
@@ -212,11 +212,6 @@ void main() {
           apiKey: 'sk-secret-key',
         ),
       );
-      kitApi.instantiate(
-        harnessSystemPromptKitId,
-        origin: const Offset(400, 24),
-      );
-      kitApi.instantiate(harnessToolsKitId, origin: const Offset(400, 240));
       final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
       sinkLlm(kitApi, llmIds.last);
       await expectLater(
@@ -291,7 +286,7 @@ void main() {
       );
       final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
       final toolIds = kitApi.instantiate(
-        'tools.list_kits',
+        'tools.read',
         origin: const Offset(400, 0),
       );
       attachToolKit(
@@ -308,7 +303,7 @@ void main() {
       expect(tools, hasLength(1));
       expect(
         (tools.single as Map)['function'],
-        containsPair('name', 'list_kits'),
+        containsPair('name', 'read'),
       );
       expect(
         kitApi.store.document.objectById(llmIds.last)!.props['reply'],
@@ -320,7 +315,7 @@ void main() {
           .firstWhere(
             (event) => event.kind == RunEventKind.modelRequestStarted,
           );
-      expect(started.payload['offeredTools'], ['list_kits']);
+      expect(started.payload['offeredTools'], ['read']);
       expect(started.payload['toolSchemaDigest'], hasLength(8));
       expect(jsonEncode(started.payload), isNot(contains('sk-secret-key')));
       expect(started.payload.containsKey('cost'), isFalse);
@@ -371,7 +366,7 @@ void main() {
     final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     kitApi.updateProps(llmIds.last, {'model': 'muse-spark-1.3-contributor'});
     final toolIds = kitApi.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     attachToolKit(
@@ -426,7 +421,7 @@ void main() {
     final llmIds = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     kitApi.updateProps(llmIds.last, {'model': 'deepseek-v4-flash'});
     final toolIds = kitApi.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     attachToolKit(
@@ -613,7 +608,7 @@ void main() {
         const AgentModelReply(
           content: '',
           toolCalls: [
-            AgentToolCall(id: 'c1', name: 'list_kits', argumentsJson: '{}'),
+            AgentToolCall(id: 'c1', name: 'read', argumentsJson: '{}'),
           ],
         ),
         const AgentModelReply(content: 'listed'),
@@ -623,7 +618,7 @@ void main() {
     );
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final tool = kitApi.instantiate(
-      worldToolKitId('list_kits'),
+      worldToolKitId('read'),
       origin: const Offset(-400, 0),
     );
     attachToolKit(
@@ -643,7 +638,7 @@ void main() {
     expect(controller.toolResultFrameId, tool.first);
     expect(controller.toolResultBodyId, llm.last);
     final activity = controller.toolActivitiesFor(llm.last).single;
-    expect(activity.name, 'list_kits');
+    expect(activity.name, 'read');
     expect(activity.state, AgentToolActivityState.completed);
     expect(activity.result, contains('"kits"'));
     expect(activity.result, contains(harnessLlmKitId));
@@ -687,7 +682,7 @@ void main() {
         const AgentModelReply(
           content: '',
           toolCalls: [
-            AgentToolCall(id: 'c1', name: 'list_kits', argumentsJson: '{}'),
+            AgentToolCall(id: 'c1', name: 'read', argumentsJson: '{}'),
           ],
         ),
         const AgentModelReply(content: 'listed'),
@@ -697,11 +692,11 @@ void main() {
     );
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final used = kitApi.instantiate(
-      worldToolKitId('list_kits'),
+      worldToolKitId('read'),
       origin: const Offset(-400, 0),
     );
     final idle = kitApi.instantiate(
-      worldToolKitId('get_kit'),
+      worldToolKitId('write'),
       origin: const Offset(-400, 200),
     );
     final context = kitApi.instantiate(
@@ -762,7 +757,7 @@ void main() {
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     sinkLlm(kitApi, llm.last);
     final tool = kitApi.instantiate(
-      worldToolKitId('repo_list_files'),
+      worldToolKitId('read'),
       origin: const Offset(-400, 0),
     );
     attachToolKit(
@@ -779,7 +774,7 @@ void main() {
         .firstWhere((event) => event.kind == RunEventKind.modelRequestStarted);
     expect(started.payload['offeredTools'], isEmpty);
     expect(started.payload['filteredTools'], [
-      {'name': 'repo_list_files', 'reason': 'Repository grant missing'},
+      {'name': 'read', 'reason': 'Repository grant missing'},
     ]);
     expect(started.payload.containsKey('apiKey'), isFalse);
     expect(started.payload.containsKey('cost'), isFalse);

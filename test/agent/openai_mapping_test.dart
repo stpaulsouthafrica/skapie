@@ -72,20 +72,18 @@ void main() {
 
   test('kit tools send object parameters, never an empty schema', () {
     final mapped = openaiToolsFromAgent(
-      createKitAgentTools(createAppKitApi(store: SceneStore())),
+      createKitAgentTools(
+        createAppKitApi(store: SceneStore()),
+      ),
     );
     expect(mapped, isNotEmpty);
     for (final tool in mapped) {
       final function = tool['function'] as Map;
       final parameters = function['parameters'] as Map;
       expect(parameters['type'], 'object');
-      if (function['name'] == 'add_object') {
-        expect((parameters['properties'] as Map).containsKey('typeId'), isTrue);
-        expect(parameters['required'], contains('typeId'));
-      }
-      if (function['name'] == 'list_kits') {
-        expect(parameters['properties'], isEmpty);
-        expect(parameters['additionalProperties'], isFalse);
+      if (function['name'] == 'read') {
+        expect((parameters['properties'] as Map).containsKey('action'), isTrue);
+        expect(parameters['required'], contains('action'));
       }
     }
   });

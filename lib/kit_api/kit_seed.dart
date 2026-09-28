@@ -35,9 +35,25 @@ Future<KitSeedResult> seedStarterKits(KitPackageStore store) async {
       continue;
     }
     await store.write(recipe);
+    await _copyKitProgram(store.root, recipe.id);
     written.add(recipe.id);
   }
   return KitSeedResult(written: written, kept: kept);
+}
+
+/// Copy `kits/<id>/kit.dart` from the repo when this process can see it.
+/// A shipped build that cannot see the repo still loads a program the user
+/// copies into the shelf themselves.
+Future<void> _copyKitProgram(Directory root, String id) async {
+  final source = File('kits/$id/kit.dart');
+  if (!source.existsSync()) {
+    return;
+  }
+  final dest = File('${root.path}/$id/kit.dart');
+  if (dest.existsSync()) {
+    return;
+  }
+  await dest.writeAsString(await source.readAsString());
 }
 
 /// Ids the seed installs, for tests and docs.

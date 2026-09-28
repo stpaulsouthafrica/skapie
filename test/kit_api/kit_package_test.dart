@@ -18,21 +18,21 @@ void main() {
 
   test('kit.json round-trips to KitRecipe', () {
     final parsed = parseKitPackageJson(
-      demoNoteCardJson,
-      folderId: demoNoteCardKitId,
+      harnessLlmJson,
+      folderId: harnessLlmKitId,
     );
-    expect(parsed.recipe.id, demoNoteCardKitId);
-    expect(parsed.recipe.displayName, 'Note card');
+    expect(parsed.recipe.id, harnessLlmKitId);
+    expect(parsed.recipe.displayName, 'LLM');
     expect(parsed.recipe.objects, hasLength(2));
     expect(parsed.recipe.objects[0].typeId, 'box');
-    expect(parsed.recipe.objects[1].props['content'], 'Note');
+    expect(parsed.recipe.objects[1].props['content'], contains('Input'));
     expect(parsed.schemaVersion, 1);
 
     final encoded = kitPackageToJson(parsed);
-    final again = parseKitPackageJson(encoded, folderId: demoNoteCardKitId);
+    final again = parseKitPackageJson(encoded, folderId: harnessLlmKitId);
     expect(again.recipe.id, parsed.recipe.id);
     expect(again.recipe.objects[1].x, 12);
-    expect(again.recipe.objects[1].height, 56);
+    expect(again.recipe.objects[1].height, 176);
   });
 
   test('harness kit packages parse as real recipes', () {
@@ -43,29 +43,6 @@ void main() {
       isTrue,
     );
 
-    final prompt = parseKitPackageJson(
-      harnessSystemPromptJson,
-      folderId: harnessSystemPromptKitId,
-    );
-    expect(prompt.recipe.displayName, 'System prompt');
-    expect(
-      prompt.recipe.objects.any(
-        (object) => object.props.containsKey('attachedTo'),
-      ),
-      isTrue,
-    );
-
-    final tools = parseKitPackageJson(
-      harnessToolsJson,
-      folderId: harnessToolsKitId,
-    );
-    expect(tools.recipe.displayName, 'Tools');
-    expect(
-      tools.recipe.objects.any(
-        (object) => object.props.containsKey('attachedTo'),
-      ),
-      isTrue,
-    );
   });
 
   test('createAppKitApi registers the lean starter shelf', () {
@@ -77,11 +54,8 @@ void main() {
     for (final name in ['read', 'write', 'edit', 'shell']) {
       expect(api.getKit('tools.$name'), isNotNull, reason: name);
     }
-    // Demoted kits are not registered by default.
-    expect(api.getKit(harnessRunControlKitId), isNull);
-    expect(api.getKit(harnessSystemPromptKitId), isNull);
-    expect(api.getKit(harnessToolsKitId), isNull);
     expect(api.getKit('tools.list_kits'), isNull);
+    expect(api.getKit('harness.run_control'), isNull);
   });
 
   test('rejects missing schemaVersion', () {
@@ -228,14 +202,22 @@ void main() {
       registry: registry,
       packages: KitPackageStore(root: root, registry: registry),
     );
-    api.registerKit(demoNoteCardRecipe);
-    expect(api.getKit(demoNoteCardKitId)!.displayName, 'Note card');
+    api.registerKit(
+      const KitRecipe(
+        id: 'demo.note-card',
+        displayName: 'Note card',
+        objects: [
+          KitObjectSpec(typeId: 'button', x: 0, y: 0, props: {'label': 'Memory'}),
+        ],
+      ),
+    );
+    expect(api.getKit('demo.note-card')!.displayName, 'Note card');
 
     final logs = <String>[];
     api.log = logs.add;
     await api.reloadPackages();
-    expect(api.getKit(demoNoteCardKitId)!.displayName, 'From disk');
-    expect(api.getKit(demoNoteCardKitId)!.objects.single.typeId, 'button');
+    expect(api.getKit('demo.note-card')!.displayName, 'From disk');
+    expect(api.getKit('demo.note-card')!.objects.single.typeId, 'button');
     expect(logs.join('\n'), contains('replaces'));
   });
 

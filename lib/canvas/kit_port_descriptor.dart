@@ -21,23 +21,6 @@ enum KitPortKind {
   llmConversation,
   llmTools,
   llmOutput,
-  proposalResult,
-  proposalIn,
-  proposalOut,
-  reviewIn,
-  reviewOut,
-  applyIn,
-  writeScopeOut,
-  applyWriteScope,
-  checkSpecOut,
-  runCheckSpec,
-  runCheckWrite,
-  runCheckResult,
-  checkResultIn,
-  checkResultOut,
-  runControlOut,
-  runControlIn,
-  runCheckFeedback,
 }
 
 enum PortDirection { input, output }
@@ -64,13 +47,7 @@ enum PortValue {
   transcript('Transcript', PortRole.data),
   tool('Tool', PortRole.capability),
   repository('Repository', PortRole.grant),
-  writeScope('Write Scope', PortRole.grant),
-  patchProposal('Proposal', PortRole.data),
-  reviewDecision('Review', PortRole.data),
-  checkSpec('Check Spec', PortRole.data),
-  checkResult('Check Result', PortRole.data),
-  checkSummary('Check Summary', PortRole.data),
-  runControl('Run Control', PortRole.data);
+  writeScope('Write', PortRole.grant);
 
   const PortValue(this.label, this.role);
 
@@ -295,188 +272,6 @@ const List<KitPortSpec> worldToolKitPorts = [
   toolOutPort,
 ];
 
-const List<KitPortSpec> proposePatchKitPorts = [
-  KitPortSpec(
-    id: repositoryPort,
-    kind: KitPortKind.toolRepository,
-    label: 'Repository',
-    direction: PortDirection.input,
-    value: PortValue.repository,
-    placement: PortPlacement.middle(PortSide.left),
-    multiplicity: PortMultiplicity.one,
-    requiresProp: 'requiresRepository',
-    requiredGroup: repositoryPort,
-    requiredMessage: 'Repository grant missing',
-  ),
-  toolOutPort,
-  KitPortSpec(
-    id: 'result',
-    kind: KitPortKind.proposalResult,
-    label: 'Result',
-    direction: PortDirection.output,
-    value: PortValue.patchProposal,
-    placement: PortPlacement.footer(PortSide.right),
-  ),
-];
-
-const List<KitPortSpec> patchProposalKitPorts = [
-  KitPortSpec(
-    id: patchProposalPort,
-    kind: KitPortKind.proposalIn,
-    label: 'In',
-    direction: PortDirection.input,
-    value: PortValue.patchProposal,
-    placement: PortPlacement.footer(PortSide.left),
-  ),
-  KitPortSpec(
-    id: 'out',
-    kind: KitPortKind.proposalOut,
-    label: 'Out',
-    direction: PortDirection.output,
-    value: PortValue.patchProposal,
-    placement: PortPlacement.footer(PortSide.right),
-  ),
-];
-
-const List<KitPortSpec> reviewDecisionKitPorts = [
-  KitPortSpec(
-    id: patchReviewPort,
-    kind: KitPortKind.reviewIn,
-    label: 'In',
-    direction: PortDirection.input,
-    value: PortValue.patchProposal,
-    placement: PortPlacement.footer(PortSide.left),
-  ),
-  KitPortSpec(
-    id: 'out',
-    kind: KitPortKind.reviewOut,
-    label: 'Out',
-    direction: PortDirection.output,
-    value: PortValue.reviewDecision,
-    placement: PortPlacement.footer(PortSide.right),
-  ),
-];
-
-const List<KitPortSpec> applyPatchKitPorts = [
-  KitPortSpec(
-    id: patchApplyPort,
-    kind: KitPortKind.applyIn,
-    label: 'In',
-    direction: PortDirection.input,
-    value: PortValue.reviewDecision,
-    placement: PortPlacement.footer(PortSide.left),
-  ),
-  KitPortSpec(
-    id: writeScopePort,
-    kind: KitPortKind.applyWriteScope,
-    label: 'Write',
-    direction: PortDirection.input,
-    value: PortValue.writeScope,
-    placement: PortPlacement.middle(PortSide.left),
-    multiplicity: PortMultiplicity.one,
-  ),
-];
-
-const List<KitPortSpec> writeScopeKitPorts = [
-  KitPortSpec(
-    id: 'out',
-    kind: KitPortKind.writeScopeOut,
-    label: 'Apply',
-    direction: PortDirection.output,
-    value: PortValue.writeScope,
-    placement: PortPlacement.footer(PortSide.right),
-    liveProp: writeScopePathProp,
-    liveMessage: 'Choose a write folder',
-  ),
-];
-
-const List<KitPortSpec> checkSpecKitPorts = [
-  KitPortSpec(
-    id: 'out',
-    kind: KitPortKind.checkSpecOut,
-    label: 'Out',
-    direction: PortDirection.output,
-    value: PortValue.checkSpec,
-    placement: PortPlacement.footer(PortSide.right),
-    liveProp: checkPresetProp,
-    liveMessage: 'Choose a check',
-  ),
-];
-
-const List<KitPortSpec> runCheckKitPorts = [
-  KitPortSpec(
-    id: checkSpecPort,
-    kind: KitPortKind.runCheckSpec,
-    label: 'Spec',
-    direction: PortDirection.input,
-    value: PortValue.checkSpec,
-    placement: PortPlacement.footer(PortSide.left),
-    multiplicity: PortMultiplicity.one,
-    requiredGroup: checkSpecPort,
-    requiredMessage: 'Check Spec missing',
-  ),
-  KitPortSpec(
-    id: checkWritePort,
-    kind: KitPortKind.runCheckWrite,
-    label: 'Write',
-    direction: PortDirection.input,
-    value: PortValue.writeScope,
-    placement: PortPlacement.middle(PortSide.left),
-    multiplicity: PortMultiplicity.one,
-    requiredGroup: checkWritePort,
-    requiredMessage: 'Write Scope missing',
-  ),
-  KitPortSpec(
-    id: checkResultPort,
-    kind: KitPortKind.runCheckResult,
-    label: 'Result',
-    direction: PortDirection.output,
-    value: PortValue.checkResult,
-    placement: PortPlacement.footer(PortSide.right),
-    affectsRun: false,
-  ),
-];
-
-const List<KitPortSpec> checkResultKitPorts = [
-  KitPortSpec(
-    id: checkResultPort,
-    kind: KitPortKind.checkResultIn,
-    label: 'In',
-    direction: PortDirection.input,
-    value: PortValue.checkResult,
-    placement: PortPlacement.footer(PortSide.left),
-    affectsRun: false,
-  ),
-  KitPortSpec(
-    id: 'out',
-    kind: KitPortKind.checkResultOut,
-    label: 'Context',
-    direction: PortDirection.output,
-    value: PortValue.checkSummary,
-    placement: PortPlacement.footer(PortSide.right),
-  ),
-];
-
-const List<KitPortSpec> runControlKitPorts = [
-  KitPortSpec(
-    id: runCheckFeedbackPort,
-    kind: KitPortKind.runCheckFeedback,
-    label: 'Check',
-    direction: PortDirection.input,
-    value: PortValue.checkSummary,
-    placement: PortPlacement.footer(PortSide.left),
-    multiplicity: PortMultiplicity.one,
-  ),
-  KitPortSpec(
-    id: 'out',
-    kind: KitPortKind.runControlOut,
-    label: 'LLM',
-    direction: PortDirection.output,
-    value: PortValue.runControl,
-    placement: PortPlacement.footer(PortSide.right),
-  ),
-];
-
 const String _llmSink = 'sink';
 const String _llmSinkMessage = 'Needs Output or Conversation';
 
@@ -499,7 +294,7 @@ const List<KitPortSpec> llmKitPorts = [
     label: 'Context',
     direction: PortDirection.input,
     value: PortValue.text,
-    accepts: {PortValue.text, PortValue.reply, PortValue.checkSummary},
+    accepts: {PortValue.text, PortValue.reply},
     placement: PortPlacement.row(1, PortSide.left),
     peer: PortPeer.body,
   ),
@@ -524,22 +319,12 @@ const List<KitPortSpec> llmKitPorts = [
     requiredMessage: _llmSinkMessage,
   ),
   KitPortSpec(
-    id: runControlPort,
-    kind: KitPortKind.runControlIn,
-    label: 'Control',
-    direction: PortDirection.input,
-    value: PortValue.runControl,
-    placement: PortPlacement.row(4, PortSide.left),
-    peer: PortPeer.body,
-    multiplicity: PortMultiplicity.one,
-  ),
-  KitPortSpec(
     id: 'output',
     kind: KitPortKind.llmOutput,
     label: 'Output',
     direction: PortDirection.output,
     value: PortValue.reply,
-    placement: PortPlacement.row(5, PortSide.right),
+    placement: PortPlacement.row(4, PortSide.right),
     peer: PortPeer.body,
     requiredGroup: _llmSink,
     requiredMessage: _llmSinkMessage,
@@ -564,15 +349,6 @@ const Map<String, List<KitPortSpec>> builtinKitPorts = {
   codingRepositoryKitId: repositoryKitPorts,
   skapieExtensionsKitId: extensionsKitPorts,
   harnessLlmKitId: llmKitPorts,
-  harnessRunControlKitId: runControlKitPorts,
-  proposePatchKitId: proposePatchKitPorts,
-  codingPatchProposalKitId: patchProposalKitPorts,
-  codingReviewDecisionKitId: reviewDecisionKitPorts,
-  codingApplyPatchKitId: applyPatchKitPorts,
-  codingWriteScopeKitId: writeScopeKitPorts,
-  codingCheckSpecKitId: checkSpecKitPorts,
-  codingRunCheckKitId: runCheckKitPorts,
-  codingCheckResultKitId: checkResultKitPorts,
 };
 
 final Map<KitPortKind, KitPortSpec> _specsByKind = {

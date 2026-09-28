@@ -16,7 +16,7 @@ import 'package:skapie/tools/repository/repository_permission.dart';
 void main() {
   late KitApi api;
 
-  setUp(() => api = createAppKitApi(includeDemotedKits: true, store: SceneStore()));
+  setUp(() => api = createAppKitApi(store: SceneStore()));
 
   test('compaction replaces a turn span but keeps the original turns', () {
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
@@ -126,7 +126,7 @@ void main() {
 
   test('a read result becomes a bounded excerpt with a line range', () {    final excerpt = contextExcerptFromRead(
       callId: 'c1',
-      toolName: 'repo_read_file',
+      toolName: 'read',
       result: const {
         'ok': true,
         'path': 'lib/main.dart',
@@ -135,7 +135,7 @@ void main() {
         'content': '10: foo\n11: bar',
         'truncated': true,
       },
-      sourceKitId: 'tools.repo_read_file',
+      sourceKitId: 'tools.read',
     )!;
     expect(excerpt.path, 'lib/main.dart');
     expect(excerpt.lineStart, 10);
@@ -157,7 +157,7 @@ void main() {
 
     final irrelevant = contextExcerptFromRead(
       callId: 'c2',
-      toolName: 'repo_read_file',
+      toolName: 'read',
       result: const {'ok': false, 'error': 'missing'},
     );
     expect(irrelevant, isNull);
@@ -175,7 +175,7 @@ void main() {
       origin: const Offset(0, 400),
     );
     final tool = api.instantiate(
-      'tools.repo_read_file',
+      'tools.read',
       origin: const Offset(400, 400),
     );
     final output = api.instantiate(
@@ -205,8 +205,8 @@ void main() {
             toolCalls: [
               AgentToolCall(
                 id: 'r1',
-                name: 'repo_read_file',
-                argumentsJson: '{"path":"note.txt"}',
+                name: 'read',
+                argumentsJson: '{"action":"read","path":"note.txt"}',
               ),
             ],
           ),
@@ -243,8 +243,8 @@ void main() {
     final excerpts = [
       for (var i = 0; i < 3; i++)
         ContextExcerpt(
-          toolName: 'repo_read_file',
-          sourceKitId: 'tools.repo_read_file',
+          toolName: 'read',
+          sourceKitId: 'tools.read',
           sourceId: 'c$i',
           text: big,
           path: 'file$i.txt',

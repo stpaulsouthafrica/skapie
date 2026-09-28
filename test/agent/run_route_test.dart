@@ -13,14 +13,14 @@ void main() {
   test(
     'a model event lights the input cable and leaves the tool cable still',
     () {
-      final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+      final kitApi = createAppKitApi(store: SceneStore());
       final text = kitApi.instantiate(boardTextKitId, origin: Offset.zero);
       final llm = kitApi.instantiate(
         harnessLlmKitId,
         origin: const Offset(400, 0),
       );
       final tool = kitApi.instantiate(
-        worldToolKitId('list_kits'),
+        worldToolKitId('read'),
         origin: const Offset(0, 240),
       );
       kitApi.updateProps(text.last, {'content': 'hello'});
@@ -81,18 +81,18 @@ void main() {
       at: DateTime.utc(2026, 9, 24),
       kind: RunEventKind.toolCallStarted,
       payload: {
-        'name': 'list_kits',
+        'name': 'read',
         'arguments': 'x' * 400,
         'kits': ['frame'],
         'cables': ['cable'],
       },
     );
-    expect(runEventSummary(event), '2. Tool call started · list_kits');
+    expect(runEventSummary(event), '2. Tool call started · read');
     expect(runEventInspectAside(event), contains('At:'));
     expect(runEventInspectAside(event), isNot(contains('arguments:')));
     expect(runEventInspectBody(event), startsWith('x'));
     final lines = runEventDetailLines(event);
-    expect(lines.join('\n'), contains('list_kits'));
+    expect(lines.join('\n'), contains('read'));
     expect(lines.join('\n'), isNot(contains('frame')));
     expect(
       lines.firstWhere((line) => line.startsWith('arguments')).length,

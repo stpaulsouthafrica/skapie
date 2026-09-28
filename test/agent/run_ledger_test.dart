@@ -10,6 +10,7 @@ import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
+import 'read_grant.dart';
 
 import 'agent_controller_test.dart';
 
@@ -17,7 +18,7 @@ void main() {
   late KitApi kitApi;
 
   setUp(() {
-    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    kitApi = createAppKitApi(store: SceneStore());
   });
 
   test(
@@ -89,10 +90,11 @@ void main() {
         kitApi: kitApi,
         session: AgentSession(model: model, kitApi: kitApi),
         runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+        repositoryPermission: const AllowRead(),
       );
       final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
       final tool = kitApi.instantiate(
-        'tools.list_kits',
+        'tools.read',
         origin: const Offset(400, 0),
       );
       attachToolKit(
@@ -100,6 +102,7 @@ void main() {
         toolObjectId: tool.first,
         llmBodyId: llm.last,
       );
+      grantRead(kitApi, tool.first);
       sinkLlm(kitApi, llm.last);
 
       final pending = controller.sendUser('kits', targetBodyId: llm.last);
@@ -143,7 +146,7 @@ void main() {
                   )
                   .payload['offeredTools']
               as List;
-      expect(offered, contains('list_kits'));
+      expect(offered, contains('read'));
       _expectIncreasing(run);
     },
   );
@@ -156,10 +159,11 @@ void main() {
         kitApi: kitApi,
         session: AgentSession(model: model, kitApi: kitApi),
         runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+        repositoryPermission: const AllowRead(),
       );
       final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
       final tool = kitApi.instantiate(
-        'tools.list_kits',
+        'tools.read',
         origin: const Offset(400, 0),
       );
       attachToolKit(
@@ -167,6 +171,7 @@ void main() {
         toolObjectId: tool.first,
         llmBodyId: llm.last,
       );
+      grantRead(kitApi, tool.first);
       sinkLlm(kitApi, llm.last);
 
       final first = controller.sendUser('first', targetBodyId: llm.last);
@@ -190,7 +195,11 @@ void main() {
           const AgentModelReply(
             content: '',
             toolCalls: [
-              AgentToolCall(id: 'c1', name: 'list_kits', argumentsJson: '{}'),
+              AgentToolCall(
+                id: 'c1',
+                name: 'read',
+                argumentsJson: '{"action":"list"}',
+              ),
             ],
           ),
           const AgentModelReply(content: 'done'),
@@ -198,10 +207,11 @@ void main() {
         kitApi: kitApi,
       ),
       runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+      repositoryPermission: const AllowRead(),
     );
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final tool = kitApi.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     attachToolKit(
@@ -209,6 +219,7 @@ void main() {
       toolObjectId: tool.first,
       llmBodyId: llm.last,
     );
+    grantRead(kitApi, tool.first);
     sinkLlm(kitApi, llm.last);
 
     await controller.sendUser('kits', targetBodyId: llm.last);
@@ -246,7 +257,7 @@ void main() {
     expect(contexts, hasLength(2));
     expect(
       contexts.first.payload['sources'],
-      contains('toolDefinition:tools:tools.list_kits'),
+      contains('toolDefinition:tools:tools.read'),
     );
     expect(
       (contexts.last.payload['sources'] as List)
@@ -296,7 +307,7 @@ void main() {
       final scene = File('${dir.path}/board.json');
       await scene.writeAsString('{"objects":[]}\n');
       final store = SceneStore(persistence: SceneFilePersistence(scene));
-      final api = createAppKitApi(includeDemotedKits: true, store: store);
+      final api = createAppKitApi(store: store);
       final file = RunLedgerFile.besideScene(store.sceneFilePath)!;
       final controller = AgentController(
         kitApi: api,
@@ -335,7 +346,7 @@ void main() {
     final run = ledger.begin(bodyId: 'llm');
     final huge = 'z' * (runPayloadTextLimit + 40);
     ledger.append(run.id, RunEventKind.toolCallFinished, {
-      'name': 'list_kits',
+      'name': 'read',
       'result': huge,
     });
     final event = run.events.single;
@@ -440,7 +451,7 @@ class _HoldModel implements AgentModel {
     return const AgentModelReply(
       content: 'late',
       toolCalls: [
-        AgentToolCall(id: 'c1', name: 'list_kits', argumentsJson: '{}'),
+        AgentToolCall(id: 'c1', name: 'read', argumentsJson: '{}'),
       ],
     );
   }

@@ -10,7 +10,6 @@ import 'package:skapie/tools/attach.dart';
 import 'package:skapie/tools/coding/coding_tools.dart';
 import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
-import 'package:skapie/tools/repository/repository_tools.dart';
 
 /// Documented cap for earlier turns sent to the model. Newest turns win;
 /// anything older is listed as omitted with a reason.
@@ -336,10 +335,7 @@ ContextAssembly assembleContext({
         sourceId: tool.name,
         text: tool.description,
         order: ++order,
-        reason:
-            codingGrantForName(tool.name) != null ||
-                repositoryToolNames.contains(tool.name) ||
-                tool.name == proposePatchToolName
+        reason: codingGrantForName(tool.name) != null
             ? 'Cabled to Tools; access checked at dispatch'
             : 'Cabled to Tools',
       ),
@@ -379,7 +375,6 @@ ContextProvenance _provenanceFor(String kitId, {required bool instruction}) {
     boardTextKitId => instruction
         ? ContextProvenance.boardInstruction
         : ContextProvenance.userTask,
-    codingCheckResultKitId => ContextProvenance.toolOutput,
     harnessLlmKitId => ContextProvenance.modelOutput,
     _ => ContextProvenance.boardInstruction,
   };
@@ -473,21 +468,6 @@ List<ContextExclusion> _unusedSources(
         ),
       );
     }
-  }
-  for (final frame in document.objects) {
-    if (frame.props[skapieRoleProp] != 'frame' ||
-        kitIdOf(frame) != codingCheckResultKitId ||
-        kitHasLink(frame, to: llmBodyId, port: llmContextPort)) {
-      continue;
-    }
-    exclusions.add(
-      ContextExclusion(
-        layer: ContextLayer.instructions,
-        sourceKitId: codingCheckResultKitId,
-        sourceId: frame.id,
-        reason: 'Not cabled to Context',
-      ),
-    );
   }
   for (final frame in textFrames(document)) {
     final asInput = kitHasLink(frame, to: llmBodyId, port: llmInputPort);

@@ -8,9 +8,8 @@ This shelf is the default install. It holds only the lean starter:
 - `coding.repository` — one card with separate read and write folder grants
 - `tools.read`, `tools.write`, `tools.edit`, `tools.shell` — the four coding tools
 - `skapie.extensions` — offline pointers to the kit-author docs
-- `demo.note-card` — a schema example, not on the palette
 
-Everything else is a user package. Demoted first-party kits (checks, Propose/Review/Apply, Write Scope, Run Control, the kit-author world tools) live under [`examples/kits/`](../examples/README.md) as rebuild references. They are off the palette and off the starter.
+Each package has `kit.json` for the card and `kit.dart` for its program. The four coding tools declare their tools in `kit.dart`. The host runs the folder grant they ask for.
 
 This tree is the shipped starter source and a reference. The product default is
 the **user shelf** `~/.skapie/kits`, seeded from this lean set on first launch.

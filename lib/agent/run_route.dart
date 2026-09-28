@@ -83,19 +83,10 @@ RunRoute routeIntoModel({
     for (final cable in sceneCables(document))
       if (cable.targetBodyId == bodyId &&
           (ports.contains(cable.port) ||
-              cable.port == runControlPort ||
               (conversation && cable.port == llmConversationPort)))
         cable.id,
   ];
-  final controls = [
-    for (final cable in sceneCables(document))
-      if (cable.targetBodyId == bodyId && cable.port == runControlPort)
-        cable.sourceId,
-  ];
-  return RunRoute(
-    kits: [?frame, ...controls],
-    cables: cables,
-  );
+  return RunRoute(kits: [?frame], cables: cables);
 }
 
 /// The tool kit, the LLM, and the cables that call actually traveled.

@@ -663,12 +663,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       controller: widget.agentController,
                       boardUseForCable: (id) =>
                           _viewportKey.currentState?.boardUseFor(id),
-                      onApplyWriteAttempted: (frameId) => _viewportKey
-                          .currentState
-                          ?.signalApplyWriteAttempted(frameId),
-                      onCheckRunRequested: (frameId) => _viewportKey
-                          .currentState
-                          ?.signalCheckRunRequested(frameId),
                       onCutCable: (cable) {
                         _viewportKey.currentState?.retractCable(cable);
                       },

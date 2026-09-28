@@ -12,6 +12,7 @@ import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
+import 'read_grant.dart';
 
 class _PendingModel implements AgentModel {
   final started = Completer<void>();
@@ -52,7 +53,7 @@ void main() {
   late _SpyCheckpointStore spy;
 
   setUp(() {
-    api = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    api = createAppKitApi(store: SceneStore());
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
     final input = api.instantiate(boardTextKitId, origin: const Offset(400, 0));
     final output = api.instantiate(
@@ -80,6 +81,7 @@ void main() {
         kitApi: api,
         session: AgentSession(model: const FakeAgentModel(), kitApi: api),
         runtime: const ResolvedAgentRuntime(presetId: 'fake', useFake: true),
+        repositoryPermission: const AllowRead(),
         checkpointStore: store ?? spy,
       );
 
@@ -123,7 +125,7 @@ void main() {
     final controller = buildController();
     final call = const AgentToolCall(
       id: 'c1',
-      name: 'list_kits',
+      name: 'read',
       argumentsJson: '{}',
     );
     controller.session = AgentSession(
@@ -134,10 +136,11 @@ void main() {
       kitApi: api,
     );
     final tool = api.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 400),
     );
     attachToolKit(kitApi: api, toolObjectId: tool.first, llmBodyId: llmBody);
+    grantRead(api, tool.first);
 
     await controller.sendUser('kits', targetBodyId: llmBody);
     await controller.flushLedger();
@@ -265,10 +268,11 @@ void main() {
     final controller = buildController();
     controller.session = AgentSession(model: _PendingModel(), kitApi: api);
     final tool = api.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 400),
     );
     attachToolKit(kitApi: api, toolObjectId: tool.first, llmBodyId: llmBody);
+    grantRead(api, tool.first);
     final model = controller.session.model as _PendingModel;
 
     final pending = controller.sendUser('kits', targetBodyId: llmBody);

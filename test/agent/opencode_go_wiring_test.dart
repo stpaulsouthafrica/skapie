@@ -76,7 +76,7 @@ void main() {
           headers: {'content-type': 'application/json'},
         );
       });
-      final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+      final kitApi = createAppKitApi(store: SceneStore());
       final controller = AgentController(
         kitApi: kitApi,
         session: AgentSession(
@@ -99,7 +99,7 @@ void main() {
       );
       final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
       final tool = kitApi.instantiate(
-        'tools.list_kits',
+        'tools.read',
         origin: const Offset(400, 0),
       );
       attachToolKit(

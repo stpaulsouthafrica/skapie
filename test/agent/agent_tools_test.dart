@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:skapie/agent/agent.dart';
-import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/agent/openai_compatible.dart';
+import 'package:skapie/agent/run_control.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/scene/scene.dart';
 
@@ -15,153 +15,7 @@ void main() {
 
   setUp(() {
     store = SceneStore();
-    kitApi = createAppKitApi(includeDemotedKits: true, store: store);
-  });
-
-  test('scripted add_object puts a box on the scene via KitApi', () async {
-    final session = AgentSession(
-      model: ScriptedAgentModel([
-        const AgentModelReply(
-          content: '',
-          toolCalls: [
-            AgentToolCall(
-              id: 'c1',
-              name: 'add_object',
-              argumentsJson: '{"typeId":"box","x":10,"y":20}',
-            ),
-          ],
-        ),
-        const AgentModelReply(content: 'Added a box.'),
-      ]),
-      kitApi: kitApi,
-      tools: createWorldTools(kitApi),
-    );
-
-    await session.sendUser('add a box');
-
-    expect(store.document.objects, hasLength(1));
-    expect(store.document.objects.single.type, 'box');
-    expect(store.document.objects.single.x, 10);
-    expect(store.document.objects.single.y, 20);
-    expect(
-      session.messages.where((m) => m.role == AgentRole.tool),
-      hasLength(1),
-    );
-    expect(session.messages.last.role, AgentRole.assistant);
-    expect(session.messages.last.content, 'Added a box.');
-    expect(session.messages.last.toolCalls, isNull);
-  });
-
-  test('instantiate_kit demo.note-card adds two objects', () async {
-    final session = AgentSession(
-      model: ScriptedAgentModel([
-        const AgentModelReply(
-          content: '',
-          toolCalls: [
-            AgentToolCall(
-              id: 'c1',
-              name: 'instantiate_kit',
-              argumentsJson:
-                  '{"kitId":"demo.note-card","originX":100,"originY":50}',
-            ),
-          ],
-        ),
-        const AgentModelReply(content: 'Spawned note card.'),
-      ]),
-      kitApi: kitApi,
-      tools: createWorldTools(kitApi),
-    );
-
-    await session.sendUser('note');
-
-    expect(store.document.objects.map((o) => o.type), ['box', 'text']);
-    expect(store.document.objects[1].x, 112);
-    store.undo();
-    expect(store.document.objects, hasLength(1));
-    store.undo();
-    expect(store.document.objects, isEmpty);
-  });
-
-  test(
-    'unknown tool name is a tool error; scene unchanged; loop continues',
-    () async {
-      final session = AgentSession(
-        model: ScriptedAgentModel([
-          const AgentModelReply(
-            content: '',
-            toolCalls: [
-              AgentToolCall(id: 'c1', name: 'nope.tool', argumentsJson: '{}'),
-            ],
-          ),
-          const AgentModelReply(content: 'I could not do that.'),
-        ]),
-        kitApi: kitApi,
-        tools: createWorldTools(kitApi),
-      );
-
-      await session.sendUser('nope');
-
-      expect(store.document.objects, isEmpty);
-      final tool = session.messages.singleWhere(
-        (m) => m.role == AgentRole.tool,
-      );
-      expect(tool.toolCallId, 'c1');
-      expect(tool.content, contains('Unknown tool'));
-      expect(session.messages.last.content, 'I could not do that.');
-    },
-  );
-
-  test(
-    'unknown typeId in add_object is a tool error; scene unchanged',
-    () async {
-      final session = AgentSession(
-        model: ScriptedAgentModel([
-          const AgentModelReply(
-            content: '',
-            toolCalls: [
-              AgentToolCall(
-                id: 'c1',
-                name: 'add_object',
-                argumentsJson: '{"typeId":"nope.widget","x":0,"y":0}',
-              ),
-            ],
-          ),
-          const AgentModelReply(content: 'skipped'),
-        ]),
-        kitApi: kitApi,
-        tools: createWorldTools(kitApi),
-      );
-
-      await session.sendUser('bad type');
-
-      expect(store.document.objects, isEmpty);
-      expect(
-        session.messages.singleWhere((m) => m.role == AgentRole.tool).content,
-        contains('nope.widget'),
-      );
-    },
-  );
-
-  test('list_kits returns the demo kit', () async {
-    final session = AgentSession(
-      model: ScriptedAgentModel([
-        const AgentModelReply(
-          content: '',
-          toolCalls: [
-            AgentToolCall(id: 'c1', name: 'list_kits', argumentsJson: '{}'),
-          ],
-        ),
-        const AgentModelReply(content: 'listed'),
-      ]),
-      kitApi: kitApi,
-      tools: createWorldTools(kitApi),
-    );
-
-    await session.sendUser('kits');
-
-    final tool = session.messages.singleWhere((m) => m.role == AgentRole.tool);
-    expect(tool.content, contains('demo.note-card'));
-    expect(tool.content, contains('Note card'));
+    kitApi = createAppKitApi(store: store);
   });
 
   test('bad JSON args become a tool error; sendUser does not throw', () async {
@@ -170,17 +24,13 @@ void main() {
         const AgentModelReply(
           content: '',
           toolCalls: [
-            AgentToolCall(
-              id: 'c1',
-              name: 'add_object',
-              argumentsJson: 'not-json',
-            ),
+            AgentToolCall(id: 'c1', name: 'read', argumentsJson: 'not-json'),
           ],
         ),
         const AgentModelReply(content: 'recovered'),
       ]),
       kitApi: kitApi,
-      tools: createWorldTools(kitApi),
+      tools: createKitAgentTools(kitApi),
     );
 
     await session.sendUser('bad json');
@@ -201,9 +51,7 @@ void main() {
       return http.Response(
         jsonEncode({
           'choices': [
-            {
-              'message': {'content': 'plain'},
-            },
+            {'message': {'content': 'plain'}},
           ],
         }),
         200,
@@ -218,7 +66,7 @@ void main() {
         httpClient: client,
       ),
       kitApi: kitApi,
-      tools: createWorldTools(kitApi),
+      tools: createKitAgentTools(kitApi),
       includeTools: false,
     );
     await session.sendUser('hi');
@@ -232,14 +80,18 @@ void main() {
         AgentModelReply(
           content: '',
           toolCalls: [
-            AgentToolCall(id: 'c$i', name: 'list_kits', argumentsJson: '{}'),
+            AgentToolCall(
+              id: 'c$i',
+              name: 'read',
+              argumentsJson: '{"action":"list"}',
+            ),
           ],
         ),
     ];
     final session = AgentSession(
       model: ScriptedAgentModel(replies),
       kitApi: kitApi,
-      tools: createWorldTools(kitApi),
+      tools: createKitAgentTools(kitApi),
       maxToolIterations: 8,
     );
 

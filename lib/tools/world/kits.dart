@@ -3,8 +3,8 @@ import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/registry/builtin_types.dart';
 
-/// One tool kit on the board. The package carries only look and metadata; the
-/// host owns the runner behind the matching [toolName].
+/// One starter tool card. The look is the package `kit.json`. The program is
+/// the package `kit.dart`.
 class WorldToolKitSpec {
   const WorldToolKitSpec(
     this.toolName,

@@ -31,16 +31,8 @@ bool isKitObject(SceneObject object) => kitIdOf(object) != null;
 /// These kits hide the body widget and draw a two-line preview on the frame.
 bool kitUsesTextPreview(String? kitId) {
   return kitId == boardTextKitId ||
-      kitId == harnessRunControlKitId ||
       kitId == harnessConversationKitId ||
-      kitId == codingRepositoryKitId ||
-      kitId == codingPatchProposalKitId ||
-      kitId == codingReviewDecisionKitId ||
-      kitId == codingApplyPatchKitId ||
-      kitId == codingWriteScopeKitId ||
-      kitId == codingCheckSpecKitId ||
-      kitId == codingRunCheckKitId ||
-      kitId == codingCheckResultKitId;
+      kitId == codingRepositoryKitId;
 }
 
 bool kitChildBelongsToFrame(SceneObject child, SceneObject frame) {

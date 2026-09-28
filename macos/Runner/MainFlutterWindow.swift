@@ -6,7 +6,6 @@ class MainFlutterWindow: NSWindow {
   private let writeBookmarkKey = "SkapieWriteScopeBookmarks"
   private var activeRepositories: [String: URL] = [:]
   private var activeWriteScopes: [String: URL] = [:]
-  private let checkRunner = BoundedCheckRunner()
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -42,47 +41,6 @@ class MainFlutterWindow: NSWindow {
           return
         }
         result(self.restoreWriteDirectory(path))
-      case "exportPatchProposal":
-        guard let args = call.arguments as? [String: String],
-              let name = args["name"], let text = args["text"] else {
-          result(FlutterError(code: "export_args", message: "Missing proposal", details: nil))
-          return
-        }
-        self.exportPatchProposal(name: name, text: text, result: result)
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    }
-
-    let checkChannel = FlutterMethodChannel(
-      name: "skapie/checks",
-      binaryMessenger: flutterViewController.engine.binaryMessenger
-    )
-    checkChannel.setMethodCallHandler { [weak self] call, result in
-      guard let self = self else {
-        result(FlutterError(code: "window_closed", message: "Window closed", details: nil))
-        return
-      }
-      switch call.method {
-      case "runGitDiffCheck":
-        guard let args = call.arguments as? [String: String],
-              let root = args["root"], !root.isEmpty,
-              self.restoreWriteDirectory(root) else {
-          result(FlutterError(code: "write_scope", message: "A separate live Write Scope is required", details: nil))
-          return
-        }
-        self.checkRunner.run(root: root, onChunk: { phase, stream, text in
-          DispatchQueue.main.async {
-            checkChannel.invokeMethod("checkChunk", arguments: [
-              "phase": phase,
-              "stream": stream,
-              "text": text,
-              "at": ISO8601DateFormatter().string(from: Date())
-            ])
-          }
-        }, result: result)
-      case "cancelGitDiffCheck":
-        result(self.checkRunner.cancel())
       default:
         result(FlutterMethodNotImplemented)
       }
@@ -162,22 +120,6 @@ class MainFlutterWindow: NSWindow {
     guard url.startAccessingSecurityScopedResource() else { return false }
     activeWriteScopes[url.path] = url
     return true
-  }
-
-  private func exportPatchProposal(name: String, text: String, result: @escaping FlutterResult) {
-    let panel = NSSavePanel()
-    panel.nameFieldStringValue = URL(fileURLWithPath: name).lastPathComponent
-    panel.prompt = "Export Proposal"
-    guard panel.runModal() == .OK, let url = panel.url else {
-      result(nil)
-      return
-    }
-    do {
-      try text.write(to: url, atomically: true, encoding: .utf8)
-      result(url.path)
-    } catch {
-      result(FlutterError(code: "export_failed", message: error.localizedDescription, details: nil))
-    }
   }
 
   private func chooseRepository(_ result: @escaping FlutterResult) {

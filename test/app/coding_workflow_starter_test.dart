@@ -64,7 +64,7 @@ void main() {
       expect(id.startsWith('coding.patch'), isFalse);
       expect(id.startsWith('coding.review'), isFalse);
       expect(id.startsWith('coding.apply'), isFalse);
-      expect(id, isNot(harnessRunControlKitId));
+      expect(id, isNot('harness.run_control'));
     }
 
     final cables = sceneCables(document);

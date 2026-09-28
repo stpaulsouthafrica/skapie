@@ -9,12 +9,12 @@ void main() {
   late KitApi kitApi;
 
   setUp(() {
-    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    kitApi = createAppKitApi(store: SceneStore());
   });
 
   test('new LLM and tool kit frames omit toy-blue fill', () {
     kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
-    kitApi.instantiate('tools.list_kits', origin: const Offset(400, 0));
+    kitApi.instantiate('tools.read', origin: const Offset(400, 0));
     final frames = kitApi.store.document.objects.where(
       (object) => object.props[skapieRoleProp] == 'frame',
     );
@@ -33,7 +33,7 @@ void main() {
   test('kitMembers groups LLM and tools.list_kits by the containing frame', () {
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final tool = kitApi.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     final llmBody = kitApi.store.document.objectById(llm.last)!;
@@ -107,7 +107,7 @@ void main() {
   test('removeKitSelection deletes a tool grant and refreshes LLM tools', () {
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final tool = kitApi.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     attachToolKit(
@@ -117,13 +117,13 @@ void main() {
     );
     expect(
       kitApi.store.document.objectById(llm.last)!.props['content'],
-      contains('Tools: list_kits'),
+      contains('Tools: read'),
     );
 
     removeKitSelection(kitApi: kitApi, selectedId: tool.last);
     expect(
       kitApi.store.document.objects.where(
-        (object) => object.props[skapieKitProp] == 'tools.list_kits',
+        (object) => object.props[skapieKitProp] == 'tools.read',
       ),
       isEmpty,
     );

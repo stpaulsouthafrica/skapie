@@ -19,7 +19,7 @@ import 'package:skapie/tools/repository/repository_permission.dart';
 void main() {
   late KitApi api;
 
-  setUp(() => api = createAppKitApi(includeDemotedKits: true, store: SceneStore()));
+  setUp(() => api = createAppKitApi(store: SceneStore()));
 
   test('terminal states do not allow more work in the same run', () {
     expect(runPhaseCanMove(RunPhase.ready, RunPhase.validating), true);
@@ -47,48 +47,10 @@ void main() {
     );
   }
 
-  test(
-    'Run Control only changes a cabled LLM and a failed check adds one turn',
-    () {
-      final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
-      final control = api.instantiate(
-        harnessRunControlKitId,
-        origin: const Offset(400, 0),
-      );
-      final check = api.instantiate(
-        codingCheckResultKitId,
-        origin: const Offset(800, 0),
-      );
-      api.updateProps(control.first, {
-        'modelTurns': 2,
-        'failedCheckRule': 'oneMoreTurn',
-      });
-      api.updateProps(check.last, {'checkOutcome': 'nonzero_exit'});
-
-      expect(runLimitsFor(api.store.document, llm.last).modelTurns, 8);
-      cable(
-        control.first,
-        KitPortKind.runControlOut,
-        llm.first,
-        KitPortKind.runControlIn,
-      );
-      expect(runLimitsFor(api.store.document, llm.last).effectiveModelTurns, 2);
-      cable(
-        check.first,
-        KitPortKind.checkResultOut,
-        control.first,
-        KitPortKind.runCheckFeedback,
-      );
-      expect(runLimitsFor(api.store.document, llm.last).effectiveModelTurns, 3);
-      api.updateProps(control.first, {'failedCheckRule': 'off'});
-      expect(runLimitsFor(api.store.document, llm.last).effectiveModelTurns, 2);
-    },
-  );
-
   test('model turn and tool call limits stop the session by name', () async {
     const call = AgentToolCall(
       id: 'c1',
-      name: 'list_kits',
+      name: 'read',
       argumentsJson: '{}',
     );
     final limitedTurns = AgentSession(
@@ -128,7 +90,7 @@ void main() {
           toolCalls: [
             AgentToolCall(
               id: 'call-$index',
-              name: 'list_kits',
+              name: 'read',
               argumentsJson: '{}',
             ),
           ],
@@ -161,7 +123,7 @@ void main() {
       const toolReply = AgentModelReply(
         content: '',
         toolCalls: [
-          AgentToolCall(id: 'c1', name: 'list_kits', argumentsJson: '{}'),
+          AgentToolCall(id: 'c1', name: 'read', argumentsJson: '{}'),
         ],
       );
       final model = ScriptedAgentModel([
@@ -216,7 +178,7 @@ void main() {
       );
       final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
       final attached = api.instantiate(
-        'tools.list_kits',
+        'tools.read',
         origin: const Offset(400, 0),
       );
       final conversation = api.instantiate(
@@ -263,7 +225,7 @@ void main() {
       origin: const Offset(0, 400),
     );
     final tool = api.instantiate(
-      'tools.repo_list_files',
+      'tools.read',
       origin: const Offset(400, 400),
     );
     final conversation = api.instantiate(
@@ -313,7 +275,7 @@ void main() {
       origin: const Offset(0, 400),
     );
     final tool = api.instantiate(
-      'tools.repo_list_files',
+      'tools.read',
       origin: const Offset(400, 400),
     );
     api.updateProps(repository.first, {repositoryPathProp: '/example'});
@@ -345,8 +307,8 @@ void main() {
     expect(started.payload['toolSchemaDigest'], toolSchemaDigest([]));
     expect(started.payload['filteredTools'], [
       {
-        'name': 'repo_list_files',
-        'reason': 'Repository access expired for repo_list_files',
+        'name': 'read',
+        'reason': 'Repository read access expired for read',
       },
     ]);
   });
@@ -519,7 +481,7 @@ void main() {
       );
       final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
       final tool = api.instantiate(
-        'tools.list_kits',
+        'tools.read',
         origin: const Offset(400, 0),
       );
       final conversation = api.instantiate(
@@ -582,7 +544,7 @@ void main() {
       AgentModel model,
       ResolvedAgentRuntime runtime,
     ) async {
-      final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+      final kitApi = createAppKitApi(store: SceneStore());
       final controller = AgentController(
         kitApi: kitApi,
         session: AgentSession(model: model, kitApi: kitApi),
@@ -590,7 +552,7 @@ void main() {
       );
       final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
       final tool = kitApi.instantiate(
-        'tools.list_kits',
+        'tools.read',
         origin: const Offset(400, 0),
       );
       final conversation = kitApi.instantiate(
@@ -695,7 +657,7 @@ class _RevokingModel implements AgentModel {
     return const AgentModelReply(
       content: '',
       toolCalls: [
-        AgentToolCall(id: 'read', name: 'repo_list_files', argumentsJson: '{}'),
+        AgentToolCall(id: 'read', name: 'read', argumentsJson: '{}'),
       ],
     );
   }

@@ -18,7 +18,7 @@ void main() {
   });
 
   test('a mixed board keeps every port and cable from saved links', () {
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    final kitApi = createAppKitApi(store: SceneStore());
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -37,26 +37,11 @@ void main() {
       origin: const Offset(-800, 400),
     );
     final tool = kitApi.instantiate(
-      worldToolKitId('repo_list_files'),
+      worldToolKitId('read'),
       origin: const Offset(-400, 400),
     );
     kitApi.instantiate(worldToolKitId('write'), origin: const Offset(-400, 500));
     kitApi.instantiate(skapieExtensionsKitId, origin: const Offset(1000, 400));
-    kitApi.instantiate(proposePatchKitId, origin: const Offset(-400, 600));
-    kitApi.instantiate(codingPatchProposalKitId, origin: const Offset(0, 600));
-    kitApi.instantiate(
-      codingReviewDecisionKitId,
-      origin: const Offset(400, 600),
-    );
-    kitApi.instantiate(codingApplyPatchKitId, origin: const Offset(800, 600));
-    kitApi.instantiate(codingWriteScopeKitId, origin: const Offset(800, 800));
-    kitApi.instantiate(codingCheckSpecKitId, origin: const Offset(0, 800));
-    kitApi.instantiate(codingRunCheckKitId, origin: const Offset(400, 800));
-    kitApi.instantiate(codingCheckResultKitId, origin: const Offset(800, 1000));
-    final control = kitApi.instantiate(
-      harnessRunControlKitId,
-      origin: const Offset(-800, 1000),
-    );
     connectTextToLlm(
       kitApi: kitApi,
       textObjectId: text.first,
@@ -84,19 +69,6 @@ void main() {
       repositoryFrameId: repository.first,
       toolFrameId: tool.first,
     );
-    final controlPorts = kitPorts(kitApi.store.document);
-    connectKitPorts(
-      kitApi: kitApi,
-      from: controlPorts.singleWhere(
-        (port) =>
-            port.frameId == control.first &&
-            port.kind == KitPortKind.runControlOut,
-      ),
-      to: controlPorts.singleWhere(
-        (port) =>
-            port.frameId == llm.first && port.kind == KitPortKind.runControlIn,
-      ),
-    );
 
     final document = kitApi.store.document;
     final kinds = kitPorts(document).map((port) => port.kind).toSet();
@@ -106,7 +78,7 @@ void main() {
     SceneCable cableOn(String port) =>
         cables.singleWhere((cable) => cable.port == port);
     final llmFrame = document.objectById(llm.first)!;
-    expect(cables, hasLength(6));
+    expect(cables, hasLength(5));
     expect(cableOn(llmInputPort).ownerId, text.first);
     expect(cableOn(llmInputPort).to, llmInputCenter(llmFrame));
     expect(cableOn(llmTextOutPort).ownerId, llm.last);
@@ -131,8 +103,8 @@ void main() {
   });
 
   test('a dragged Text → LLM Input cable writes the same link as before', () {
-    final dragged = createAppKitApi(includeDemotedKits: true, store: SceneStore());
-    final direct = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    final dragged = createAppKitApi(store: SceneStore());
+    final direct = createAppKitApi(store: SceneStore());
     for (final kitApi in [dragged, direct]) {
       kitApi.instantiate(harnessLlmKitId, origin: const Offset(400, 0));
       kitApi.instantiate(boardTextKitId, origin: Offset.zero);
@@ -188,7 +160,7 @@ void main() {
   });
 
   test('older single-target props still draw their cable', () {
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    final kitApi = createAppKitApi(store: SceneStore());
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -204,14 +176,14 @@ void main() {
   });
 
   test('a single-input port keeps only the newest cable', () {
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    final kitApi = createAppKitApi(store: SceneStore());
     final first = kitApi.instantiate(
       codingRepositoryKitId,
       origin: const Offset(-800, 0),
     );
     kitApi.instantiate(codingRepositoryKitId, origin: const Offset(-800, 300));
     kitApi.instantiate(
-      worldToolKitId('repo_list_files'),
+      worldToolKitId('read'),
       origin: const Offset(-300, 0),
     );
     final ports = kitPorts(kitApi.store.document);

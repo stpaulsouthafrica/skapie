@@ -8,7 +8,7 @@ import 'package:skapie/tools/attach.dart';
 void main() {
   late KitApi api;
 
-  setUp(() => api = createAppKitApi(includeDemotedKits: true, store: SceneStore()));
+  setUp(() => api = createAppKitApi(store: SceneStore()));
 
   test('each request source keeps its kit and provenance', () {
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
@@ -18,7 +18,7 @@ void main() {
       origin: const Offset(400, 200),
     );
     final tool = api.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 400),
     );
     api.updateProps(task.last, {'content': 'Add a text kit'});
@@ -53,9 +53,9 @@ void main() {
     expect(assembly.instructionText, 'Be careful');
 
     final toolItem = assembly.itemsFor(ContextLayer.tools).single;
-    expect(toolItem.sourceRange, 'tools.list_kits');
+    expect(toolItem.sourceRange, 'tools.read');
     expect(toolItem.provenance, ContextProvenance.toolDefinition);
-    expect(assembly.tools.map((tool) => tool.name), contains('list_kits'));
+    expect(assembly.tools.map((tool) => tool.name), contains('read'));
   });
 
   test('disconnected Conversation drops history and names the reason', () {

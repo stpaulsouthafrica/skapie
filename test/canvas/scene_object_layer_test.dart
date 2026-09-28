@@ -88,53 +88,6 @@ void main() {
     expect(find.text('mystery.kit'), findsOneWidget);
   });
 
-  testWidgets('Run Control shows its limits and feedback cable labels', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SizedBox.fromSize(
-          size: viewport,
-          child: SceneObjectLayer(
-            camera: CanvasCamera(),
-            viewportSize: viewport,
-            objects: const [
-              SceneObject(
-                id: 'run-frame',
-                type: 'box',
-                x: -140,
-                y: -60,
-                width: 280,
-                height: 120,
-                props: {
-                  skapieKitProp: harnessRunControlKitId,
-                  skapieRoleProp: 'frame',
-                },
-              ),
-              SceneObject(
-                id: 'run-body',
-                type: 'text',
-                x: -128,
-                y: -20,
-                width: 256,
-                height: 48,
-                props: {
-                  skapieKitProp: harnessRunControlKitId,
-                  skapieRoleProp: 'body',
-                  'content': '8 turns · 16 tools · 120s',
-                },
-              ),
-            ],
-            registry: createBuiltinRegistry(),
-          ),
-        ),
-      ),
-    );
-    expect(find.text('8 turns · 16 tools · 120s'), findsOneWidget);
-    expect(find.text('Check'), findsOneWidget);
-    expect(find.text('LLM'), findsOneWidget);
-  });
-
   testWidgets('LLM chrome scales with zoom and selection does not resize it', (
     tester,
   ) async {
@@ -420,51 +373,4 @@ void main() {
     expect(find.text('list repo files.'), findsNothing);
   });
 
-  testWidgets('a patch proposal kit previews content once with In and Out', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SizedBox.fromSize(
-          size: viewport,
-          child: SceneObjectLayer(
-            camera: CanvasCamera(),
-            viewportSize: viewport,
-            objects: const [
-              SceneObject(
-                id: 'proposal-frame',
-                type: 'box',
-                x: -140,
-                y: -75,
-                width: 280,
-                height: 120,
-                props: {
-                  skapieKitProp: codingPatchProposalKitId,
-                  skapieRoleProp: 'frame',
-                },
-              ),
-              SceneObject(
-                id: 'proposal-body',
-                type: 'text',
-                x: -128,
-                y: -35,
-                width: 256,
-                height: 48,
-                props: {
-                  skapieKitProp: codingPatchProposalKitId,
-                  skapieRoleProp: 'body',
-                  'content': 'No proposal yet',
-                },
-              ),
-            ],
-            registry: createBuiltinRegistry(),
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('Waiting for a proposal'), findsOneWidget);
-    expect(find.text('In'), findsOneWidget);
-    expect(find.text('Out'), findsOneWidget);
-  });
 }

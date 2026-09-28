@@ -1,6 +1,3 @@
-import 'package:skapie/canvas/kit_links.dart';
-import 'package:skapie/kit_api/kit_api.dart';
-import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
 
 const defaultRunModelTurns = 8;
@@ -85,46 +82,7 @@ class RunLimitReached implements Exception {
   String toString() => '$name limit reached';
 }
 
-int _bounded(Object? value, int fallback, int maximum) {
-  final parsed = value is int ? value : int.tryParse('$value');
-  return parsed == null ? fallback : parsed.clamp(0, maximum);
-}
-
-/// A Run Control affects only the LLM it is cabled to. Existing boards use
-/// the visible defaults until one is connected.
+/// Every run uses the same visible limits.
 RunLimits runLimitsFor(SceneDocument document, String llmBodyId) {
-  final frames = [
-    for (final object in document.objects)
-      if (kitIdOf(object) == harnessRunControlKitId &&
-          object.props[skapieRoleProp] == 'frame' &&
-          kitHasLink(object, to: llmBodyId, port: runControlPort))
-        object,
-  ];
-  if (frames.length != 1) {
-    return const RunLimits();
-  }
-  final frame = frames.single;
-  final failedCheckConnected = document.objects.any(
-    (object) =>
-        kitIdOf(object) == codingCheckResultKitId &&
-        object.props[skapieRoleProp] == 'frame' &&
-        kitHasLink(object, to: frame.id, port: runCheckFeedbackPort) &&
-        (kitMembers(document: document, selectedId: object.id) ?? const []).any(
-          (member) => member.props['checkOutcome'] == 'nonzero_exit',
-        ),
-  );
-  return RunLimits(
-    modelTurns: _bounded(frame.props['modelTurns'], defaultRunModelTurns, 100),
-    toolCalls: _bounded(frame.props['toolCalls'], defaultRunToolCalls, 500),
-    elapsed: Duration(
-      seconds: _bounded(frame.props['elapsedSeconds'], defaultRunSeconds, 3600),
-    ),
-    outputChars: _bounded(
-      frame.props['outputChars'],
-      defaultRunOutputChars,
-      1000000,
-    ),
-    extraTurnAfterFailedCheck:
-        frame.props['failedCheckRule'] == 'oneMoreTurn' && failedCheckConnected,
-  );
+  return const RunLimits();
 }

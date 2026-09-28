@@ -8,19 +8,19 @@ void main() {
   late KitApi kitApi;
 
   setUp(() {
-    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    kitApi = createAppKitApi(store: SceneStore());
   });
 
   test('attach and detach write attachedTo via KitApi', () {
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final tool = kitApi.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     final grant = kitApi.store.document.objects.firstWhere(
       (object) =>
-          object.props[skapieKitProp] == 'tools.list_kits' &&
-          object.props['toolName'] == 'list_kits',
+          object.props[skapieKitProp] == 'tools.read' &&
+          object.props['toolName'] == 'read',
     );
 
     attachToolKit(
@@ -37,7 +37,7 @@ void main() {
       isTrue,
     );
     expect(attachedToolNames(kitApi: kitApi, llmBodyId: llm.last), [
-      'list_kits',
+      'read',
     ]);
 
     detachToolKit(kitApi: kitApi, toolObjectId: grant.id);
@@ -48,11 +48,11 @@ void main() {
   test('unknown toolName is an error on the kit and is omitted', () {
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final tool = kitApi.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     final grant = kitApi.store.document.objects.firstWhere(
-      (object) => object.props['toolName'] == 'list_kits',
+      (object) => object.props['toolName'] == 'read',
     );
     kitApi.updateProps(grant.id, {'toolName': 'nope.tool'});
     attachToolKit(

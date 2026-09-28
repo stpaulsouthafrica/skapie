@@ -134,9 +134,11 @@ void main() {
     );
     await model.complete(
       messages: const [AgentMessage(role: AgentRole.user, content: 'hi')],
-      tools: createKitAgentTools(createAppKitApi(store: SceneStore())),
+      tools: createKitAgentTools(
+        createAppKitApi(store: SceneStore()),
+      ),
     );
-    expect(model.lastDiagnostic!.toolNames, contains('list_kits'));
+    expect(model.lastDiagnostic!.toolNames, contains('read'));
   });
 
   test('OpenRouter reasoning effort is sent when set', () async {

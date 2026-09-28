@@ -17,14 +17,10 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final api = createAppKitApi(includeDemotedKits: true, store: store);
+    final api = createAppKitApi(store: store);
     final repository = api.instantiate(
       codingRepositoryKitId,
       origin: Offset.zero,
-    );
-    final scope = api.instantiate(
-      codingWriteScopeKitId,
-      origin: const Offset(400, 0),
     );
     final selection = SelectionController()..select(repository.first);
     final readPermission = _InspectorRepositoryPermission();
@@ -59,15 +55,13 @@ void main() {
       '/tmp/read-repo',
     );
 
-    selection.select(scope.first);
-    await tester.pump();
-    final writeButton = find.byKey(const Key('choose-write-scope'));
+    final writeButton = find.byKey(const Key('choose-repository-write'));
     await tester.ensureVisible(writeButton);
     await tester.tap(writeButton);
     await tester.pump();
     expect(writePermission.chooseCalls, 1);
     expect(
-      store.document.objectById(scope.first)!.props[writeScopePathProp],
+      store.document.objectById(repository.first)!.props[repositoryWritePathProp],
       '/tmp/write-repo',
     );
   });
@@ -76,7 +70,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final api = createAppKitApi(includeDemotedKits: true, store: store);
+    final api = createAppKitApi(store: store);
     final first = api.instantiate(boardTextKitId, origin: Offset.zero);
     final second = api.instantiate(
       boardTextKitId,
@@ -308,13 +302,12 @@ void main() {
   testWidgets('kits omit Transform, including a future kit id', (tester) async {
     for (final kitId in [
       codingRepositoryKitId,
-      codingWriteScopeKitId,
       boardTextKitId,
       harnessLlmKitId,
-      'tools.list_kits',
+      'tools.read',
     ]) {
       final store = SceneStore();
-      final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
+      final kitApi = createAppKitApi(store: store);
       final ids = kitApi.instantiate(kitId, origin: Offset.zero);
       final selection = SelectionController()
         ..select(kitId == codingRepositoryKitId ? ids.last : ids.first);
@@ -380,13 +373,13 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
+    final kitApi = createAppKitApi(store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     for (final id in llm) {
       kitApi.updateProps(id, {kitNameProp: 'Blue', kitAccentProp: '#88CCFF'});
     }
     final tool = kitApi.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     final selection = SelectionController()..select(tool.last);
@@ -431,7 +424,7 @@ void main() {
     tester,
   ) async {
     final store = SceneStore();
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
+    final kitApi = createAppKitApi(store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final selection = SelectionController()..select(llm.first);
 

@@ -24,12 +24,9 @@ import 'package:skapie/canvas/selection_actions.dart';
 import 'package:skapie/app/conversation_kit_viewer.dart';
 import 'package:skapie/app/text_kit_editor.dart';
 import 'package:skapie/app/canvas_shortcut_settings.dart';
-import 'package:skapie/app/patch_diff_viewer.dart';
 import 'package:skapie/app/kit_folder_actions.dart';
 import 'package:skapie/canvas/scene_object_layer.dart';
 import 'package:skapie/canvas/selection_controller.dart';
-import 'package:skapie/tools/patch/patch_board.dart';
-import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
 import 'package:skapie/canvas/selection_overlay.dart';
 import 'package:skapie/kit_api/kit_api.dart';
@@ -53,7 +50,6 @@ class CanvasViewport extends StatefulWidget {
     this.agentController,
     this.onConnect,
     this.canvasShortcuts,
-    this.writePermission = const SystemPatchWritePermission(),
   }) : selection = selection ?? SelectionController(),
        kitApi =
            kitApi ??
@@ -64,7 +60,6 @@ class CanvasViewport extends StatefulWidget {
   final KitApi kitApi;
   final AgentController? agentController;
   final CanvasShortcutSettings? canvasShortcuts;
-  final PatchWritePermission writePermission;
 
   /// Enter while a port is ringed. The host opens the connect palette.
   final VoidCallback? onConnect;
@@ -335,9 +330,7 @@ class CanvasViewportState extends State<CanvasViewport>
           if (member.props[skapieRoleProp] != 'body') continue;
           final previous = before.objectById(member.id);
           if (previous == null ||
-              (previous.props['content'] == member.props['content'] &&
-                  previous.props['checkOutcome'] ==
-                      member.props['checkOutcome'])) {
+              previous.props['content'] == member.props['content']) {
             continue;
           }
           _pendingRevealProps[member.id] = previous.props;
@@ -374,22 +367,6 @@ class CanvasViewportState extends State<CanvasViewport>
     _boardEventsExpiry = Timer(const Duration(seconds: 3), () {
       if (mounted) setState(_boardEvents.clear);
     });
-  }
-
-  /// Called only after Apply's final verification, immediately before writing.
-  void signalApplyWriteAttempted(String applyFrameId) {
-    _recordBoardRoutes(
-      boardDataRoutesForApply(widget.store.document, applyFrameId),
-    );
-    setState(() {});
-  }
-
-  /// Called only after a Check's live permission check, before native work.
-  void signalCheckRunRequested(String runFrameId) {
-    _recordBoardRoutes(
-      boardDataRoutesForCheck(widget.store.document, runFrameId),
-    );
-    setState(() {});
   }
 
   CanvasCamera _clamped(CanvasCamera camera) {
@@ -587,15 +564,7 @@ class CanvasViewportState extends State<CanvasViewport>
     _lastTapStamp = event.timeStamp;
     if (isDouble &&
         hitFrame != null &&
-        kitIdOf(hitFrame) == harnessRunControlKitId) {
-      widget.selection.select(hitFrame.id);
-      _dragKind = _DragKind.none;
-      return;
-    }
-    if (isDouble &&
-        hitFrame != null &&
-        (kitIdOf(hitFrame) == codingRepositoryKitId ||
-            kitIdOf(hitFrame) == codingWriteScopeKitId)) {
+        kitIdOf(hitFrame) == codingRepositoryKitId) {
       widget.selection.select(hitFrame.id);
       _dragKind = _DragKind.none;
       unawaited(_chooseFolderForKit(hitFrame));
@@ -612,25 +581,6 @@ class CanvasViewportState extends State<CanvasViewport>
     }
     widget.selection.select(hit.id);
     if (isDouble) {
-      final frame = kitFrameForSelection(
-        document: widget.store.document,
-        selectedId: hit.id,
-      );
-      if (frame != null && kitIdOf(frame) == codingPatchProposalKitId) {
-        final body = patchProposalBody(widget.store.document, frame.id);
-        final diff = body?.props['diff']?.toString() ?? '';
-        if (diff.isNotEmpty) {
-          widget.selection.cancelMove();
-          _dragKind = _DragKind.none;
-          showPatchDiffViewer(
-            context: context,
-            path: body!.props['path']?.toString() ?? '',
-            diff: diff,
-            proposalId: body.props[proposalIdProp]?.toString() ?? '',
-          );
-          return;
-        }
-      }
       final previewBody = _previewKitBody(hit);
       if (previewBody != null) {
         widget.selection.cancelMove();
@@ -665,13 +615,6 @@ class CanvasViewportState extends State<CanvasViewport>
           permission:
               widget.agentController?.repositoryPermission ??
               const SystemRepositoryPermission(),
-          isActive: () => mounted,
-        );
-      } else if (kitIdOf(frame) == codingWriteScopeKitId) {
-        await chooseWriteScopeFolder(
-          kitApi: widget.kitApi,
-          frameId: frame.id,
-          permission: widget.writePermission,
           isActive: () => mounted,
         );
       }
@@ -1447,14 +1390,7 @@ class CanvasViewportState extends State<CanvasViewport>
 
   SceneObject? _previewKitBody(SceneObject hit) {
     final kitId = kitIdOf(hit);
-    if (kitId == codingPatchProposalKitId ||
-        kitId == codingRepositoryKitId ||
-        kitId == codingReviewDecisionKitId ||
-        kitId == codingApplyPatchKitId ||
-        kitId == codingWriteScopeKitId ||
-        kitId == codingCheckSpecKitId ||
-        kitId == codingRunCheckKitId ||
-        kitId == codingCheckResultKitId) {
+    if (kitId == codingRepositoryKitId) {
       return null;
     }
     if (!kitUsesTextPreview(kitId)) {
@@ -1503,14 +1439,7 @@ class CanvasViewportState extends State<CanvasViewport>
       return false;
     }
     final kitId = kitIdOf(object);
-    if (kitId == codingPatchProposalKitId ||
-        kitId == codingRepositoryKitId ||
-        kitId == codingReviewDecisionKitId ||
-        kitId == codingApplyPatchKitId ||
-        kitId == codingWriteScopeKitId ||
-        kitId == codingCheckSpecKitId ||
-        kitId == codingRunCheckKitId ||
-        kitId == codingCheckResultKitId) {
+    if (kitId == codingRepositoryKitId) {
       return false;
     }
     if (isLlmKitObject(object) || kitUsesTextPreview(kitIdOf(object))) {

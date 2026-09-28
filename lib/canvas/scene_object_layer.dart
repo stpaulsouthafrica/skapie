@@ -10,8 +10,6 @@ import 'package:skapie/paint/kit_icon.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
-import 'package:skapie/tools/patch/patch_board.dart';
-import 'package:skapie/tools/check/check_board.dart';
 
 /// Below this zoom, kits read as a name and a status instead of port rows.
 const double kitOverviewZoom = 0.6;
@@ -425,8 +423,6 @@ class SceneObjectLayer extends StatelessWidget {
             ],
           ),
         ),
-        if (kitIdOf(frame) == proposePatchKitId)
-          _outputCaption(tokens, zoom, frame, label: 'Result'),
       ],
     );
   }
@@ -447,187 +443,23 @@ class SceneObjectLayer extends StatelessWidget {
           tokens: tokens,
           zoom: zoom,
         ),
-        if (id == boardTextKitId ||
-            id == harnessConversationKitId ||
-            id == harnessRunControlKitId)
+        if (id == boardTextKitId || id == harnessConversationKitId)
           Positioned.fill(
             child: _previewFooter(
               tokens,
               zoom,
               frame,
               content: _bodyContent(frame, id!),
-              leading: id == harnessRunControlKitId ? 'Check' : 'In',
-              trailing: id == harnessRunControlKitId ? 'LLM' : 'Out',
-            ),
-          ),
-        if (kitIdOf(frame) == codingPatchProposalKitId)
-          Positioned.fill(child: _patchArtifactCard(tokens, zoom, frame)),
-        if (kitIdOf(frame) == codingReviewDecisionKitId)
-          Positioned.fill(child: _reviewArtifactCard(tokens, zoom, frame)),
-        if (kitIdOf(frame) == codingApplyPatchKitId)
-          Positioned.fill(
-            child: _artifactCard(
-              tokens,
-              zoom,
-              frame,
-              icon: Icons.playlist_add_check_circle_outlined,
-              color: tokens.accent,
-              headline: 'Separate file action',
-              subtitle: 'Verify → write → observe',
-              leading: 'Review',
-              trailing: 'Write',
+              leading: 'In',
+              trailing: 'Out',
             ),
           ),
         if (kitIdOf(frame) == codingRepositoryKitId)
           Positioned.fill(child: _repositoryCard(tokens, zoom, frame)),
-        if (kitIdOf(frame) == codingWriteScopeKitId)
-          Positioned.fill(child: _writeScopeCard(tokens, zoom, frame)),
-        if (kitIdOf(frame) == codingCheckSpecKitId)
-          Positioned.fill(
-            child: _artifactCard(
-              tokens,
-              zoom,
-              frame,
-              icon: Icons.rule_folder_outlined,
-              color: tokens.accent,
-              headline: frame.props[checkPresetProp] == gitDiffCheckPreset
-                  ? 'Git diff --check'
-                  : 'Choose a check',
-              subtitle: 'Trusted preset · exact argv',
-              leading: '',
-              trailing: 'Spec',
-            ),
-          ),
-        if (kitIdOf(frame) == codingRunCheckKitId)
-          Positioned.fill(
-            child: _artifactCard(
-              tokens,
-              zoom,
-              frame,
-              icon: Icons.play_circle_outline,
-              color: tokens.accent,
-              headline: checkGate(_preview, frame.id).ready
-                  ? 'Ready for your Run'
-                  : 'Waiting for connections',
-              subtitle: 'Explicit effect · network allowed',
-              leading: 'Spec',
-              trailing: 'Result',
-            ),
-          ),
-        if (kitIdOf(frame) == codingCheckResultKitId)
-          Positioned.fill(child: _checkResultCard(tokens, zoom, frame)),
       ],
     );
   }
 
-  SceneObject? _namedBody(SceneObject frame) {
-    for (final object in objects) {
-      if (object.props[skapieRoleProp] == 'body' &&
-          kitIdOf(object) == kitIdOf(frame) &&
-          kitChildBelongsToFrame(object, frame)) {
-        return object;
-      }
-    }
-    return null;
-  }
-
-  Widget _patchArtifactCard(
-    PaintTokens tokens,
-    double zoom,
-    SceneObject frame,
-  ) {
-    final body = _namedBody(frame);
-    final path = body?.props['path']?.toString() ?? '';
-    final diff = body?.props['diff']?.toString() ?? '';
-    final added = diff
-        .split('\n')
-        .where((line) => line.startsWith('+') && !line.startsWith('+++'))
-        .length;
-    final removed = diff
-        .split('\n')
-        .where((line) => line.startsWith('-') && !line.startsWith('---'))
-        .length;
-    return _artifactCard(
-      tokens,
-      zoom,
-      frame,
-      icon: Icons.description_outlined,
-      color: tokens.accent,
-      headline: path.isEmpty ? 'Waiting for a proposal' : path.split('/').last,
-      subtitle: path.isEmpty
-          ? 'A proposed file change will appear here'
-          : '+$added added    −$removed removed  ·  1 file',
-      leading: 'In',
-      trailing: 'Out',
-    );
-  }
-
-  Widget _reviewArtifactCard(
-    PaintTokens tokens,
-    double zoom,
-    SceneObject frame,
-  ) {
-    final reviewBody = _namedBody(frame);
-    final proposal = connectedProposalFrame(_preview, frame.id);
-    final proposalBody = proposal == null
-        ? null
-        : patchProposalBody(_preview, proposal.id);
-    final matches =
-        validPatchProposal(proposalBody) &&
-        reviewBody?.props[proposalIdProp] ==
-            proposalBody?.props[proposalIdProp] &&
-        reviewBody?.props[proposalFingerprintProp] ==
-            proposalBody?.props[proposalFingerprintProp];
-    final decision = matches
-        ? reviewBody?.props[reviewDecisionProp]?.toString() ?? ''
-        : '';
-    final accepted = decision == 'accept';
-    final rejected = decision == 'reject';
-    return _artifactCard(
-      tokens,
-      zoom,
-      frame,
-      icon: accepted
-          ? Icons.check_circle_outline
-          : rejected
-          ? Icons.cancel_outlined
-          : Icons.rule_outlined,
-      color: accepted
-          ? tokens.success
-          : rejected
-          ? tokens.danger
-          : tokens.accent,
-      headline: accepted
-          ? 'Accepted'
-          : rejected
-          ? 'Rejected'
-          : 'Awaiting review',
-      subtitle: accepted
-          ? 'Approved for a separate Apply'
-          : rejected
-          ? 'This proposal will not be applied'
-          : 'Inspect the diff, then decide',
-      leading: 'In',
-      trailing: 'Out',
-    );
-  }
-
-  Widget _writeScopeCard(PaintTokens tokens, double zoom, SceneObject frame) {
-    final path = frame.props[writeScopePathProp]?.toString() ?? '';
-    return _artifactCard(
-      tokens,
-      zoom,
-      frame,
-      icon: path.isEmpty ? Icons.lock_outline : Icons.folder_open_outlined,
-      color: path.isEmpty ? tokens.muted : tokens.accent,
-      headline: path.isEmpty ? 'No write folder' : path.split('/').last,
-      subtitle: path.isEmpty
-          ? 'Double-click to choose folder'
-          : 'Write access · separate grant',
-      leading: '',
-      trailing: 'Apply',
-    );
-  }
 
   Widget _repositoryCard(PaintTokens tokens, double zoom, SceneObject frame) {
     final path = frame.props[repositoryPathProp]?.toString() ?? '';
@@ -643,39 +475,6 @@ class SceneObjectLayer extends StatelessWidget {
           : 'Read-only repository',
       leading: 'In',
       trailing: 'Out',
-    );
-  }
-
-  Widget _checkResultCard(PaintTokens tokens, double zoom, SceneObject frame) {
-    final outcome = _namedBody(frame)?.props['checkOutcome']?.toString() ?? '';
-    final color = outcome == 'exit_0'
-        ? tokens.success
-        : outcome == 'nonzero_exit' || outcome == 'infrastructure_error'
-        ? tokens.danger
-        : tokens.accent;
-    final headline = switch (outcome) {
-      'exit_0' => 'Exited 0',
-      'nonzero_exit' => 'Nonzero exit',
-      'timeout' => 'Timed out',
-      'cancelled' => 'Cancelled',
-      'infrastructure_error' => 'Could not run',
-      'running' => 'Running check…',
-      _ => 'No result yet',
-    };
-    return _artifactCard(
-      tokens,
-      zoom,
-      frame,
-      icon: outcome == 'exit_0'
-          ? Icons.check_circle_outline
-          : Icons.fact_check_outlined,
-      color: color,
-      headline: headline,
-      subtitle: outcome.isEmpty
-          ? 'Waiting for an explicit Run'
-          : 'Git diff --check',
-      leading: 'In',
-      trailing: 'Context',
     );
   }
 
@@ -1245,26 +1044,6 @@ class SceneObjectLayer extends StatelessWidget {
       }
     }
     return '';
-  }
-
-  Widget _outputCaption(
-    PaintTokens tokens,
-    double zoom,
-    SceneObject frame, {
-    String label = 'Output',
-  }) {
-    return Positioned(
-      right: 16 * zoom,
-      top: (frame.height - textOutputInset) * zoom - kitLabelSize * zoom / 2,
-      child: Text(
-        label,
-        style: TextStyle(
-          color: tokens.muted,
-          fontSize: kitLabelSize * zoom,
-          letterSpacing: 0.4 * zoom,
-        ),
-      ),
-    );
   }
 
   SceneDocument get _preview =>

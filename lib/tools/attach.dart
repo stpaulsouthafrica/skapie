@@ -5,13 +5,12 @@ import 'package:skapie/agent/llm_kit.dart';
 import 'package:skapie/canvas/kit_links.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
+import 'package:skapie/kit_api/kit_script.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/shared/text_digest.dart';
 import 'package:skapie/tools/coding/coding_tools.dart';
-import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/tools/patch/write_permission.dart';
 import 'package:skapie/tools/repository/repository_permission.dart';
-import 'package:skapie/tools/repository/repository_tools.dart';
 
 bool isWorldToolKit(SceneObject object) {
   final id = object.props[skapieKitProp]?.toString() ?? '';
@@ -134,7 +133,6 @@ LlmToolOffer llmToolOffer({
   bool recordErrors = true,
 }) {
   final document = kitApi.store.document;
-  final byName = {for (final tool in createWorldTools(kitApi)) tool.name: tool};
   final tools = <AgentTool>[];
   final filtered = <FilteredTool>[];
   final seen = <String>{};
@@ -157,13 +155,13 @@ LlmToolOffer llmToolOffer({
       filtered.add(FilteredTool(name: name, reason: 'Duplicate tool'));
       continue;
     }
-    // Demoted tools (repo_*, propose_patch) stay resolvable only while their
-    // kit package is loaded from examples/. They are rebuild references.
-    final grant = codingGrantForName(name);
-    final legacyRead =
-        repositoryToolNames.contains(name) || name == proposePatchToolName;
-    final worldAuthor = byName.containsKey(name);
-    if (grant == null && !legacyRead && !worldAuthor) {
+    final packaged = kitApi.packageTool(name);
+    final grant = switch (packaged?.grant) {
+      'read' => CodingGrant.read,
+      'write' => CodingGrant.write,
+      _ => codingGrantForName(name),
+    };
+    if (grant == null && packaged == null) {
       filtered.add(FilteredTool(name: name, reason: 'Unknown tool'));
       if (recordErrors) {
         kitApi.updateProps(object.id, {
@@ -183,14 +181,9 @@ LlmToolOffer llmToolOffer({
     final writePath = frame == null
         ? ''
         : repositoryWritePathForTool(document, frame.id);
-    if ((legacyRead || grant == CodingGrant.read) && readPath.isEmpty) {
+    if (grant == CodingGrant.read && readPath.isEmpty) {
       filtered.add(
-        FilteredTool(
-          name: name,
-          reason: legacyRead
-              ? 'Repository grant missing'
-              : 'Repository read grant missing',
-        ),
+        FilteredTool(name: name, reason: 'Repository read grant missing'),
       );
       continue;
     }
@@ -200,31 +193,22 @@ LlmToolOffer llmToolOffer({
       );
       continue;
     }
-    AgentTool? tool;
-    if (grant != null) {
-      tool = codingToolForName(
-        name,
-        readPath: readPath,
-        writePath: writePath,
-        readPermission: repositoryPermission,
-        writePermission: writePermission,
-      );
-    } else if (legacyRead && name != proposePatchToolName) {
-      tool = repositoryToolForName(
-        name,
-        repositoryPath: readPath,
-        permission: repositoryPermission,
-      );
-    } else if (name == proposePatchToolName && frame != null) {
-      tool = proposePatchTool(
-        kitApi: kitApi,
-        proposeFrameId: frame.id,
-        repositoryPath: readPath,
-        permission: repositoryPermission,
-      );
-    } else {
-      tool = byName[name];
-    }
+    final AgentTool? tool = packaged != null
+        ? packaged.toAgentTool(
+            KitToolBinding(
+              readPath: readPath,
+              writePath: writePath,
+              readPermission: repositoryPermission,
+              writePermission: writePermission,
+            ),
+          )
+        : codingToolForName(
+            name,
+            readPath: readPath,
+            writePath: writePath,
+            readPermission: repositoryPermission,
+            writePermission: writePermission,
+          );
     if (tool == null) {
       filtered.add(FilteredTool(name: name, reason: 'Unknown tool'));
       if (recordErrors) {
@@ -258,22 +242,12 @@ Future<String?> repositoryGrantReasonForTool({
   PatchWritePermission writePermission = const SystemPatchWritePermission(),
 }) async {
   final grant = codingGrantForName(name);
-  final legacyRead =
-      repositoryToolNames.contains(name) || name == proposePatchToolName;
-  if (grant == null && !legacyRead) {
+  if (grant == null) {
     return null;
   }
   final frameId = toolFrameIdForName(document, bodyId, name);
   if (frameId == null) {
     return 'Tool is not connected for this turn: $name';
-  }
-  if (legacyRead) {
-    final path = repositoryPathForTool(document, frameId);
-    if (path.isEmpty) return 'Repository grant missing for $name';
-    if (!await readPermission.canRead(path)) {
-      return 'Repository access expired for $name';
-    }
-    return null;
   }
   if (grant == CodingGrant.read) {
     final path = repositoryPathForTool(document, frameId);

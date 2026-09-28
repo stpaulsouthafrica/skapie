@@ -162,8 +162,7 @@ String graphRevision(SceneDocument document) {
       'toolName',
       'requiresRepository',
       'repositoryPath',
-      writeScopePathProp,
-      'checkPreset',
+      'repositoryWritePath',
     ]) {
       final value = object.props[key];
       if (value != null) buffer.write('$key=$value;');

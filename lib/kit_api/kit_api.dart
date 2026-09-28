@@ -1,14 +1,15 @@
+import 'dart:io';
 import 'dart:ui';
 
+import 'package:skapie/agent/agent_tool.dart';
 import 'package:skapie/kit_api/host_status.dart';
 import 'package:skapie/kit_api/kit_package_ports.dart';
 import 'package:skapie/kit_api/kit_package_store.dart';
+import 'package:skapie/kit_api/kit_script.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
-import 'package:skapie/tools/demoted/demoted_kits.dart';
 import 'package:skapie/tools/world/kits.dart';
 
-const String demoNoteCardKitId = 'demo.note-card';
 const String boardTextKitId = 'board.text';
 
 /// Header, two preview lines, a short gap, and the In / Out row.
@@ -16,33 +17,8 @@ const double textFrameHeight = 120;
 const String boardBoxKitId = 'board.box';
 const String boardButtonKitId = 'board.button';
 const String harnessLlmKitId = 'harness.llm';
-const String harnessRunControlKitId = 'harness.run_control';
 const String harnessConversationKitId = 'harness.conversation';
 const String codingRepositoryKitId = 'coding.repository';
-const String proposePatchToolName = 'propose_patch';
-const String proposePatchKitId = 'tools.propose_patch';
-const String codingPatchProposalKitId = 'coding.patch_proposal';
-const String codingReviewDecisionKitId = 'coding.review_decision';
-const String codingApplyPatchKitId = 'coding.apply_patch';
-const String codingWriteScopeKitId = 'coding.write_scope';
-const String codingCheckSpecKitId = 'coding.check_spec';
-const String codingRunCheckKitId = 'coding.run_check';
-const String codingCheckResultKitId = 'coding.check_result';
-const String checkPresetProp = 'checkPreset';
-const String checkSpecPort = 'checkSpec';
-const String checkWritePort = 'checkWrite';
-const String checkResultPort = 'checkResult';
-const String writeScopePathProp = 'writeScopePath';
-const String writeScopePort = 'writeScope';
-const String proposalIdProp = 'proposalId';
-const String proposalFingerprintProp = 'fingerprint';
-const String reviewDecisionProp = 'decision';
-const String patchProposalPort = 'proposal';
-const String patchReviewPort = 'review';
-const String patchApplyPort = 'apply';
-const double proposePatchFrameHeight = 120;
-const String harnessSystemPromptKitId = 'harness.system-prompt';
-const String harnessToolsKitId = 'harness.tools';
 const String skapieKitProp = 'skapieKit';
 const String skapieRoleProp = 'skapieRole';
 const String attachedToProp = 'attachedTo';
@@ -55,8 +31,6 @@ const String llmInputPort = 'input';
 const String llmContextPort = 'context';
 const String llmConversationPort = 'conversation';
 const String llmToolsPort = 'tools';
-const String runControlPort = 'runControl';
-const String runCheckFeedbackPort = 'checkFeedback';
 
 /// LLM output cabled into a text kit. The text kit receives the reply.
 const String llmTextOutPort = 'text';
@@ -76,8 +50,6 @@ const String skapieExtensionsKitId = 'skapie.extensions';
 const String kitNameProp = 'name';
 const String kitAccentProp = 'accent';
 const double kitRadius = 8;
-const String harnessToolsRoster =
-    'list_kits, get_kit, instantiate_kit, add_object, remove_object, update_frame, update_props, set_locked, save_kit, reload_packages, register_kit';
 
 Size defaultObjectSize(String typeId) {
   return switch (typeId) {
@@ -214,22 +186,6 @@ const KitRecipe boardButtonRecipe = KitRecipe(
   ],
 );
 
-const KitRecipe demoNoteCardRecipe = KitRecipe(
-  id: demoNoteCardKitId,
-  displayName: 'Note card',
-  objects: [
-    KitObjectSpec(typeId: boxTypeId, x: 0, y: 0, width: 200, height: 88),
-    KitObjectSpec(
-      typeId: textTypeId,
-      x: 12,
-      y: 16,
-      width: 176,
-      height: 56,
-      props: {'content': 'Note'},
-    ),
-  ],
-);
-
 const KitRecipe harnessLlmRecipe = KitRecipe(
   id: harnessLlmKitId,
   displayName: 'LLM',
@@ -259,42 +215,6 @@ const KitRecipe harnessLlmRecipe = KitRecipe(
         'surface': '',
         skapieKitProp: harnessLlmKitId,
         skapieRoleProp: 'body',
-      },
-    ),
-  ],
-);
-
-const KitRecipe harnessRunControlRecipe = KitRecipe(
-  id: harnessRunControlKitId,
-  displayName: 'Run Control',
-  objects: [
-    KitObjectSpec(
-      typeId: boxTypeId,
-      x: 0,
-      y: 0,
-      width: 280,
-      height: textFrameHeight,
-      props: {
-        skapieKitProp: harnessRunControlKitId,
-        skapieRoleProp: 'frame',
-        'modelTurns': 8,
-        'toolCalls': 16,
-        'elapsedSeconds': 120,
-        'outputChars': 32000,
-        'failedCheckRule': 'off',
-      },
-    ),
-    KitObjectSpec(
-      typeId: textTypeId,
-      x: 12,
-      y: 40,
-      width: 256,
-      height: 48,
-      props: {
-        skapieKitProp: harnessRunControlKitId,
-        skapieRoleProp: 'body',
-        'content': '8 turns · 16 tools · 120s',
-        'fontSize': 13,
       },
     ),
   ],
@@ -410,65 +330,6 @@ const KitRecipe skapieExtensionsRecipe = KitRecipe(
   ],
 );
 
-const KitRecipe harnessSystemPromptRecipe = KitRecipe(
-  id: harnessSystemPromptKitId,
-  displayName: 'System prompt',
-  objects: [
-    KitObjectSpec(
-      typeId: boxTypeId,
-      x: 0,
-      y: 0,
-      width: 280,
-      height: 140,
-      props: {skapieKitProp: harnessSystemPromptKitId, skapieRoleProp: 'frame'},
-    ),
-    KitObjectSpec(
-      typeId: textTypeId,
-      x: 12,
-      y: 16,
-      width: 256,
-      height: 108,
-      props: {
-        'content': 'System prompt',
-        'fontSize': 14,
-        attachedToProp: '',
-        skapieKitProp: harnessSystemPromptKitId,
-        skapieRoleProp: 'prompt',
-      },
-    ),
-  ],
-);
-
-const KitRecipe harnessToolsRecipe = KitRecipe(
-  id: harnessToolsKitId,
-  displayName: 'Tools',
-  objects: [
-    KitObjectSpec(
-      typeId: boxTypeId,
-      x: 0,
-      y: 0,
-      width: 280,
-      height: 180,
-      props: {skapieKitProp: harnessToolsKitId, skapieRoleProp: 'frame'},
-    ),
-    KitObjectSpec(
-      typeId: textTypeId,
-      x: 12,
-      y: 16,
-      width: 256,
-      height: 148,
-      props: {
-        'content': 'Kit tools (stub)\n\n$harnessToolsRoster',
-        'fontSize': 14,
-        'toolNames': harnessToolsRoster,
-        attachedToProp: '',
-        skapieKitProp: harnessToolsKitId,
-        skapieRoleProp: 'tools',
-      },
-    ),
-  ],
-);
-
 /// High-level scene mutations. Always wraps [SceneStore.apply].
 ///
 /// [registerKit] is ephemeral (in-memory kit recipe). Saved kit packages under `kits/` are
@@ -484,6 +345,29 @@ class KitApi {
   /// Package and grant/tool faults shown in the top-left host status.
   HostStatusLog? statusLog;
   final Map<String, KitRecipe> _kits = {};
+  final Map<String, PackageTool> _packageTools = {};
+
+  /// Tools injected from package `kit.dart` files. Empty until a shelf loads.
+  List<AgentTool> get packageAgentTools => [
+    for (final tool in _packageTools.values) tool.toAgentTool(),
+  ];
+
+  PackageTool? packageTool(String name) => _packageTools[name];
+
+  void setPackageTools(List<PackageTool> tools) {
+    final seen = <String>{};
+    _packageTools.clear();
+    for (final tool in tools) {
+      if (!seen.add(tool.name)) {
+        statusLog?.report(
+          key: 'package-script:${tool.kitId}',
+          message: 'Duplicate tool from ${tool.kitId}: ${tool.name}',
+        );
+        continue;
+      }
+      _packageTools[tool.name] = tool;
+    }
+  }
 
   String addObject({
     required String typeId,
@@ -624,6 +508,11 @@ class KitApi {
       }
       _kits[recipe.id] = recipe;
     }
+    loadPackageScripts(
+      this,
+      store.root,
+      onlyIds: {for (final recipe in loaded.recipes) recipe.id},
+    );
     final summary =
         'Loaded ${loaded.recipes.length} kit package(s) from ${store.root.absolute.path}';
     log?.call(summary);
@@ -726,9 +615,6 @@ String kitNameStem(String kitId) {
   if (kitId == harnessLlmKitId) {
     return 'LLM';
   }
-  if (kitId == harnessSystemPromptKitId) {
-    return 'System prompt';
-  }
   if (kitId == boardTextKitId) {
     return 'Text';
   }
@@ -743,18 +629,6 @@ String kitNameStem(String kitId) {
   }
   if (kitId == codingRepositoryKitId) {
     return 'Repository';
-  }
-  if (kitId == codingPatchProposalKitId) {
-    return 'Patch Proposal';
-  }
-  if (kitId == codingReviewDecisionKitId) {
-    return 'Review Decision';
-  }
-  if (kitId == codingApplyPatchKitId) {
-    return 'Apply Patch';
-  }
-  if (kitId == codingWriteScopeKitId) {
-    return 'Write Scope';
   }
   if (kitId.startsWith('harness.')) {
     return kitId.substring('harness.'.length);
@@ -832,14 +706,13 @@ SceneObject _nameFrame(SceneDocument document, SceneObject object) {
   return object;
 }
 
-/// The default shelf is the lean starter. Pass [includeDemotedKits] to also
-/// register the demoted rebuild-reference kits (used by tests and research).
+/// The default shelf is the lean starter. Kit programs load from [packages]
+/// on reload, and from the repo `kits/` folder when that folder is present.
 KitApi createAppKitApi({
   required SceneStore store,
   ObjectRegistry? registry,
   KitPackageStore? packages,
   HostStatusLog? status,
-  bool includeDemotedKits = false,
 }) {
   final api = KitApi(
     store: store,
@@ -847,7 +720,6 @@ KitApi createAppKitApi({
     packages: packages,
   );
   api.statusLog = status;
-  api.registerKit(demoNoteCardRecipe);
   api.registerKit(boardTextRecipe);
   api.registerKit(boardBoxRecipe);
   api.registerKit(boardButtonRecipe);
@@ -856,8 +728,9 @@ KitApi createAppKitApi({
   api.registerKit(codingRepositoryRecipe);
   api.registerKit(skapieExtensionsRecipe);
   registerWorldToolKits(api);
-  if (includeDemotedKits) {
-    registerDemotedKits(api);
+  final bundled = Directory('kits');
+  if (bundled.existsSync()) {
+    loadPackageScripts(api, bundled);
   }
   return api;
 }

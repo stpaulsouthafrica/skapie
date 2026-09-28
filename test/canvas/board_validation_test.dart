@@ -11,7 +11,7 @@ void main() {
   late KitApi kitApi;
 
   setUp(() {
-    kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    kitApi = createAppKitApi(store: SceneStore());
   });
 
   List<String> llmKit() =>
@@ -130,7 +130,7 @@ void main() {
       llmBodyId: llm.last,
     );
     final tool = kitApi.instantiate(
-      worldToolKitId('repo_list_files'),
+      worldToolKitId('read'),
       origin: const Offset(-400, 300),
     );
     attachToolKit(
@@ -163,7 +163,7 @@ void main() {
 
   test('an unattached tool without a grant only warns', () {
     kitApi.instantiate(
-      worldToolKitId('repo_list_files'),
+      worldToolKitId('read'),
       origin: const Offset(-400, 300),
     );
     final issue = check().issues.single;
@@ -275,7 +275,7 @@ void main() {
 
   test('a one-cable port with two saved cables marks the extra', () {
     final tool = kitApi.instantiate(
-      worldToolKitId('repo_list_files'),
+      worldToolKitId('read'),
       origin: const Offset(-400, 300),
     );
     for (final y in [0.0, 300.0]) {

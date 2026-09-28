@@ -5,9 +5,7 @@ import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/scene/scene.dart';
-import 'package:skapie/tools/patch/patch_board.dart';
 import 'package:skapie/canvas/board_data_flow.dart';
-import 'package:skapie/tools/check/check_board.dart';
 
 const int connectionPreviewLimit = 280;
 
@@ -79,10 +77,6 @@ ConnectionInfo describeConnection(
 
 String connectionExplanation(KitPortKind? from, KitPortKind? to) {
   return switch ((from, to)) {
-    (KitPortKind.runControlOut, KitPortKind.runControlIn) =>
-      'Sets limits and controls for this LLM run.',
-    (KitPortKind.checkResultOut, KitPortKind.runCheckFeedback) =>
-      'A failed check can allow one more turn when the rule is enabled.',
     (KitPortKind.textOut, KitPortKind.llmInput) =>
       'This text becomes the prompt when you start LLM Run.',
     (KitPortKind.llmConversation, KitPortKind.conversationIn) =>
@@ -97,21 +91,6 @@ String connectionExplanation(KitPortKind? from, KitPortKind? to) {
       'Writes the model reply into this text kit.',
     (KitPortKind.toolOut, KitPortKind.llmTools) =>
       'Offers this tool to the LLM. The model chooses whether to call it.',
-    (KitPortKind.proposalResult, KitPortKind.proposalIn) =>
-      'Displays the proposed patch for review. No file is changed.',
-    (KitPortKind.proposalOut, KitPortKind.reviewIn) =>
-      'Shows the proposal for your Accept or Reject decision.',
-    (KitPortKind.reviewOut, KitPortKind.applyIn) =>
-      'An accepted decision can unlock Apply, which you still start yourself.',
-    (KitPortKind.writeScopeOut, KitPortKind.applyWriteScope) =>
-      'Limits manual Apply to the folder you choose.',
-    (KitPortKind.writeScopeOut, KitPortKind.runCheckWrite) =>
-      'Limits manual Check to the folder you choose.',
-    (KitPortKind.checkSpecOut, KitPortKind.runCheckSpec) =>
-      'Selects the trusted check you configure. You start it manually.',
-    (KitPortKind.runCheckResult, KitPortKind.checkResultIn) =>
-      'Records the outcome after you start Run Check.',
-    (KitPortKind.checkResultOut, KitPortKind.llmContext) => 'Adds a short check summary to the next turn. Conversation keeps the thread.',
     _ => '',
   };
 }
@@ -175,51 +154,11 @@ String _preview(SceneDocument document, SceneCable cable, PortValue value) {
           ? 'No folder chosen. The grant is not live.'
           : 'Read access to $path';
     case PortValue.writeScope:
-      final path = source?.props[writeScopePathProp]?.toString().trim() ?? '';
+      final path =
+          source?.props[repositoryWritePathProp]?.toString().trim() ?? '';
       return path.isEmpty
           ? 'No write folder chosen. The grant is not live.'
-          : 'Selected write scope: $path';
-    case PortValue.patchProposal:
-      final proposalFrame =
-          (source != null && kitIdOf(source) == codingPatchProposalKitId)
-          ? source
-          : (target != null && kitIdOf(target) == codingPatchProposalKitId)
-          ? target
-          : null;
-      final body = proposalFrame == null
-          ? null
-          : patchProposalBody(document, proposalFrame.id);
-      final note = body?.props['note']?.toString().trim() ?? '';
-      final id = body?.props[proposalIdProp]?.toString().trim() ?? '';
-      if (id.isEmpty) {
-        return 'No proposal yet';
-      }
-      return note.isEmpty ? 'Proposal $id' : note;
-    case PortValue.reviewDecision:
-      final reviewFrame =
-          (source != null && kitIdOf(source) == codingReviewDecisionKitId)
-          ? source
-          : (target != null && kitIdOf(target) == codingReviewDecisionKitId)
-          ? target
-          : null;
-      final decision = reviewFrame == null
-          ? ''
-          : reviewDecisionOf(document, reviewFrame.id);
-      return decision.isEmpty ? 'No decision yet' : decision;
-    case PortValue.checkSpec:
-      return source?.props[checkPresetProp] == gitDiffCheckPreset
-          ? 'Trusted check: installed Git · diff --check'
-          : 'Choose the trusted check first';
-    case PortValue.checkResult:
-      return 'An explicit Run Check writes the outcome here';
-    case PortValue.checkSummary:
-      return source == null ? '' : textKitContent(document, source);
-    case PortValue.runControl:
-      return source == null
-          ? ''
-          : '${source.props['modelTurns'] ?? 8} turns · '
-                '${source.props['toolCalls'] ?? 16} tools · '
-                '${source.props['elapsedSeconds'] ?? 120}s';
+          : 'Write access to $path';
   }
 }
 
@@ -308,17 +247,6 @@ String lastUseSummary(
 }) {
   if (boardUse != null) {
     return '${_clock(boardUse.at)} · ${boardUse.how}';
-  }
-  if (const {
-    KitPortKind.proposalIn,
-    KitPortKind.reviewIn,
-    KitPortKind.applyIn,
-    KitPortKind.applyWriteScope,
-    KitPortKind.runCheckSpec,
-    KitPortKind.runCheckWrite,
-    KitPortKind.checkResultIn,
-  }.contains(cable.toKind)) {
-    return 'No transfer observed this session';
   }
   final last = cableLastUse(document, cable, uses);
   if (last != null) {

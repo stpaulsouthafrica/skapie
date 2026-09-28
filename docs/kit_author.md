@@ -63,18 +63,38 @@ If the folder name and `id` do not match, the package is skipped.
 
 ## Tools and grants
 
-A tool is a host-owned runner plus a visible grant card. Give the kit an id that
-starts with `tools.` (for example `tools.mytool`), then name the tool with
-`props.toolName`; the package never runs code. The host must already own a runner
-for that name.
+A tool package has two files. `kit.json` is the card. `kit.dart` is the program.
+On launch, and again on **Reload kit packages**, the app runs `register()` from
+`kit.dart`. Copy the folder into `~/.skapie/kits` and the next launch uses it.
+No app rebuild.
 
-The default shelf ships four runners: `read`, `write`, `edit`, and `shell`. Read
-needs the Repository read folder. Write, edit, and shell need the Repository
-write folder. A grant card shows a Repository input port and an Output port;
-cable the Output to the LLM Tools port.
+```dart
+import 'package:skapie_kit/host.dart';
 
-To add a new runner you change the host, not the package. New host runners need
-an explicit spike first.
+void register() {
+  addTool(
+    'list_kits',
+    'List registered kits.',
+    '{"type":"object","properties":{},"additionalProperties":false}',
+  );
+}
+
+String runTool(String name, String argsJson, String contextJson) {
+  return call('listKits', argsJson);
+}
+```
+
+`call` names a host hook, such as `listKits`, `addObject`, `getKit`, or
+`registerKit`. `saveKit` and `reloadPackages` are deferred: return
+`{"__defer":"saveKit","args":...}` or `{"__defer":"reloadPackages"}`. A hook the
+host does not know is refused.
+
+Give the kit an id that starts with `tools.` and set `props.toolName` to the
+same name you pass to `addTool`. Cable the card's Output to the LLM Tools port.
+
+The starter shelf still ships four host runners: `read`, `write`, `edit`, and
+`shell`. Read needs the Repository read folder. Write, edit, and shell need the
+Repository write folder.
 
 ## Author from inside the app
 

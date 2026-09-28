@@ -6,7 +6,7 @@ import 'package:skapie/scene/scene.dart';
 
 void main() {
   test('Tab walks kit frames from the top, then the left', () {
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    final kitApi = createAppKitApi(store: SceneStore());
     final lower = kitApi.instantiate(
       boardTextKitId,
       origin: const Offset(40, 200),
@@ -44,7 +44,7 @@ void main() {
   });
 
   test('P walks the selected kit ports in draw order', () {
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    final kitApi = createAppKitApi(store: SceneStore());
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final ports = [
       for (final port in kitPorts(kitApi.store.document))
@@ -67,7 +67,7 @@ void main() {
   });
 
   test('Connect lists compatible free targets and skips the cabled pair', () {
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: SceneStore());
+    final kitApi = createAppKitApi(store: SceneStore());
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,

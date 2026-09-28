@@ -12,7 +12,7 @@ void main() {
     'group move keeps kit members together, skips locked kits, undoes once',
     () {
       final store = SceneStore();
-      final api = createAppKitApi(includeDemotedKits: true, store: store);
+      final api = createAppKitApi(store: store);
       final first = api.instantiate(boardTextKitId, origin: Offset.zero);
       final second = api.instantiate(
         boardTextKitId,
@@ -49,7 +49,7 @@ void main() {
 
   test('group color changes only selected cable and kit, with one undo', () {
     final store = SceneStore();
-    final api = createAppKitApi(includeDemotedKits: true, store: store);
+    final api = createAppKitApi(store: store);
     final first = api.instantiate(boardTextKitId, origin: Offset.zero);
     final second = api.instantiate(
       boardTextKitId,
@@ -132,17 +132,17 @@ void main() {
 
   test('group delete refreshes a surviving LLM tool label in one undo', () {
     final store = SceneStore();
-    final api = createAppKitApi(includeDemotedKits: true, store: store);
+    final api = createAppKitApi(store: store);
     final llm = api.instantiate(harnessLlmKitId, origin: Offset.zero);
     final tool = api.instantiate(
-      'tools.list_kits',
+      'tools.read',
       origin: const Offset(400, 0),
     );
     final text = api.instantiate(boardTextKitId, origin: const Offset(800, 0));
     attachToolKit(kitApi: api, toolObjectId: tool.first, llmBodyId: llm.last);
     expect(
       store.document.objectById(llm.last)!.props['content'],
-      contains('Tools: list_kits'),
+      contains('Tools: read'),
     );
 
     expect(
@@ -164,13 +164,13 @@ void main() {
     expect(store.document.objectById(text.first), isNotNull);
     expect(
       store.document.objectById(llm.last)!.props['content'],
-      contains('Tools: list_kits'),
+      contains('Tools: read'),
     );
   });
 
   test('cable-only group actions leave unselected links alone', () {
     final store = SceneStore();
-    final api = createAppKitApi(includeDemotedKits: true, store: store);
+    final api = createAppKitApi(store: store);
     final text = api.instantiate(boardTextKitId, origin: Offset.zero);
     final firstLlm = api.instantiate(
       harnessLlmKitId,
@@ -239,7 +239,7 @@ void main() {
     'group delete removes selected kits and cables, then one undo restores',
     () {
       final store = SceneStore();
-      final api = createAppKitApi(includeDemotedKits: true, store: store);
+      final api = createAppKitApi(store: store);
       final first = api.instantiate(boardTextKitId, origin: Offset.zero);
       final second = api.instantiate(
         boardTextKitId,

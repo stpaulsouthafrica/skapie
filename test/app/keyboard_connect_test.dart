@@ -22,7 +22,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(900, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final store = SceneStore();
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
+    final kitApi = createAppKitApi(store: store);
     kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     kitApi.instantiate(boardTextKitId, origin: const Offset(-320, 280));
     kitApi.instantiate(
@@ -100,7 +100,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(900, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final store = SceneStore();
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
+    final kitApi = createAppKitApi(store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,
@@ -162,7 +162,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(900, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final store = SceneStore();
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
+    final kitApi = createAppKitApi(store: store);
     kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     await tester.pumpWidget(
       SkapieApp(
@@ -196,7 +196,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(900, 700));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final store = SceneStore();
-    final kitApi = createAppKitApi(includeDemotedKits: true, store: store);
+    final kitApi = createAppKitApi(store: store);
     final llm = kitApi.instantiate(harnessLlmKitId, origin: Offset.zero);
     final text = kitApi.instantiate(
       boardTextKitId,

@@ -534,7 +534,7 @@ List<LlmContextPart> llmInputParts(SceneDocument document, String llmBodyId) {
   return _llmReplyParts(document, llmBodyId, llmInputPort);
 }
 
-/// Text cabled into Context, then a Check Result, then an upstream reply.
+/// Text cabled into Context, then an upstream reply.
 List<LlmContextPart> llmContextParts(SceneDocument document, String llmBodyId) {
   if (llmBodyId.isEmpty) {
     return const [];
@@ -549,23 +549,6 @@ List<LlmContextPart> llmContextParts(SceneDocument document, String llmBodyId) {
       parts.add(
         LlmContextPart(
           sourceKitId: boardTextKitId,
-          sourceId: frame.id,
-          text: content,
-        ),
-      );
-    }
-  }
-  for (final frame in document.objects) {
-    if (frame.props[skapieRoleProp] != 'frame' ||
-        kitIdOf(frame) != codingCheckResultKitId ||
-        !kitHasLink(frame, to: llmBodyId, port: llmContextPort)) {
-      continue;
-    }
-    final content = textKitContent(document, frame).trim();
-    if (content.isNotEmpty && content != 'No check run yet') {
-      parts.add(
-        LlmContextPart(
-          sourceKitId: codingCheckResultKitId,
           sourceId: frame.id,
           text: content,
         ),

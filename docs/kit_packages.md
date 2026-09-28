@@ -154,7 +154,7 @@ Call these on `KitApi`, not `KitPackageStore` (store is internal + tests).
 
 ## Current capability boundary
 
-`coding.repository` and the four starter tools (`tools.read`, `tools.write`, `tools.edit`, `tools.shell`) are ordinary package recipes. Their native folder permission and runners are implemented by the host app. A package with an unknown `toolName` does not become executable. The old `tools.repo_*` and kit-author world tools now live under [`examples/kits/`](../examples/README.md). See [tool kits](tools.md) and the [Phase 12 inventory](phase_12_inventory.md).
+`coding.repository` and the four starter tools (`tools.read`, `tools.write`, `tools.edit`, `tools.shell`) are ordinary package recipes. Their native folder permission and runners are implemented by the host app. A package may also ship `kit.dart`. On launch and on reload the app runs that file and registers the tools it declares. A `toolName` with no loaded `kit.dart` and no starter runner does not become executable. The kit-author tools under [`examples/kits/`](../examples/README.md) are the first packages on this path. See [tool kits](tools.md) and [Author a kit](kit_author.md).
 
 A package can name a port from the host vocabulary and can request a tool the
 host already runs. Anything harder needs a **host KitApi hook**, added on purpose
