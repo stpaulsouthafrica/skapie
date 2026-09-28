@@ -14,7 +14,7 @@ On-disk folders are documented in [kit packages](kit_packages.md). Types are doc
 |---|---|---|
 | **Scene object** | One typed item on the canvas (`id`, `type`, frame, `props`) | **Yes** — the scene document |
 | **Kit** (as `KitRecipe`) | In-memory kit recipe: id + display name + relative `KitObjectSpec`s | Process memory |
-| **Kit package** | Folder `kits/<kitId>/kit.json` | Disk shelf (not a live world) |
+| **Kit package** | Folder `~/.skapie/kits/<kitId>/kit.json` | User shelf (not a live world) |
 | **Registry** | `typeId` → builder (`box`, `text`, `button`, `debug.rect`) | Known widgets only |
 
 Instantiating a kit **copies** specs into new scene objects. Editing those objects does not edit the kit. Reloading the scene does not reload kits; kits reload from disk via `reloadPackages`.
@@ -26,8 +26,8 @@ Instantiating a kit **copies** specs into new scene objects. Editing those objec
 App bootstrap (`lib/main.dart`):
 
 1. `bootstrapSceneStore()` loads `scene.json`.
-2. `bootstrapKitApi()` resolves the kits root (see [kit packages](kit_packages.md)).
-3. `createAppKitApi(...)` constructs `KitApi` and registers `demoNoteCardRecipe`, the harness kit recipes (`harness.llm`, `harness.system-prompt`, `harness.tools`), and every `tools.*` world-tool grant as fallbacks.
+2. `bootstrapKitApi()` resolves the kits root (see [kit packages](kit_packages.md)), creates it, and seeds the lean starter set once when it is the user shelf.
+3. `createAppKitApi(...)` constructs `KitApi` and registers `demoNoteCardRecipe`, the harness kit recipes, and every `tools.*` world-tool grant as fallbacks.
 4. `await reloadPackages()` — disk packages win when present.
 5. UI / future agent call `listKits`, `instantiate`, `addObject`, `saveKit`, …
 
@@ -63,6 +63,8 @@ Relative object inside a kit recipe. World position at instantiate is `origin + 
 | `id` | `String` — e.g. `demo.note-card` |
 | `displayName` | `String` |
 | `objects` | `List<KitObjectSpec>` |
+| `ports` | `List<KitPackagePort>` — ports from the package, stamped onto the frame |
+| `assets` | `Map<String, String>` — asset path to file contents, read at reload |
 
 `description` exists on disk `kit.json` only. It is **not** a `KitRecipe` field. `saveKit` does not write `description`.
 
@@ -199,7 +201,10 @@ Scan the kits root (`*/kit.json`), parse, register. See [kit packages](kit_packa
 
 - If `packages` is null: return immediately.
 - **Conflict:** disk **replaces** memory for the same id (logged).
-- Bad packages: skip + `log`; other packages still load.
+- Bad packages: skip + `log`; other packages still load. The skipped folder id and
+  reason are reported to the top-left host status.
+- Package `assets` are read here; a missing asset is a warning, not a crash.
+- Package `ports` and `contentRef` assets are applied when the kit is instantiated.
 - Non-empty `capabilities`: warning, objects still load. Workers are not run.
 - Does not mutate the scene.
 - **Undo:** none.
@@ -212,7 +217,7 @@ Future<void> saveKit(KitRecipe recipe)
 
 Write pretty `kit.json` under the **resolved** kits root (`<root>/<id>/kit.json`), create the folder, then put the kit recipe in memory (overwrite ok).
 
-Writes to Application Support unless you overrode the root. It does **not** automatically write the git repo `kits/` folder. Path rules: [kit packages](kit_packages.md).
+Writes to the **user shelf** `~/.skapie/kits` unless you overrode the root. It does **not** automatically write the git repo `kits/` folder. Path rules: [kit packages](kit_packages.md).
 
 - **Throws:** `StateError` (`No kit package store`); `ArgumentError` invalid id (`/`, `\`, empty, `.`, `..`) or unknown `typeId` in objects.
 - Does not mutate the scene.
@@ -228,7 +233,7 @@ KitApi createAppKitApi({
 })
 ```
 
-Uses `createBuiltinRegistry()` if `registry` is omitted. Always registers `demoNoteCardRecipe`, the harness kit recipes, world-tool grants (`tools.*`), and the patch board kits (`coding.patch_proposal`, `coding.review_decision`, `coding.apply_patch`). Call `reloadPackages` afterward so disk wins.
+Uses `createBuiltinRegistry()` if `registry` is omitted. Always registers `demoNoteCardRecipe`, the harness kit recipes, and world-tool grants (`tools.*`). Pass `includeDemotedKits: true` to also register the demoted rebuild references. Call `reloadPackages` afterward so disk wins.
 
 ## Errors
 
@@ -239,9 +244,9 @@ Uses `createBuiltinRegistry()` if `registry` is omitted. Always registers `demoN
 | Duplicate `registerKit` id | `StateError` |
 | `saveKit` with no `packages` | `StateError` (`No kit package store`) |
 | Invalid kit id on write | `ArgumentError` |
-| Bad `kit.json` on load | That package skipped; logged; others load |
-| Relative `SKAPIE_KITS_ROOT` | Warning; fall back to Application Support |
-| Unreadable kits root (sandbox) | Load errors logged; in-memory demo fallback remains |
+| Bad `kit.json` on load | That package skipped; reported to host status; others load |
+| Relative `SKAPIE_KITS_ROOT` | Warning; ignored (falls to project root or user shelf) |
+| Unreadable kits root (sandbox) | Failure reported to host status; in-memory fallback remains |
 
 ## Cookbook
 
@@ -372,7 +377,8 @@ Visible sub-agent kits: a future direction where a kit can show living agent wor
 ## Non-goals
 
 - Workers, isolates, Wasm, executing non-empty `capabilities`
-- Streaming / Pi / MCP (see [agent.md](agent.md) — tools are 9.1; provider + chat are 9.2)
+- A shipped MCP product kit. MCP is a **package**, not a host feature; the host
+  grows a hook only if a spike proves one is needed (see [kit packages](kit_packages.md#mcp-and-other-hard-packages))
 - Dart eval / new registry types
 - Batched multi-object undo
 - “Save selection as kit…” UI

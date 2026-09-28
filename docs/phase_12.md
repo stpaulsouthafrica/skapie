@@ -32,7 +32,7 @@ Lead every turn with Layer, kit id, Change, stop-after-this-layer.
 Prove with the slice’s How to test. Stay on main. Sheep emoji when done with your rules.
 ```
 
-**Status:** all Phase 12 slices are implemented. Next opens at Phase 13 (deepen the author API and docs). Evidence: [inventory](phase_12_inventory.md), [rebuild notes](phase_12_rebuild_notes.md), `kits/` for the lean shelf, `examples/kits/` for demoted packages, and the proof tests under `test/app/phase_12_proof_test.dart` and `test/tools/coding_tools_test.dart`.
+**Status:** all Phase 12 slices are implemented. Next: [Phase 13](phase_13.md) (injectable packages, user kits shelf, authoring loop). Evidence: [inventory](phase_12_inventory.md), [rebuild notes](phase_12_rebuild_notes.md), `kits/` for the lean shelf, `examples/kits/` for demoted packages, and the proof tests under `test/app/phase_12_proof_test.dart` and `test/tools/coding_tools_test.dart`.
 
 **Already done:** `12.0.1`, `12.0.2`, `12.0.3`, `12.1.1`–`12.1.3`, `12.2.1`–`12.2.3`, `12.3.1`–`12.3.4`, `12.4.1`–`12.4.3`, `12.5.1`–`12.5.3`.
 
@@ -202,7 +202,7 @@ Human or starter LLM authors a trivial package from docs; reload; place; cable; 
 
 ## Out of scope
 
-Swarms, MCP marketplace, pause/resume product UI, eval corpus, new first-party feature kits. Phase 13 = deepen author API/docs after 12.5.
+Swarms, MCP marketplace, pause/resume product UI, eval corpus, new first-party feature kits. See [Phase 13](phase_13.md) for the injectable packages / authoring loop plan.
 
 ## Gate for the phase
 

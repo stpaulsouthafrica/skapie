@@ -38,7 +38,7 @@ Old shape: visible per-run limits and a failed-check feedback rule for one LLM.
 
 ## Kit-author world tools
 
-Old shape: the model changed the scene and kits through `tools.list_kits`, `tools.add_object`, `tools.save_kit`, and friends. The lean host instead gives the model `read`, `write`, `edit`, and `shell` over a granted repository, plus a **Reload kit packages** palette action. Authoring is: write `kits/<id>/kit.json`, reload, place, cable.
+Old shape: the model changed the scene and kits through `tools.list_kits`, `tools.add_object`, `tools.save_kit`, and friends. The lean host instead gives the model `read`, `write`, `edit`, and `shell` over a granted repository, plus a **Reload kit packages** palette action. Authoring is: write `~/.skapie/kits/<id>/kit.json` (grant the shelf as the repository), reload, place, cable.
 
 - Runners: `lib/tools/world/register.dart` (`createWorldTools`) and `lib/tools/world/*.dart`.
 

@@ -1,4 +1,5 @@
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/kit_package_ports.dart';
 import 'package:skapie/registry/object_registry.dart';
 import 'package:skapie/scene/scene_json_codec.dart';
 
@@ -143,6 +144,7 @@ class ParsedKitPackage {
     this.description,
     this.capabilities = const [],
     this.capabilityWarning,
+    this.assetPaths = const [],
   });
 
   final int schemaVersion;
@@ -150,6 +152,9 @@ class ParsedKitPackage {
   final String? description;
   final List<String> capabilities;
   final String? capabilityWarning;
+
+  /// Relative file paths a package ships. Contents are loaded by the store.
+  final List<String> assetPaths;
 }
 
 bool isValidKitId(String id) {
@@ -190,6 +195,14 @@ ParsedKitPackage parseKitPackageJson(
   final description = json['description'];
   final capabilities = _readCapabilities(json['capabilities']);
   final objects = _readObjects(json['objects'], registry: registry);
+  final ports = parseKitPackagePorts(json['ports']);
+  final assetPaths = _readAssetPaths(json['assets']);
+  final recipe = KitRecipe(
+    id: id,
+    displayName: displayName,
+    objects: objects,
+    ports: ports,
+  );
   String? warning;
   if (capabilities.isNotEmpty) {
     warning =
@@ -197,10 +210,11 @@ ParsedKitPackage parseKitPackageJson(
   }
   return ParsedKitPackage(
     schemaVersion: version.toInt(),
-    recipe: KitRecipe(id: id, displayName: displayName, objects: objects),
+    recipe: recipe,
     description: description is String ? description : null,
     capabilities: capabilities,
     capabilityWarning: warning,
+    assetPaths: assetPaths,
   );
 }
 
@@ -211,6 +225,9 @@ Map<String, Object?> kitPackageToJson(ParsedKitPackage package) {
     'displayName': package.recipe.displayName,
     if (package.description != null) 'description': package.description,
     'capabilities': package.capabilities,
+    if (package.recipe.ports.isNotEmpty)
+      'ports': kitPackagePortsToJson(package.recipe.ports),
+    if (package.assetPaths.isNotEmpty) 'assets': package.assetPaths,
     'objects': [
       for (final object in package.recipe.objects) _objectToJson(object),
     ],
@@ -222,7 +239,32 @@ ParsedKitPackage packageFromRecipe(KitRecipe recipe) {
     schemaVersion: kitPackageSchemaVersion,
     recipe: recipe,
     capabilities: const [],
+    assetPaths: recipe.assets.keys.toList(),
   );
+}
+
+List<String> _readAssetPaths(Object? value) {
+  if (value == null) {
+    return const [];
+  }
+  if (value is! List) {
+    throw const FormatException('kit.json assets must be an array');
+  }
+  final paths = <String>[];
+  for (final item in value) {
+    if (item is! String) {
+      throw const FormatException('kit.json assets entries must be strings');
+    }
+    final path = item.trim();
+    if (path.isEmpty ||
+        path.startsWith('/') ||
+        path.contains('..') ||
+        path.contains('\\')) {
+      throw FormatException('Invalid asset path: $path');
+    }
+    paths.add(path);
+  }
+  return paths;
 }
 
 List<String> _readCapabilities(Object? value) {

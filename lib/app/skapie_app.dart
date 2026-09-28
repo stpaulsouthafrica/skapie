@@ -11,6 +11,7 @@ import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/tools/world/kits.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/host_status.dart';
 import 'package:skapie/paint/paint.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene_store.dart';
@@ -28,6 +29,7 @@ class SkapieApp extends StatefulWidget {
     AgentController? agentController,
     BoardCatalog? boardCatalog,
     CanvasShortcutSettings? canvasShortcuts,
+    HostStatusLog? statusLog,
   }) : this._(
          key: key,
          store: store,
@@ -36,11 +38,13 @@ class SkapieApp extends StatefulWidget {
              createAppKitApi(
                store: store,
                registry: registry ?? createBuiltinRegistry(),
+               status: statusLog,
              ),
          agentSession: agentSession,
          agentController: agentController,
          boardCatalog: boardCatalog,
          canvasShortcuts: canvasShortcuts ?? CanvasShortcutSettings(),
+         statusLog: statusLog,
        );
 
   SkapieApp._({
@@ -51,6 +55,7 @@ class SkapieApp extends StatefulWidget {
     AgentController? agentController,
     this.boardCatalog,
     required this.canvasShortcuts,
+    this.statusLog,
   }) : agentController =
            agentController ??
            AgentController(
@@ -69,6 +74,7 @@ class SkapieApp extends StatefulWidget {
   final AgentController agentController;
   final BoardCatalog? boardCatalog;
   final CanvasShortcutSettings canvasShortcuts;
+  final HostStatusLog? statusLog;
   ObjectRegistry get registry => kitApi.registry;
 
   @override
@@ -79,6 +85,13 @@ class _SkapieAppState extends State<SkapieApp> {
   late SceneStore _store = widget.store;
   late KitApi _kitApi = widget.kitApi;
   late AgentController _controller = widget.agentController;
+  late final HostStatusLog _statusLog = widget.statusLog ?? HostStatusLog();
+
+  @override
+  void initState() {
+    super.initState();
+    _kitApi.statusLog ??= _statusLog;
+  }
 
   Future<void> _openBoard(BoardInfo board) async {
     if (_controller.runningBodyId != null) {
@@ -94,7 +107,9 @@ class _SkapieAppState extends State<SkapieApp> {
       store: nextStore,
       registry: _kitApi.registry,
       packages: _kitApi.packages,
+      status: _statusLog,
     );
+    nextKitApi.log = _kitApi.log;
     await nextKitApi.reloadPackages();
     fitPlacedLlmKits(nextKitApi);
     fitPlacedToolKits(nextKitApi);
@@ -165,6 +180,7 @@ class _SkapieAppState extends State<SkapieApp> {
           kitApi: _kitApi,
           agentController: _controller,
           canvasShortcuts: widget.canvasShortcuts,
+          statusLog: _statusLog,
           onNewBoard: widget.boardCatalog == null ? null : _newBoard,
           listBoards: widget.boardCatalog?.list,
           onOpenBoard: widget.boardCatalog == null ? null : _openBoard,

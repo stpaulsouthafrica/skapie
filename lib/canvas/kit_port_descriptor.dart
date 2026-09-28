@@ -1,5 +1,6 @@
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
+import 'package:skapie/kit_api/kit_package_ports.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/tools/attach.dart';
 
@@ -603,6 +604,18 @@ String? kitPortRefusal(KitPortKind a, KitPortKind b) {
 
 /// Ports this kit frame shows right now.
 List<KitPortSpec> kitPortSpecsFor(SceneObject frame) {
+  final declared = kitPortSpecsFromPackage(frame.props[packagePortsProp]);
+  if (declared != null) {
+    final base = isWorldToolKit(frame)
+        ? worldToolKitPortsFor(frame)
+        : const <KitPortSpec>[];
+    final kinds = {for (final spec in declared) spec.kind};
+    return [
+      ...declared,
+      for (final spec in base)
+        if (!kinds.contains(spec.kind)) spec,
+    ];
+  }
   final kitId = kitIdOf(frame);
   if (kitId == null) {
     return const [];
@@ -617,4 +630,64 @@ List<KitPortSpec> kitPortSpecsFor(SceneObject frame) {
       if (spec.requiresProp == null || frame.props[spec.requiresProp] == true)
         spec,
   ];
+}
+
+/// Ports from a package's declared `ports` prop. Null when the frame has no
+/// package ports, so built-in kits keep their own ports.
+List<KitPortSpec>? kitPortSpecsFromPackage(Object? raw) {
+  if (raw is! List) {
+    return null;
+  }
+  try {
+    return [
+      for (final port in parseKitPackagePorts(raw)) _packagePortSpec(port),
+    ];
+  } on FormatException {
+    return null;
+  }
+}
+
+KitPortKind? _packagePortKind(String value, bool output) {
+  if (output) {
+    return switch (value) {
+      'text' => KitPortKind.textOut,
+      _ => null,
+    };
+  }
+  return null;
+}
+
+KitPortSpec _packagePortSpec(KitPackagePort port) {
+  final kind = _packagePortKind(port.value, port.isOutput);
+  if (kind == null) {
+    throw FormatException('Unsupported port: ${port.value}');
+  }
+  final canonical = kitPortSpecOf(kind);
+  return KitPortSpec(
+    id: port.id,
+    kind: kind,
+    label: port.label ?? canonical.label,
+    direction: PortDirection.output,
+    value: canonical.value,
+    placement: _packagePlacement(port, canonical),
+    multiplicity: canonical.multiplicity,
+    peer: canonical.peer,
+    linkPort: canonical.linkPort,
+    linkOwner: canonical.linkOwner,
+    affectsRun: canonical.affectsRun,
+  );
+}
+
+PortPlacement _packagePlacement(KitPackagePort port, KitPortSpec canonical) {
+  final right =
+      (port.side ??
+          (canonical.placement.side == PortSide.right ? 'right' : 'left')) ==
+      'right';
+  final side = right ? PortSide.right : PortSide.left;
+  final anchor =
+      port.placement ??
+      (canonical.placement.anchor == PortAnchor.middle ? 'middle' : 'footer');
+  return anchor == 'middle'
+      ? PortPlacement.middle(side)
+      : PortPlacement.footer(side);
 }

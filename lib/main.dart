@@ -12,8 +12,10 @@ import 'package:skapie/agent/agent_provider.dart';
 import 'package:skapie/app/skapie_app.dart';
 import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/kit_api/kit_api.dart';
+import 'package:skapie/kit_api/host_status.dart';
 import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/kit_api/kit_path.dart';
+import 'package:skapie/kit_api/kit_seed.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
 import 'package:skapie/canvas/kit_ports.dart';
@@ -38,7 +40,8 @@ Future<void> main() async {
     store = SceneStore(persistence: SceneFilePersistence(activeBoard.file));
     await store.load();
   }
-  final kitApi = await bootstrapKitApi(store: store);
+  final statusLog = HostStatusLog();
+  final kitApi = await bootstrapKitApi(store: store, statusLog: statusLog);
   final agentController = await bootstrapAgentController(kitApi: kitApi);
   final appSupport = await getApplicationSupportDirectory();
   final canvasShortcuts = await CanvasShortcutSettings.load(
@@ -51,6 +54,7 @@ Future<void> main() async {
       agentController: agentController,
       boardCatalog: boardCatalog,
       canvasShortcuts: canvasShortcuts,
+      statusLog: statusLog,
     ),
   );
 }
@@ -90,7 +94,9 @@ Future<SceneStore> bootstrapSceneStore({
 Future<KitApi> bootstrapKitApi({
   required SceneStore store,
   Directory? appSupportDirectory,
+  Directory? homeDirectory,
   ObjectRegistry? registry,
+  HostStatusLog? statusLog,
 }) async {
   final appSupport =
       appSupportDirectory ?? await getApplicationSupportDirectory();
@@ -101,6 +107,7 @@ Future<KitApi> bootstrapKitApi({
     dartDefinePath: _kitsRootDefine,
     envPath: Platform.environment['SKAPIE_KITS_ROOT'],
     projectRoot: projectRoot,
+    homeDirectory: homeDirectory,
     appSupportDirectory: appSupport,
   );
   if (resolved.warning != null) {
@@ -110,13 +117,26 @@ Future<KitApi> bootstrapKitApi({
     'Skapie kits root: ${resolved.directory.absolute.path} (${resolved.source})',
   );
   final objectRegistry = registry ?? createBuiltinRegistry();
+  final kitPackages = KitPackageStore(
+    root: resolved.directory,
+    registry: objectRegistry,
+  );
+  try {
+    await resolved.directory.create(recursive: true);
+    if (resolved.source == 'user') {
+      final seed = await seedStarterKits(kitPackages);
+      if (seed.written.isNotEmpty) {
+        debugPrint('Skapie seeded ${seed.written.length} starter kit(s)');
+      }
+    }
+  } catch (error) {
+    debugPrint('Skapie: could not prepare kits shelf: $error');
+  }
   final api = createAppKitApi(
     store: store,
     registry: objectRegistry,
-    packages: KitPackageStore(
-      root: resolved.directory,
-      registry: objectRegistry,
-    ),
+    packages: kitPackages,
+    status: statusLog,
   );
   api.log = (message) => debugPrint('Skapie: $message');
   await api.reloadPackages();

@@ -7,6 +7,7 @@ import 'package:skapie/app/canvas_settings_panel.dart';
 import 'package:skapie/app/canvas_shortcut_settings.dart';
 import 'package:skapie/app/command_palette.dart';
 import 'package:skapie/app/coding_workflow_starter.dart';
+import 'package:skapie/app/host_status_banner.dart';
 import 'package:skapie/app/inspector_panel.dart';
 import 'package:skapie/app/run_recovery_banner.dart';
 import 'package:skapie/app/starter_set.dart';
@@ -14,6 +15,7 @@ import 'package:skapie/canvas/canvas_viewport.dart';
 import 'package:skapie/canvas/keyboard_connect.dart';
 import 'package:skapie/canvas/kit_ports.dart';
 import 'package:skapie/canvas/selection_controller.dart';
+import 'package:skapie/kit_api/host_status.dart';
 import 'package:skapie/kit_api/kit_api.dart';
 import 'package:skapie/kit_api/kit_compound.dart';
 import 'package:skapie/registry/registry.dart';
@@ -31,6 +33,7 @@ class HomeScreen extends StatefulWidget {
     required this.kitApi,
     required this.agentController,
     this.canvasShortcuts,
+    this.statusLog,
     this.onNewBoard,
     this.listBoards,
     this.onOpenBoard,
@@ -41,6 +44,7 @@ class HomeScreen extends StatefulWidget {
   final KitApi kitApi;
   final AgentController agentController;
   final CanvasShortcutSettings? canvasShortcuts;
+  final HostStatusLog? statusLog;
   final Future<void> Function()? onNewBoard;
   final Future<List<BoardInfo>> Function()? listBoards;
   final Future<void> Function(BoardInfo board)? onOpenBoard;
@@ -151,28 +155,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _add(String value) {
     if (widget.kitApi.getKit(value) != null) {
-      final ids = widget.kitApi.instantiate(value, origin: _placeOrigin);
-      if (value == harnessLlmKitId) {
-        for (final id in ids) {
-          final object = widget.store.document.objectById(id);
-          if (object != null && object.props[skapieRoleProp] == 'body') {
-            _lastLlmBodyId = id;
-            _selection.select(id);
-            break;
+      try {
+        final ids = widget.kitApi.instantiate(value, origin: _placeOrigin);
+        widget.statusLog?.clear('package:$value');
+        if (value == harnessLlmKitId) {
+          for (final id in ids) {
+            final object = widget.store.document.objectById(id);
+            if (object != null && object.props[skapieRoleProp] == 'body') {
+              _lastLlmBodyId = id;
+              _selection.select(id);
+              break;
+            }
+          }
+        } else if (value == codingRepositoryKitId) {
+          _selection.select(ids.first);
+        } else if (value.startsWith('tools.')) {
+          for (final id in ids) {
+            final object = widget.store.document.objectById(id);
+            if (object != null &&
+                (object.props['toolName']?.toString().trim() ?? '')
+                    .isNotEmpty) {
+              _lastToolObjectId = id;
+              _selection.select(id);
+              break;
+            }
           }
         }
-      } else if (value == codingRepositoryKitId) {
-        _selection.select(ids.first);
-      } else if (value.startsWith('tools.')) {
-        for (final id in ids) {
-          final object = widget.store.document.objectById(id);
-          if (object != null &&
-              (object.props['toolName']?.toString().trim() ?? '').isNotEmpty) {
-            _lastToolObjectId = id;
-            _selection.select(id);
-            break;
-          }
-        }
+      } catch (error) {
+        widget.statusLog?.report(
+          key: 'package:$value',
+          message: 'Could not place $value: $error',
+        );
       }
       return;
     }
@@ -495,6 +508,10 @@ class _HomeScreenState extends State<HomeScreen> {
         const SnackBar(content: Text('Reloaded kit packages from disk.')),
       );
     } catch (error) {
+      widget.statusLog?.report(
+        key: 'package:reload',
+        message: 'Could not reload packages: $error',
+      );
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -612,13 +629,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 left: 16,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 360),
-                  child: RunRecoveryBanner(
-                    controller: widget.agentController,
-                    onInspect: (bodyId) {
-                      if (widget.store.document.objectById(bodyId) != null) {
-                        _selection.select(bodyId);
-                      }
-                    },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      RunRecoveryBanner(
+                        controller: widget.agentController,
+                        onInspect: (bodyId) {
+                          if (widget.store.document.objectById(bodyId) !=
+                              null) {
+                            _selection.select(bodyId);
+                          }
+                        },
+                      ),
+                      if (widget.statusLog != null)
+                        HostStatusBanner(status: widget.statusLog!),
+                    ],
                   ),
                 ),
               ),

@@ -2,7 +2,7 @@
 
 These documents described the earlier Phase 12–15 plan (reliable single-agent loop, kit platform, swarms, engineer-ready product). They remain useful as design archaeology and as source material for kit-author docs, but they are **not** the active roadmap.
 
-Active plan starts again at [Phase 12 — lean host](../phase_12.md): cleanup, a minimal starter coding agent, and a rock-solid host API so users (and the starter LLM) create new kit packages instead of shipping more first-party kits in the app binary.
+Active plan: [Phase 12 — lean host](../phase_12.md) and [Phase 13 — injectable packages](../phase_13.md) are **implemented**. Users author kit packages on `~/.skapie/kits`, and future changes happen inside Skapie as packages rather than as new first-party kits in the app binary.
 
 | Archived file | Former title |
 | --- | --- |

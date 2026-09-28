@@ -272,12 +272,14 @@ void main() {
   });
 
   test('relative kits root override is rejected', () {
-    final appSupport = Directory.systemTemp;
+    final home = Directory.systemTemp;
     final resolved = resolveKitsRoot(
       dartDefinePath: 'relative/kits',
-      appSupportDirectory: appSupport,
+      homeDirectory: home,
+      appSupportDirectory: home,
     );
     expect(resolved.warning, isNotNull);
+    expect(resolved.source, 'user');
     expect(resolved.directory.path, contains('skapie/kits'));
   });
 }

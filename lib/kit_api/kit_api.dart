@@ -1,5 +1,7 @@
 import 'dart:ui';
 
+import 'package:skapie/kit_api/host_status.dart';
+import 'package:skapie/kit_api/kit_package_ports.dart';
 import 'package:skapie/kit_api/kit_package_store.dart';
 import 'package:skapie/registry/registry.dart';
 import 'package:skapie/scene/scene.dart';
@@ -110,11 +112,35 @@ class KitRecipe {
     required this.id,
     required this.displayName,
     required this.objects,
+    this.ports = const [],
+    this.assets = const {},
   });
 
   final String id;
   final String displayName;
   final List<KitObjectSpec> objects;
+
+  /// Package-declared ports, stamped onto the frame at instantiate time.
+  final List<KitPackagePort> ports;
+
+  /// Asset path (relative to the package folder) to file contents.
+  final Map<String, String> assets;
+
+  KitRecipe copyWith({
+    String? id,
+    String? displayName,
+    List<KitObjectSpec>? objects,
+    List<KitPackagePort>? ports,
+    Map<String, String>? assets,
+  }) {
+    return KitRecipe(
+      id: id ?? this.id,
+      displayName: displayName ?? this.displayName,
+      objects: objects ?? this.objects,
+      ports: ports ?? this.ports,
+      assets: assets ?? this.assets,
+    );
+  }
 }
 
 const KitRecipe boardTextRecipe = KitRecipe(
@@ -340,13 +366,20 @@ const KitRecipe codingRepositoryRecipe = KitRecipe(
 /// model can answer schema questions without the network.
 const String skapieExtensionsBody =
     'Skapie Extensions — author a kit package offline\n\n'
-    'A kit package is a folder kits/<id>/ with kit.json:\n'
-    'schemaVersion: 1, id (same as folder), displayName,\n'
-    'description (optional), capabilities: [], objects: [].\n'
-    'Each object: typeId (box, text, button, debug.rect), x, y, width, '
-    'height, props.\n\n'
-    'Add a tool by setting props.toolName on an object and cabling Output to '
-    'the LLM Tools port. The host must own that runner.\n\n'
+    'Your shelf is ~/.skapie/kits. Each kit is a folder there:\n'
+    '~/.skapie/kits/<id>/kit.json (the folder name must match id).\n\n'
+    'kit.json fields: schemaVersion: 1, id, displayName, description\n'
+    '(optional), capabilities: [], ports (optional), assets (optional),\n'
+    'objects: []. Each object: typeId (box, text, button, debug.rect), x, y,\n'
+    'width, height, props.\n\n'
+    'Useful kit: add a text output port and an asset file, and a body object\n'
+    'with contentRef pointing at that asset. Cable the output to an LLM\n'
+    'Context port to feed the text.\n\n'
+    'To add a tool, give the kit an id that starts with tools. (for example\n'
+    'tools.mytool). Set props.toolName on an object and cable Output to the\n'
+    'LLM Tools port. The host must already own that runner.\n\n'
+    'Workflow: write the folder (grant Read/Write/Edit/Shell a folder, e.g.\n'
+    'the shelf), run Reload kit packages, place the kit, then cable it.\n\n'
     'Local docs: docs/kit_author.md, docs/kit_api.md, docs/kit_packages.md';
 
 const KitRecipe skapieExtensionsRecipe = KitRecipe(
@@ -447,6 +480,9 @@ class KitApi {
   final ObjectRegistry registry;
   final KitPackageStore? packages;
   void Function(String message)? log;
+
+  /// Package and grant/tool faults shown in the top-left host status.
+  HostStatusLog? statusLog;
   final Map<String, KitRecipe> _kits = {};
 
   String addObject({
@@ -543,6 +579,10 @@ class KitApi {
 
   void registerKit(KitRecipe recipe) {
     if (_kits.containsKey(recipe.id)) {
+      statusLog?.report(
+        key: 'package:${recipe.id}',
+        message: 'Duplicate kit id: ${recipe.id}',
+      );
       throw StateError('Duplicate kit id: ${recipe.id}');
     }
     _kits[recipe.id] = recipe;
@@ -553,18 +593,30 @@ class KitApi {
   List<KitRecipe> listKits() => List.unmodifiable(_kits.values);
 
   /// Scan the kits root and register each package. Disk replaces in-memory
-  /// kit recipes with the same id.
+  /// kit recipes with the same id. Faults go to the host status surface.
   Future<void> reloadPackages() async {
     final store = packages;
     if (store == null) {
       return;
     }
+    statusLog?.clearWhere((key) => key.startsWith('package'));
     final loaded = await store.loadAll();
     for (final warning in loaded.warnings) {
       log?.call(warning);
     }
-    for (final error in loaded.errors) {
-      log?.call(error);
+    for (var index = 0; index < loaded.warnings.length; index++) {
+      statusLog?.report(
+        key: 'package-warn:$index',
+        message: loaded.warnings[index],
+        severity: HostStatusSeverity.warning,
+      );
+    }
+    for (final failure in loaded.failures) {
+      log?.call(failure.text);
+      statusLog?.report(
+        key: 'package:${failure.id}',
+        message: failure.message,
+      );
     }
     for (final recipe in loaded.recipes) {
       if (_kits.containsKey(recipe.id)) {
@@ -572,9 +624,9 @@ class KitApi {
       }
       _kits[recipe.id] = recipe;
     }
-    log?.call(
-      'Loaded ${loaded.recipes.length} kit package(s) from ${store.root.absolute.path}',
-    );
+    final summary =
+        'Loaded ${loaded.recipes.length} kit package(s) from ${store.root.absolute.path}';
+    log?.call(summary);
   }
 
   /// Write `kits/<id>/kit.json`, then register/update the in-memory kit recipe.
@@ -591,29 +643,49 @@ class KitApi {
   List<String> instantiate(String kitId, {required Offset origin}) {
     final recipe = _kits[kitId];
     if (recipe == null) {
+      statusLog?.report(
+        key: 'package:$kitId',
+        message: 'Unknown kit: $kitId',
+      );
       throw ArgumentError('Unknown kit: $kitId');
     }
     for (final spec in recipe.objects) {
       if (registry.get(spec.typeId) == null) {
+        statusLog?.report(
+          key: 'package:$kitId',
+          message: 'Unknown typeId: ${spec.typeId}',
+        );
         throw ArgumentError('Unknown typeId: ${spec.typeId}');
       }
     }
+    statusLog?.clear('package:$kitId');
     final name = nextKitName(
       store.document,
       stem: recipe.id.startsWith('tools.') ? 'Tool' : recipe.displayName,
       kitId: recipe.id,
     );
-    return [
-      for (final spec in recipe.objects)
+    final ids = <String>[];
+    for (final spec in recipe.objects) {
+      final props = <String, Object?>{...spec.props, kitNameProp: name};
+      final ref = props['contentRef']?.toString().trim() ?? '';
+      if (ref.isNotEmpty && recipe.assets.containsKey(ref)) {
+        props['content'] = recipe.assets[ref];
+      }
+      if (spec.props[skapieRoleProp] == 'frame' && recipe.ports.isNotEmpty) {
+        props[packagePortsProp] = kitPackagePortsToJson(recipe.ports);
+      }
+      ids.add(
         addObject(
           typeId: spec.typeId,
           x: origin.dx + spec.x,
           y: origin.dy + spec.y,
           width: spec.width,
           height: spec.height,
-          props: {...spec.props, kitNameProp: name},
+          props: props,
         ),
-    ];
+      );
+    }
+    return ids;
   }
 }
 
@@ -766,6 +838,7 @@ KitApi createAppKitApi({
   required SceneStore store,
   ObjectRegistry? registry,
   KitPackageStore? packages,
+  HostStatusLog? status,
   bool includeDemotedKits = false,
 }) {
   final api = KitApi(
@@ -773,6 +846,7 @@ KitApi createAppKitApi({
     registry: registry ?? createBuiltinRegistry(),
     packages: packages,
   );
+  api.statusLog = status;
   api.registerKit(demoNoteCardRecipe);
   api.registerKit(boardTextRecipe);
   api.registerKit(boardBoxRecipe);

@@ -65,14 +65,14 @@ Do not start phase _n+1_ until phase _n_ meets its acceptance criteria: `flutter
 
 ## Phase 7 gate — done
 
-- Kit packages on disk: `kits/<kitId>/kit.json` loaded into `KitApi` at startup (`reloadPackages`). `saveKit` writes pretty JSON.
+- Kit packages on disk: `~/.skapie/kits/<kitId>/kit.json` loaded into `KitApi` at startup (`reloadPackages`). `saveKit` writes pretty JSON.
 - Demo `demo.note-card` ships as `kits/demo.note-card/`. Disk replaces the in-memory kit recipe for the same id. Unknown `typeId` in a package skips that package. No Dart eval.
 - `capabilities: []` is a seam only; non-empty logs a warning and still loads `objects`. No workers, sandbox, agent, or file watcher.
 
 ## Phase 8 gate — done
 
 - Complete Kit API documentation: mental model, every public `KitApi` method, cookbook, package contract linked from [kit packages](kit_packages.md), agent-tool sketch labeled **not implemented**.
-- Docs match `lib/kit_api/kit_api.dart`. Kits root (repo vs Application Support vs override) is unambiguous.
+- Docs match `lib/kit_api/kit_api.dart`. Kits root (user shelf vs project vs override) is unambiguous.
 
 ## Phase 9 gate — done
 

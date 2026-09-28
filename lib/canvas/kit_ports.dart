@@ -409,6 +409,21 @@ List<SceneObject> textFrames(SceneDocument document) {
   ];
 }
 
+/// Frames a package gives a text output port, beyond the built-in text and
+/// Extensions kits. Cable one to Input or Context to feed its body as text.
+List<SceneObject> packageTextFrames(SceneDocument document) {
+  return [
+    for (final object in document.objects)
+      if (object.props[skapieRoleProp] == 'frame' &&
+          kitIdOf(object) != boardTextKitId &&
+          kitIdOf(object) != skapieExtensionsKitId &&
+          kitPortSpecsFor(object).any(
+            (spec) => spec.isOutput && spec.value == PortValue.text,
+          ))
+        object,
+  ];
+}
+
 List<SceneObject> conversationFrames(SceneDocument document) {
   return [
     for (final object in document.objects)
@@ -497,6 +512,25 @@ List<LlmContextPart> llmInputParts(SceneDocument document, String llmBodyId) {
   if (parts.isNotEmpty) {
     return parts;
   }
+  for (final frame in packageTextFrames(document)) {
+    if (!kitHasLink(frame, to: llmBodyId, port: llmInputPort)) {
+      continue;
+    }
+    final content = textKitContent(document, frame).trim();
+    if (content.isEmpty) {
+      continue;
+    }
+    parts.add(
+      LlmContextPart(
+        sourceKitId: kitIdOf(frame) ?? boardTextKitId,
+        sourceId: frame.id,
+        text: content,
+      ),
+    );
+  }
+  if (parts.isNotEmpty) {
+    return parts;
+  }
   return _llmReplyParts(document, llmBodyId, llmInputPort);
 }
 
@@ -554,6 +588,22 @@ List<LlmContextPart> llmContextParts(SceneDocument document, String llmBodyId) {
         ),
       );
     }
+  }
+  for (final frame in packageTextFrames(document)) {
+    if (!kitHasLink(frame, to: llmBodyId, port: llmContextPort)) {
+      continue;
+    }
+    final content = textKitContent(document, frame).trim();
+    if (content.isEmpty) {
+      continue;
+    }
+    parts.add(
+      LlmContextPart(
+        sourceKitId: kitIdOf(frame) ?? boardTextKitId,
+        sourceId: frame.id,
+        text: content,
+      ),
+    );
   }
   return [...parts, ..._llmReplyParts(document, llmBodyId, llmContextPort)];
 }

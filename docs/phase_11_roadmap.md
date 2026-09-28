@@ -5,10 +5,11 @@ The board is the workspace. A person can assemble a coding agent or swarm from v
 The detailed implementation handoffs are separate documents:
 
 - [Phase 11 — inspectable coding-agent board](phase_11.md): typed ports, run evidence, reviewed patches, bounded checks, and a manually reproducible starter agent (historical implementation record).
-- [Phase 12 — lean host, starter agent, extensibility seam](phase_12.md): **active** cleanup and reorientation. Minimal starter (LLM, I/O, conversation, repository, read/write/edit/shell, Extensions docs). Rock-solid host API; user-authored kits instead of shipping more first-party kits.
+- [Phase 12 — lean host, starter agent, extensibility seam](phase_12.md): **implemented**. Minimal starter (LLM, I/O, conversation, repository, read/write/edit/shell, Extensions docs). Rock-solid host API; user-authored kits instead of shipping more first-party kits.
+- [Phase 13 — injectable packages, user kits shelf, authoring loop](phase_13.md): **implemented**. `~/.skapie/kits`, rich KitApi, LLM-authored packages, host status for faults. No optional product kits (MCP etc. stay packages).
 - [Archived Phase 12–15](archive/README.md): former reliable-loop / kit-platform / swarm / beta plan. Kept for archaeology and for kit-author lessons. Do not implement against these unless a task says to learn from them.
 
-Phases 13–15 will be rewritten after Phase 12’s gate. Older sketches of Phases 16–20 live in the archived Phase 15 doc.
+Phase 14–15 will be rewritten after Phase 13’s gate. Older sketches of Phases 16–20 live in the archived Phase 15 doc.
 
 ## Research synthesis
 

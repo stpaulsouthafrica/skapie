@@ -6,16 +6,25 @@ import 'package:skapie/kit_api/kit_package.dart';
 import 'package:skapie/registry/object_registry.dart';
 import 'package:skapie/scene/scene_json_codec.dart';
 
+class KitLoadFailure {
+  const KitLoadFailure({required this.id, required this.message});
+
+  final String id;
+  final String message;
+
+  String get text => 'Skip $id: $message';
+}
+
 class KitLoadResult {
   const KitLoadResult({
     required this.recipes,
     this.warnings = const [],
-    this.errors = const [],
+    this.failures = const [],
   });
 
   final List<KitRecipe> recipes;
   final List<String> warnings;
-  final List<String> errors;
+  final List<KitLoadFailure> failures;
 }
 
 class KitPackageStore {
@@ -32,12 +41,17 @@ class KitPackageStore {
     } on FileSystemException catch (error) {
       return KitLoadResult(
         recipes: const [],
-        errors: ['Cannot read kits root ${root.path}: $error'],
+        failures: [
+          KitLoadFailure(
+            id: 'kits-root',
+            message: 'Cannot read kits root ${root.path}: $error',
+          ),
+        ],
       );
     }
     final recipes = <KitRecipe>[];
     final warnings = <String>[];
-    final errors = <String>[];
+    final failures = <KitLoadFailure>[];
     final List<Directory> dirs;
     try {
       dirs = [
@@ -47,7 +61,12 @@ class KitPackageStore {
     } on FileSystemException catch (error) {
       return KitLoadResult(
         recipes: const [],
-        errors: ['Cannot list kits root ${root.path}: $error'],
+        failures: [
+          KitLoadFailure(
+            id: 'kits-root',
+            message: 'Cannot list kits root ${root.path}: $error',
+          ),
+        ],
       );
     }
 
@@ -67,12 +86,39 @@ class KitPackageStore {
         if (parsed.capabilityWarning != null) {
           warnings.add(parsed.capabilityWarning!);
         }
-        recipes.add(parsed.recipe);
+        final assets = await _loadAssets(dir, folderId, parsed, warnings);
+        recipes.add(parsed.recipe.copyWith(assets: assets));
       } catch (error) {
-        errors.add('Skip $folderId: $error');
+        failures.add(KitLoadFailure(id: folderId, message: '$error'));
       }
     }
-    return KitLoadResult(recipes: recipes, warnings: warnings, errors: errors);
+    return KitLoadResult(
+      recipes: recipes,
+      warnings: warnings,
+      failures: failures,
+    );
+  }
+
+  Future<Map<String, String>> _loadAssets(
+    Directory dir,
+    String folderId,
+    ParsedKitPackage parsed,
+    List<String> warnings,
+  ) async {
+    final assets = <String, String>{};
+    for (final path in parsed.assetPaths) {
+      final file = File('${dir.path}/$path');
+      try {
+        if (!await file.exists()) {
+          warnings.add('Kit $folderId is missing asset: $path');
+          continue;
+        }
+        assets[path] = await file.readAsString();
+      } on FileSystemException catch (error) {
+        warnings.add('Kit $folderId could not read asset $path: $error');
+      }
+    }
+    return assets;
   }
 
   Future<File> write(KitRecipe recipe) async {
@@ -91,6 +137,21 @@ class KitPackageStore {
     await file.writeAsString(
       '${encoder.convert(kitPackageToJson(packageFromRecipe(recipe)))}\n',
     );
+    for (final entry in recipe.assets.entries) {
+      if (!_isSafeAssetPath(entry.key)) {
+        throw ArgumentError('Invalid asset path: ${entry.key}');
+      }
+      final asset = File('${dir.path}/${entry.key}');
+      await asset.parent.create(recursive: true);
+      await asset.writeAsString(entry.value);
+    }
     return file;
   }
+}
+
+bool _isSafeAssetPath(String path) {
+  if (path.isEmpty || path.startsWith('/') || path.contains('..')) {
+    return false;
+  }
+  return !path.contains('\\');
 }

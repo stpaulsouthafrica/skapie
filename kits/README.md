@@ -12,4 +12,8 @@ This shelf is the default install. It holds only the lean starter:
 
 Everything else is a user package. Demoted first-party kits (checks, Propose/Review/Apply, Write Scope, Run Control, the kit-author world tools) live under [`examples/kits/`](../examples/README.md) as rebuild references. They are off the palette and off the starter.
 
-The git `kits/` tree is what you commit. A sandboxed app loads **Application Support** unless you set an absolute `SKAPIE_KITS_ROOT` or `SKAPIE_PROJECT_ROOT`. Details: [`docs/kit_packages.md`](../docs/kit_packages.md). Methods: [`docs/kit_api.md`](../docs/kit_api.md).
+This tree is the shipped starter source and a reference. The product default is
+the **user shelf** `~/.skapie/kits`, seeded from this lean set on first launch.
+
+A package folder may hold extra files listed under `assets`. A package can declare
+its own `ports` and can name a host tool runner. Details: [`docs/kit_packages.md`](../docs/kit_packages.md). Methods: [`docs/kit_api.md`](../docs/kit_api.md).

@@ -35,4 +35,7 @@ A user composes and saves kit arrangements today. Declaring a new `toolName` in 
 - The four coding tools resolve in [`lib/tools/coding/coding_tools.dart`](../lib/tools/coding/coding_tools.dart).
 - New runners need an explicit host spike; Phase 12 forbids new first-party feature kits.
 
-Typed ports and a wider capability contract deepen in Phase 13. See the [Phase 12 inventory](phase_12_inventory.md) for every host special-case.
+A package declares its own ports from the host vocabulary and can name an existing
+runner. A wider capability contract (MCP-class packages) stays a package, not a
+shipped host feature. See the [Phase 12 inventory](phase_12_inventory.md) for
+every host special-case.

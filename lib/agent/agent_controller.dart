@@ -880,23 +880,37 @@ class AgentController extends ChangeNotifier {
               }
               for (final tool in attached) {
                 final reason = await _repositoryGrantReason(bodyId, tool.name);
-                if (reason != null) throw StateError(reason);
+                if (reason != null) {
+                  kitApi.statusLog?.report(
+                    key: 'tool:${tool.name}',
+                    message: reason,
+                  );
+                  throw StateError(reason);
+                }
               }
             },
             toolDenial: (name) async {
+              String? reason;
               if (!attached.any((tool) => tool.name == name)) {
-                return 'Tool is not connected for this turn: $name';
+                reason = 'Tool is not connected for this turn: $name';
+              } else {
+                final current = llmToolOffer(
+                  kitApi: kitApi,
+                  llmBodyId: bodyId,
+                  repositoryPermission: repositoryPermission,
+                  writePermission: writePermission,
+                );
+                reason = current.names.contains(name)
+                    ? await _repositoryGrantReason(bodyId, name)
+                    : 'Tool grant or connection is no longer valid: $name';
               }
-              final current = llmToolOffer(
-                kitApi: kitApi,
-                llmBodyId: bodyId,
-                repositoryPermission: repositoryPermission,
-                writePermission: writePermission,
-              );
-              if (!current.names.contains(name)) {
-                return 'Tool grant or connection is no longer valid: $name';
+              if (reason != null) {
+                kitApi.statusLog?.report(
+                  key: 'tool:$name',
+                  message: reason,
+                );
               }
-              return _repositoryGrantReason(bodyId, name);
+              return reason;
             },
             beforeToolDispatch: flushLedger,
             afterToolResult: flushLedger,
@@ -1125,6 +1139,17 @@ class AgentController extends ChangeNotifier {
       }
       notifyListeners();
     } else if (event is AgentToolFinished) {
+      final ok = event.result.json['ok'] != false;
+      if (event.denied || !ok) {
+        kitApi.statusLog?.report(
+          key: 'tool:${event.call.name}',
+          message:
+              event.result.json['error']?.toString() ??
+              'Tool failed: ${event.call.name}',
+        );
+      } else {
+        kitApi.statusLog?.clear('tool:${event.call.name}');
+      }
       if (runId != null) {
         final frameId = toolFrameIdForName(
           kitApi.store.document,
